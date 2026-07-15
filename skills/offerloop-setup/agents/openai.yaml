@@ -1,0 +1,4 @@
+interface:
+  display_name: "OfferLoop Setup"
+  short_description: "检查并配置 OfferLoop 的邮箱、飞书与运行环境"
+  default_prompt: "Use $offerloop-setup to check and configure OfferLoop for first-time use."

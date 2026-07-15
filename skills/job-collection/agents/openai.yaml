@@ -1,0 +1,4 @@
+interface:
+  display_name: "Job Collection"
+  short_description: "同步多来源招聘信息，维护个人求职清单、去重和投递进度"
+  default_prompt: "Use $job-collection to sync my authorized recruiting sources into my personal job tracker."

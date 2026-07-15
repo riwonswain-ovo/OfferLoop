@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Test repository contracts
+        run: python -m unittest discover -s tests -v
+      - name: Test job collection helpers
+        run: python -m unittest discover -s skills/job-collection/tests -v
+      - name: Validate job collection skill
+        run: python skills/job-collection/scripts/validate_skill.py

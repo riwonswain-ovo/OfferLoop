@@ -1,0 +1,4 @@
+interface:
+  display_name: "Recruiting Reminder"
+  short_description: "识别邮箱中的笔试面试通知，并同步到飞书表格和个人日历"
+  default_prompt: "Use $recruiting-reminder to scan recent recruiting emails and propose calendar entries for my approval."
