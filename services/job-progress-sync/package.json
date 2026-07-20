@@ -1,0 +1,11 @@
+{
+  "name": "offerloop-job-progress-sync",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

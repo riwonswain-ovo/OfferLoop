@@ -1,0 +1,4 @@
+interface:
+  display_name: "OfferLoop Workspace"
+  short_description: "维护飞书求职知识库首页、统一资源入口以及安全受控的自动刷新区域"
+  default_prompt: "Use $offerloop-workspace to check and refresh my OfferLoop Feishu workspace homepage."

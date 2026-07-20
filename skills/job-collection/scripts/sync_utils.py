@@ -10,6 +10,55 @@ from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 
 TRACKING_QUERY_KEYS = {"from", "spm", "track", "tracking_id"}
+ENTERPRISE_FIELDS = (
+    "信息更新时间",
+    "投递进度",
+    "公司",
+    "招聘批次",
+    "招聘项目",
+    "招聘岗位",
+    "公告链接",
+    "投递链接",
+    "投递截止时间",
+    "城市",
+    "行业标签",
+    "企业性质",
+    "子表 record_id",
+)
+APPLICATION_STATUSES = ("待确认", "感兴趣", "已投递", "已拒绝")
+PROFILE_FIELD_NAMES = (
+    "graduation_year",
+    "target_cities",
+    "city_filter_mode",
+    "excluded_companies",
+    "excluded_industries",
+    "excluded_recruitment_types",
+)
+
+
+def resolve_profile_field(fields: dict[str, object], canonical_name: str) -> object:
+    """Read a profile field without silently accepting a truncated CLI key.
+
+    Some compact lark-cli outputs abbreviate long field names with a trailing
+    ellipsis. A unique prefix may be restored; ambiguous or absent fields are
+    errors so hard filters can never be disabled by accident.
+    """
+    if canonical_name in fields:
+        return fields[canonical_name]
+
+    matches = []
+    for raw_name, value in fields.items():
+        if not raw_name.endswith("..."):
+            continue
+        prefix = raw_name[:-3]
+        if prefix and canonical_name.startswith(prefix):
+            matches.append(value)
+
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        raise ValueError(f"ambiguous truncated profile field: {canonical_name}")
+    raise KeyError(f"missing required profile field: {canonical_name}")
 
 
 def parse_feishu_bitable_url(url: str) -> tuple[str, str]:

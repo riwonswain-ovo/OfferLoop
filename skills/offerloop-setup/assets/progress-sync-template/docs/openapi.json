@@ -1,0 +1,100 @@
+{
+  "paths": {
+    "/openapi/job-progress-sync": {
+      "post": {
+        "operationId": "sync",
+        "summary": "将已投递企业记录幂等同步到求职进展",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["sourceRecordId"],
+                "properties": {
+                  "sourceRecordId": {
+                    "type": "string",
+                    "description": "企业清单主表记录 ID",
+                    "example": "recvoGKVsf3kts"
+                  },
+                  "transitionedAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "记录进入已投递状态的时间",
+                    "example": "2026-07-17T19:00:00+08:00"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "同步成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["ok", "action", "recordId"],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "action": {
+                      "type": "string",
+                      "enum": ["created", "updated", "unchanged"],
+                      "description": "本次幂等同步采取的动作",
+                      "example": "created"
+                    },
+                    "recordId": {
+                      "type": "string",
+                      "description": "求职进展记录 ID",
+                      "example": "rec_progress_example"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "来源记录缺失或尚未进入已投递状态"
+          },
+          "503": {
+            "description": "飞书接口暂时不可用"
+          }
+        }
+      }
+    },
+    "/openapi/job-progress-sync/health": {
+      "get": {
+        "operationId": "health",
+        "summary": "检查求职进展同步服务状态",
+        "responses": {
+          "200": {
+            "description": "服务正常",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["ok", "service"],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "service": {
+                      "type": "string",
+                      "enum": ["job-progress-sync"],
+                      "example": "job-progress-sync"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

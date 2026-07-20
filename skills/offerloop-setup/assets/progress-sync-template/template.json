@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "template_id": "offerloop-progress-sync",
+  "display_name": "OfferLoop 求职进展同步服务",
+  "stack": "nestjs-react-fullstack",
+  "requires_fresh_miaoda_binding": true,
+  "required_environment": [
+    "FEISHU_APP_ID",
+    "FEISHU_APP_SECRET",
+    "SOURCE_BASE_TOKEN",
+    "SOURCE_TABLE_ID",
+    "SOURCE_BASE_URL",
+    "PROGRESS_BASE_TOKEN",
+    "PROGRESS_TABLE_ID"
+  ],
+  "protected_destination_paths": [
+    ".git",
+    ".spark",
+    ".spark_project",
+    ".env",
+    ".env.local"
+  ]
+}

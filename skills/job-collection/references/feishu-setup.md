@@ -42,21 +42,23 @@ export FEISHU_APP_ID='cli_xxx'
 export FEISHU_APP_SECRET='replace-me'
 ```
 
-也可在仓库根目录创建 `.env`：
+也可在用户配置目录创建 `~/.config/offerloop/job-collection/.env`（遵循
+`XDG_CONFIG_HOME`）：
 
 ```dotenv
 FEISHU_APP_ID=cli_xxx
 FEISHU_APP_SECRET=replace-me
 ```
 
-`.env` 已被 `.gitignore` 排除。公开仓库只提交 `.env.example`。
+文件权限设为 `0600`。Skill 根目录旧 `.env` 只作兼容读取，确认新位置可用前不要删除。
 
 ### 获取 token
 
 可选 helper 位于 `scripts/get_token.py`。它按以下顺序读取凭证：
 
 1. 当前进程环境变量。
-2. skill 根目录 `.env`。
+2. `~/.config/offerloop/job-collection/.env`。
+3. skill 根目录旧 `.env`（兼容）。
 
 token 缓存在用户缓存目录的 `job-collection/feishu-token.json`，文件权限为 `0600`。默认命令只验证 token 可用，不打印 token：
 
@@ -76,6 +78,7 @@ python3 scripts/get_token.py --print-token
 
 - 用户已有 Base：用户必须把机器人或自建应用加入为协作者。
 - 机器人新建 Base：机器人通常是资源所有者，仍需把用户加入为可编辑或 full_access 协作者。
+- 独立求职进展、笔面试中心和知识库分别验证权限；能写企业 Base 不代表能写其他资源。
 - 权限不足时停止操作并返回真实错误；不要通过公开链接或身份切换绕过访问控制。
 
 ## 最小权限原则

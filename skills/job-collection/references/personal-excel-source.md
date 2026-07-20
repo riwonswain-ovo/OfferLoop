@@ -385,7 +385,10 @@ curl -s -X PUT "https://open.feishu.cn/open-apis/bitable/v1/apps/${APP_TOKEN}/ta
 
 **失败模式**：同步脚本硬编码目标城市或遗漏届次硬筛，会写入不符合用户偏好的记录。
 
-**正确做法**：sync 脚本启动时按表名解析「用户偏好」的真实 table_id，动态拿 4 个硬筛规则：
+**正确做法**：sync 脚本启动时按表名解析「用户偏好」的真实 table_id，动态拿全部硬筛规则，
+包括 `excluded_recruitment_types`。优先按真实字段 ID 或完整字段名读取；如果 compact CLI 输出把
+长字段名截断为 `excluded_recruitment...`，只有唯一前缀命中时才能还原。字段缺失或歧义必须
+停止来源写入并保留游标，禁止默认成空集合：
 
 ```python
 PROFILE_TABLE = resolve_table_id_by_name("用户偏好")
@@ -401,11 +404,20 @@ def get_user_profile():
     excluded_companies = {c.strip() for c in excluded_companies_str.split(",") if c.strip()}
     excluded_industries_str = extract_text(f.get("excluded_industries"))
     excluded_industries = {c.strip() for c in excluded_industries_str.split(",") if c.strip()}
+    excluded_recruitment_types_str = extract_text(
+        resolve_profile_field(f, "excluded_recruitment_types")
+    )
+    excluded_recruitment_types = {
+        value.strip()
+        for value in excluded_recruitment_types_str.split(",")
+        if value.strip()
+    }
     return {
         "target_cities": target_cities,
         "graduation_year": grad_year,
         "excluded_companies": excluded_companies,
         "excluded_industries": excluded_industries,
+        "excluded_recruitment_types": excluded_recruitment_types,
     }
 ```
 

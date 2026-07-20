@@ -15,9 +15,45 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
       - name: Test repository contracts
         run: python -m unittest discover -s tests -v
       - name: Test job collection helpers
         run: python -m unittest discover -s skills/job-collection/tests -v
+      - name: Test recruiting reminder event model
+        run: python -m unittest discover -s skills/recruiting-reminder/tests -v
+      - name: Test instant progress sync service
+        run: npm --prefix services/job-progress-sync test
       - name: Validate job collection skill
         run: python skills/job-collection/scripts/validate_skill.py
+
+  app-template:
+    name: Build ${{ matrix.template }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        template:
+          - skills/offerloop-setup/assets/workbench-template
+          - skills/offerloop-setup/assets/progress-sync-template
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: ${{ matrix.template }}/package-lock.json
+      - name: Install locked dependencies
+        working-directory: ${{ matrix.template }}
+        run: npm ci
+      - name: Test template
+        working-directory: ${{ matrix.template }}
+        run: npm test -- --runInBand
+      - name: Type-check template
+        working-directory: ${{ matrix.template }}
+        run: npm run type:check
+      - name: Build template
+        working-directory: ${{ matrix.template }}
+        run: npm run build

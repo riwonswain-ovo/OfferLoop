@@ -9,7 +9,12 @@ SKILLS = ROOT / "skills"
 
 class RepositoryContractTest(unittest.TestCase):
     def test_expected_skills_are_discoverable(self):
-        expected = {"offerloop-setup", "job-collection", "recruiting-reminder"}
+        expected = {
+            "offerloop-setup",
+            "offerloop-workspace",
+            "job-collection",
+            "recruiting-reminder",
+        }
         discovered = {
             path.parent.name for path in SKILLS.glob("*/SKILL.md") if path.is_file()
         }
@@ -33,9 +38,63 @@ class RepositoryContractTest(unittest.TestCase):
             text = (SKILLS / name / "SKILL.md").read_text(encoding="utf-8")
             self.assertIn("offerloop-setup", text, name)
 
+    def test_workspace_collaboration_boundaries_are_documented(self):
+        setup = (SKILLS / "offerloop-setup" / "SKILL.md").read_text(encoding="utf-8")
+        collection = (SKILLS / "job-collection" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        reminder = (SKILLS / "recruiting-reminder" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        workspace = (SKILLS / "offerloop-workspace" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("不负责日常首页维护", setup)
+        self.assertIn("offerloop-workspace", setup)
+        self.assertIn("offerloop-workspace", collection)
+        self.assertIn("同步成功", collection)
+        self.assertIn("offerloop-workspace", reminder)
+        self.assertIn("不抓招聘信息", workspace)
+        self.assertIn("不读邮箱", workspace)
+
+    def test_readme_and_migration_describe_the_four_skill_workspace(self):
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        migration = (ROOT / "MIGRATION.md").read_text(encoding="utf-8")
+        self.assertNotIn("Skills-3", readme)
+        for expected in (
+            "offerloop-workspace",
+            "OfferLoop 求职空间",
+            "求职进展",
+            "笔面试中心",
+        ):
+            self.assertIn(expected, readme)
+        self.assertIn("旧双 Base", migration)
+        self.assertIn("永久保留", migration)
+
     def test_no_scaffold_placeholders_remain(self):
         for skill_file in SKILLS.glob("*/SKILL.md"):
             self.assertNotIn("TODO", skill_file.read_text(encoding="utf-8"), skill_file)
+
+    def test_local_deployment_workspaces_and_generated_state_are_ignored(self):
+        ignore = (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+        for expected in ("/apps/", "/.hermes/", ".spark/", ".spark_project", "*.tsbuildinfo"):
+            self.assertIn(expected, ignore)
+
+    def test_workspace_homepage_template_matches_the_readme_contract(self):
+        template = (
+            SKILLS / "offerloop-workspace" / "assets" / "homepage-template.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("# OfferLoop 使用指南", template)
+        self.assertIn("{{workbench_url}}", template)
+        self.assertNotIn("OFFERLOOP:MANAGED", template)
+        self.assertNotIn("请在飞书 UI 中插入", template)
+
+    def test_deployable_templates_do_not_reconfigure_git_hooks(self):
+        assets = SKILLS / "offerloop-setup" / "assets"
+        for directory in ("workbench-template", "progress-sync-template"):
+            package = (assets / directory / "package.json").read_text(encoding="utf-8")
+            self.assertNotIn('"prepare"', package)
+            self.assertNotIn("core.hooksPath", package)
 
 
 if __name__ == "__main__":

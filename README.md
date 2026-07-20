@@ -2,263 +2,204 @@
 
 # OfferLoop
 
-### 从发现机会，到跟进笔试和面试，让秋招进度真正形成闭环。
+### 把招聘信息、投递进展、笔面试安排和个人求职资料放进一个可持续维护的飞书工作流。
 
-一个仓库，多个可独立使用的 Agent Skills。
-
-**招聘信息同步 · 投递进度管理 · 邮件识别 · 笔试排期 · 面试提醒**
+**招聘信息同步 · 求职进展 · 邮件识别 · 笔面试中心 · 招聘工作台 · 私有知识库**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Skills](https://img.shields.io/badge/Skills-3-7C3AED)](#包含的-skills)
+[![Skills](https://img.shields.io/badge/Skills-4-7C3AED)](#四个-skills)
 
 </div>
 
----
+> **2026-07 更新**：OfferLoop 从两个独立 Skill 升级为一套四 Skill、三张 Base、一个工作台和一个知识库的求职系统。旧用户请先阅读 [旧用户如何升级](#旧用户如何升级)，不要直接对原有 Base 执行“一键完整部署”。
 
-## OfferLoop 解决什么问题
+## 这次更新了什么
 
-求职信息往往分散在共享招聘表、腾讯文档和邮箱里。发现岗位是一套流程，投递后的笔试、测评和面试又是另一套流程：信息重复、状态断裂、截止时间容易遗漏。
+- 新增 `offerloop-workspace`：创建并维护私有知识库，把工作台、三张 Base、个人材料和题库入口集中在固定位置。
+- 新增独立的「求职进展」Base：当企业清单中的进度变为“已投递”时，可即时创建或更新对应进展；人工填写的岗位、JD 和更后阶段不会被覆盖。
+- 新增统一「笔面试中心」Base：主表为“全部安排”，并按笔试、群面、一面、二面、三面、HR 面分表管理；一家公司多个岗位、多轮面试都能独立关联。
+- 新增招聘工作台：直接读取飞书 Base，支持未来 7 天笔面试日历、企业清单多视图切换和完整 Base 入口。工作台只展示数据，不复制数据。
+- `job-collection` 的企业清单字段精简为招聘事实字段；`recruiting-reminder` 可将识别到的笔面试事件关联并单调推进求职进展。
+- 新增可物化的妙搭模板、模板构建 CI、合成端到端验收用例和脱敏发布前验收记录。
 
-OfferLoop 把这些环节组织成可以逐步启用的工作流：
+## 你最终会得到什么
 
 ```text
-飞书招聘表 / 腾讯 Smartsheet
+飞书招聘信息源 / 腾讯 Smartsheet
               ↓
         job-collection
-     筛选、去重、投递进度
-              ↓ 可选关联
-   recruiting-reminder ← IMAP 邮箱
-     笔试、测评、面试、日历
+      求职企业清单（事实源）
+              ↓ 已投递
+          求职进展
+              ↑ 关联并单调推进
+IMAP 邮箱 → recruiting-reminder → 笔面试中心 → 飞书个人日历
+              ↓
+      OfferLoop 招聘工作台
+              ↓
+       OfferLoop 求职空间（知识库）
 ```
 
-每个 Skill 都可以单独使用。安装整个 OfferLoop，不代表必须一次完成所有邮箱和飞书配置。
+所有 Skill 都可独立使用：不启用邮箱和日历，不影响招聘信息同步；不安装工作台，不影响三张 Base 的正常使用。
 
-## 包含的 Skills
+## 案例
 
-| Skill | 作用 | 常见触发方式 |
+### 招聘工作台
+
+工作台读取真实飞书 Base：左侧展示未来 7 天笔试与面试，右侧预留每日训练入口；业务区可在企业清单、求职进展和笔面试中心间切换。每个视图最多展示 30 条，需要编辑时直接打开完整 Base。
+
+![OfferLoop 招聘工作台：未来 7 天笔面试与训练入口](docs/images/workbench/dashboard-overview.png)
+
+![OfferLoop 招聘工作台：企业清单的多视图与业务数据](docs/images/workbench/business-data.png)
+
+### 固定的知识库入口
+
+知识库不是数据副本，而是使用指南、工作台、三张 Base、简历、面试准备、面试复盘、题库和信息源的固定目录。业务数据仍以对应 Base 为唯一事实源。
+
+![OfferLoop 求职空间：目录](docs/images/workbench/wiki-directory.png)
+
+![OfferLoop 求职空间：使用指南](docs/images/workbench/wiki-guide.png)
+
+> 截图来自真实使用环境。为展示产品能力，企业名称和招聘数量按用户提供的截图保留；请自行确认公开仓库中的截图符合你的信息披露要求。
+
+## 四个 Skills
+
+| Skill | 职责 | 常见触发方式 |
 |---|---|---|
-| `offerloop-setup` | 首次环境检查、飞书身份选择、邮箱配置初始化 | “第一次使用 OfferLoop，帮我配置” |
-| `job-collection` | 从用户有权访问的飞书 Base 或腾讯 Smartsheet 同步招聘信息 | “把这个招聘表同步到我的求职清单” |
-| `recruiting-reminder` | 从 IMAP 邮箱识别笔试、测评和面试，并安排飞书日历 | “检查最近 7 天的笔试面试邮件” |
+| `offerloop-setup` | 检查环境、登记非敏感资源定位、生成部署计划并协助迁移 | “第一次使用 OfferLoop，先检查环境和我想启用的能力” |
+| `job-collection` | 从授权的飞书 Base 或腾讯 Smartsheet 增量同步招聘信息，并补偿对账求职进展 | “同步这个招聘表到求职企业清单” |
+| `recruiting-reminder` | 从 IMAP 邮箱识别笔试、测评和面试，先确认再写入笔面试中心/日历 | “扫描最近 7 天招聘邮件，先给我识别结果” |
+| `offerloop-workspace` | 管理私有知识库首页、固定导航和资源入口 | “检查我的 OfferLoop 求职空间，只读不要修复” |
 
-`job-collection` 不会主动爬取招聘网站，也不会自动投递；`recruiting-reminder` 不会在后台持续监听邮箱。
+## 新用户：从这里开始
 
-## 安装
-
-### Skills CLI（推荐）
+### 1. 安装
 
 ```bash
 npx skills add riwonswain-ovo/OfferLoop -g
 ```
 
-安装完成后，应能发现三个独立 Skill：`offerloop-setup`、`job-collection` 和 `recruiting-reminder`。
+安装完成后，应能发现四个独立 Skill：`offerloop-setup`、`job-collection`、`recruiting-reminder` 和 `offerloop-workspace`。
 
-### 手动安装
+如果你手动安装，请将仓库 `skills/` 下的四个目录分别复制到 Agent 的全局 Skills 目录；不要把仓库根目录作为一个 Skill，也不要合并四份 `SKILL.md`。
 
-```bash
-git clone https://github.com/riwonswain-ovo/OfferLoop.git
-```
+### 2. 先做只读预检
 
-将 `skills/` 下的每个 Skill 文件夹复制到 Agent 对应的全局 Skills 目录。例如 Codex：
+告诉 Agent：
 
 ```text
-~/.codex/skills/
-├── offerloop-setup/
-├── job-collection/
-└── recruiting-reminder/
+请调用 offerloop-setup。我第一次使用 OfferLoop，先只读检查环境和我想启用的能力；不要创建或修改飞书资源。
 ```
 
-不要把仓库根目录整体当成单个 Skill，也不要把三份 `SKILL.md` 合并。
+预检会区分 `ready`、`needs_action`、`blocked` 和 `unverified`。`unverified` 表示本地配置齐全但尚未连接真实飞书或邮箱验证，不是错误。
 
-## 新用户：从这里开始
-
-安装后直接告诉 Agent：
+### 3. 确认部署计划后再创建资源
 
 ```text
-请调用 offerloop-setup。我第一次使用，只想先配置招聘信息同步。
+请调用 offerloop-setup，一键部署完整 OfferLoop。先展示部署计划；创建 Base、知识库和工作台前向我确认一次，IMAP 只创建本地模板。
 ```
 
-或者：
+完整部署会创建三张 Base、私有知识库、工作台模板和即时同步定位信息。飞书扫码、邮箱授权码和任何真实在线验证都需要你亲自完成；不要在聊天中发送密码、token 或 App Secret。
+
+## 旧用户如何升级
+
+本次是结构性升级。旧版的 `job-collection` 和 `recruiting-reminder` 可以继续独立使用，但不会自动拥有新的工作台、知识库、求职进展或统一笔面试中心。
+
+### 升级前须知
+
+- **不要删除旧 Base、旧配置或去重状态。** 新版不会自动删除它们。
+- **不要对已有数据直接执行“一键完整部署”。** 先让 `offerloop-setup` 输出只读迁移检查和计划。
+- 旧企业清单的字段与新版“求职企业清单”不同；是否新建、迁入或保留旧表，应在迁移计划中逐项确认。
+- IMAP 凭证、Base URL 和邮件去重状态仍存于本机私有目录，不应复制进 Skill 目录或 Git 仓库。
+
+### 推荐升级步骤
+
+1. 可选：备份本地配置和状态（不要提交备份）。
+
+   ```bash
+   cp -a ~/.config/offerloop ~/.config/offerloop.backup-$(date +%Y%m%d)
+   cp -a ~/.local/state/offerloop ~/.local/state/offerloop.backup-$(date +%Y%m%d)
+   ```
+
+2. 重新执行安装命令，确保四个 Skill 都更新到同一版本：
+
+   ```bash
+   npx skills add riwonswain-ovo/OfferLoop -g
+   ```
+
+   手动安装的用户只替换全局 Skills 目录中的四个 Skill 文件夹；**保留** `~/.config/offerloop/` 和 `~/.local/state/offerloop/`。
+
+3. 先运行只读迁移检查：
+
+   ```text
+   请调用 offerloop-setup。我是旧版 OfferLoop 用户，已经升级到四个 Skill。
+   请只读检查我的旧配置和现有飞书 Base，给出迁移计划；不要创建、修改或删除任何资源。
+   ```
+
+4. 看清迁移计划后，再明确授权创建新的三张 Base、知识库和工作台，或逐项迁入旧数据。迁移完成后，运行：
+
+   ```text
+   请调用 offerloop-setup，检查完整 OfferLoop 的配置和资源定位；先只读验证，不要修复。
+   ```
+
+更详细的兼容原则见 [迁移指南](MIGRATION.md)。
+
+## 核心数据模型
+
+### 求职企业清单
+
+主表及企业性质子表保留 13 个招聘事实字段，依次为：信息更新时间、投递进度、公司、招聘批次、招聘项目、招聘岗位、公告链接、投递链接、投递截止时间、城市、行业标签、企业性质、子表 `record_id`。
+
+投递进度为：`待确认`、`感兴趣`、`已投递`、`已拒绝`。
+
+### 求职进展
+
+独立可编辑 Base，以企业清单 `record_id` 为唯一键。当一条企业信息进入“已投递”时，创建或更新对应进展记录；公司可带入，投递岗位和岗位 JD 默认留空，由用户填写。重复同步不会覆盖手填岗位、JD、首次投递日期或更后的面试阶段。
+
+### 笔面试中心
+
+一个 Base，主表为“全部安排”，物理子表为笔试、群面、一面、二面、三面和 HR 面。不同岗位和不同轮次都作为独立事件；公司级笔试可以关联多条求职进展。表中预留“面试准备文档”和“面试复盘文档”字段，等待后续专用 Skill 写入。
+
+## 日常使用
 
 ```text
-请调用 offerloop-setup。我只想先整理邮箱里的笔试和面试。
+请调用 job-collection，把这个我有权限访问的招聘 Base 增量同步到求职企业清单。
 ```
 
-引导流程只配置当前功能需要的部分：
+```text
+请调用 recruiting-reminder，扫描最近 7 天招聘邮件。先让我确认识别和关联结果，再写入笔面试中心并安排日历。
+```
 
-| 想先使用 | 需要 | 暂时不需要 |
-|---|---|---|
-| `job-collection` | Python、lark-cli bot、目标 Base、招聘信息源 | IMAP、个人日历授权 |
-| `recruiting-reminder` | Python、IMAP、lark-cli user、Base 和日历权限 | 招聘信息源、定时同步 |
-| 两者联动 | 上述全部，并保存目标求职 Base | 无 |
+```text
+请调用 offerloop-workspace，检查三个 Base、工作台和知识库首页是否完整；只读检查，先不要修复。
+```
 
-## 为什么飞书会出现两种身份
-
-OfferLoop 推荐复用同一个 lark-cli profile 和同一个飞书应用，但不同操作使用不同身份：
-
-| 身份 | 用途 | 授权特点 |
-|---|---|---|
-| `--as bot` | 招聘信息同步、Base workflow、无人值守任务 | 开通应用权限、发布并安装应用，不执行用户登录 |
-| `--as user` | 查询个人忙闲、创建个人日历日程 | 应用权限之外，还需用户完成一次授权 |
-
-机器人身份看不到用户自己的主日历，因此日历功能不能静默降级成 bot。用户身份没有完成日历授权，也不会影响纯 `job-collection` 使用。
-
-## 本地配置放在哪里
-
-OfferLoop 不把用户配置写进 Skill 安装目录，避免重新安装或更新时被覆盖。
+## 配置、安全与边界
 
 | 内容 | 默认位置 |
 |---|---|
-| 公共定位配置 | `~/.config/offerloop/config.json` |
-| Job Collection OpenAPI 备用配置 | `~/.config/offerloop/job-collection/.env` |
-| IMAP 配置 | `~/.config/offerloop/recruiting-reminder/.env` |
-| Reminder Base 定位 | `~/.config/offerloop/recruiting-reminder/base_config.json` |
+| 公共资源定位 | `~/.config/offerloop/config.json` |
+| Job Collection 私有配置 | `~/.config/offerloop/job-collection/.env` |
+| IMAP 凭证 | `~/.config/offerloop/recruiting-reminder/.env` |
 | 已处理邮件状态 | `~/.local/state/offerloop/recruiting-reminder/processed_emails.json` |
 
-支持 `XDG_CONFIG_HOME`、`XDG_STATE_HOME`。旧版 Skill 目录中的配置仍可读取，但建议通过 `offerloop-setup` 安全迁移。
+- 公共配置只保存 profile、Base URL、知识库 ID、首页节点、工作台 HTTPS URL 和可选同步定位，不保存密码或 secret。
+- Base 写入、日历创建、知识库结构变更前均应保留人工确认。
+- 邮件正文只用于当前招聘事件抽取，不写入知识库首页。
+- 当前版本仅为“简历深挖”和“产品 Sense”训练保留工作台位置，尚未包含生成训练题的专用 Skill。
 
-已有独立版用户请先阅读 [迁移指南](MIGRATION.md)，尤其是 `recruiting-reminder` 用户，应在重新安装前备份邮箱与去重状态。
-
-## 两个业务 Skill 如何联动
-
-联动是可选的，不是硬依赖。
-
-- `job-collection` 在「企业清单」维护公司、招聘批次、招聘岗位和投递进度；
-- `recruiting-reminder` 在笔试、面试记录中保存可选的「求职记录ID」；
-- 优先用公司、岗位、招聘批次和已投递状态定位申请记录；
-- 多个候选时必须让用户选择，不能只按公司名自动关联；
-- 找不到对应申请时照常建立笔试或面试记录。
-
-笔试关联成功后，可以把对应求职记录的「是否笔试」更新为「要笔试」。面试关联不会修改该字段。
-
-## 真实使用案例
-
-### 案例一：同步招聘信息到个人求职清单
-
-下面是一次真实的 `job-collection` 增量同步。Agent 从用户有权访问的飞书招聘信息 Base 和腾讯 Smartsheet 读取数据，按求职偏好完成硬筛、去重和补全，再同步到个人飞书求职清单。
-
-| 本次运行 | 结果 |
-|---|---|
-| 新增公司 | 15 家 |
-| 新增招聘记录 | 23 条 |
-| 补全已有记录 | 4 条 |
-| 待确认冲突 | 0 条 |
-
-#### 1. 汇总当天的招聘信息增量
-
-同步报告会列出新增公司和对应招聘批次，并分别展示每个信息源的硬筛、去重、新增、补全和游标推进结果，方便用户快速验收本次更新。
-
-![job-collection 汇总多个招聘信息源的增量同步结果](docs/images/job-collection/sync-summary.png)
-
-#### 2. 写入可持续跟进的个人求职清单
-
-同步后的记录按照公司、届次、招聘批次和投递进度结构化保存，并通过暑期实习、秋招提前批、秋招、春招、补录和已投递等视图分类，方便后续筛选和维护投递状态。
-
-![job-collection 将筛选后的招聘信息同步到飞书求职清单](docs/images/job-collection/base-job-list.jpg)
-
-> `job-collection` 只读取用户明确提供且有权访问的信息源，不主动爬取招聘网站，也不会自动投递。
-
-### 案例二：从招聘邮件到笔试提醒
-
-下面是一次真实的 `recruiting-reminder` 使用过程。Agent 扫描招聘邮箱，先给出识别结果供用户确认，再把确认后的笔试信息写入飞书多维表格并创建日历日程。
-
-| 本次运行 | 结果 |
-|---|---|
-| 扫描邮件 | 21 封 |
-| 去重跳过 | 1 封已处理邮件 |
-| 识别结果 | 2 封招聘相关邮件，其中 1 封明确、1 封信息不全 |
-| 临近安排 | 识别出 1 场次日开考的同步笔试 |
-
-#### 1. 识别邮件并提取关键信息
-
-Agent 从邮件中提取公司、测评类型、开始与结束时间、平台、链接和注意事项，同时区分「明确」与「疑似但信息不全」的邮件。缺少截止时间的信息不会被直接写入，而是保留给用户判断。
-
-![recruiting-reminder 扫描招聘邮件并输出待确认结果](docs/images/recruiting-reminder/email-scan-result.jpg)
-
-#### 2. 确认后创建飞书日历日程
-
-用户确认后，明确的笔试被创建为日历日程。日程中保留考试时间、平台、专属链接、注意事项和提前提醒，避免笔试邮件被后续邮件淹没。
-
-![recruiting-reminder 创建带考试信息和提醒的飞书日历日程](docs/images/recruiting-reminder/calendar-event.jpg)
-
-#### 3. 同步到飞书多维表格
-
-同一条招聘信息也会结构化写入多维表格，保留公司、笔试类型、笔试子类型、企业性质和链接，方便后续筛选、分类和跟进。
-
-![recruiting-reminder 将笔试信息写入飞书多维表格](docs/images/recruiting-reminder/base-records.jpg)
-
-> 截图来自真实使用过程，私人账号信息和专属链接均已隐藏。OfferLoop 默认在 Base 写入和日历创建前请求人工确认。
-
-## 使用示例
-
-### 同步招聘信息
-
-```text
-请调用 job-collection。
-这是我有权访问的招聘信息源：<飞书 Base 或腾讯 Smartsheet URL>。
-按我的偏好同步到个人求职清单。
-```
-
-### 整理笔试和面试
-
-```text
-请调用 recruiting-reminder。
-扫描最近 7 天的邮箱，先让我确认识别结果，再同步到飞书并安排日历。
-```
-
-### 联动已有求职清单
-
-```text
-请调用 offerloop-setup，把这个 Base 设为 OfferLoop 的目标求职清单：<Base URL>。
-以后识别笔试和面试时，尝试关联到里面的已投递记录。
-```
-
-## 隐私与安全
-
-- 不要在聊天中发送邮箱授权码、App Secret、Cookie、token 或密码；
-- IMAP 凭证仅从本机环境变量或私有 `.env` 文件读取；
-- 邮件正文会进入当前 AI Agent 上下文用于识别和提取；
-- 只读取用户明确提供且有权访问的招聘信息源；
-- 任何 Base 写入和日历创建前都保留人工确认；
-- 本地配置和状态文件不应提交到 Git。
-
-## 项目结构
-
-```text
-OfferLoop/
-├── skills/
-│   ├── offerloop-setup/
-│   ├── job-collection/
-│   └── recruiting-reminder/
-├── tests/
-├── README.md
-├── SECURITY.md
-├── CONTRIBUTING.md
-└── LICENSE
-```
-
-未来新增能力继续以 `skills/<skill-name>/SKILL.md` 的形式加入，保持独立触发和独立测试。
-
-## 当前边界
-
-- 需要支持 Agent Skills / `SKILL.md` 的 AI Agent；
-- Python 统一要求 3.10 或更高版本；
-- 飞书功能依赖可用的 `lark-cli` 和相应权限；
-- 腾讯 Smartsheet 读取可能需要用户已登录的本机浏览器；
-- 邮件扫描是主动触发的一次性任务，不是邮件服务器守护进程；
-- 当前仍分别维护求职清单、笔试和面试数据，跨 Skill 关联为可选能力。
-
-## 开发与测试
+## 开发与发布前验收
 
 ```bash
 python3 -m unittest discover -s tests -v
 python3 -m unittest discover -s skills/job-collection/tests -v
+python3 -m unittest discover -s skills/recruiting-reminder/tests -v
+npm --prefix services/job-progress-sync test
 python3 skills/job-collection/scripts/validate_skill.py
 ```
 
-每个 Skill 都必须拥有正确的 YAML frontmatter，目录名与 `name` 一致，不得包含真实凭证或用户数据。
+GitHub CI 还会在 Node 20 下分别安装、测试、类型检查并构建两份妙搭模板。合成端到端用例见 [验收用例](docs/cases/end-to-end-acceptance.md)，本地脱敏发布记录见 [发布前验收记录](docs/cases/release-acceptance-2026-07-20.md)。
 
 ## License
 
-本项目采用 [MIT License](LICENSE)。
+[MIT](LICENSE)

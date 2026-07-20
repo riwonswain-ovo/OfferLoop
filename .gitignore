@@ -18,3 +18,10 @@ exports/
 
 base_config.json
 processed_emails.json
+
+# Local deployment workspaces and internal implementation plans
+/apps/
+/.hermes/
+.spark/
+.spark_project
+*.tsbuildinfo

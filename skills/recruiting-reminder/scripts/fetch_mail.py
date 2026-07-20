@@ -28,6 +28,7 @@ accepted for migration. No external dependencies are required.
                                    date math; defaults to UTC)
 
 Usage:
+    python3 fetch_mail.py --check-connection
     python3 fetch_mail.py --days 7 --max 50
     python3 fetch_mail.py --days 7 --max 50 --with-body
     python3 fetch_mail.py --body <uid>
@@ -35,6 +36,9 @@ Usage:
 Outputs JSON to stdout: a list of envelopes, each with
 uid / subject / from / date / body_preview (first 500 chars of text body).
 The full message body can be fetched with --body <uid>.
+
+`--check-connection` only logs in, SELECTs the configured mailbox, and logs
+out. It does not issue IMAP SEARCH or FETCH commands and prints no mail data.
 """
 
 import argparse
@@ -45,6 +49,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 from imaplib import IMAP4_SSL, Commands
 from pathlib import Path
+from email.utils import parseaddr
 
 
 # Allow imaplib to issue the IMAP ID extension command.
@@ -63,6 +68,67 @@ NETEASE_DOMAINS = (
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 LEGACY_ENV_FILE = SCRIPT_DIR / ".env"
+
+
+def default_ignored_senders_file(environ=None):
+    source = dict(os.environ if environ is None else environ)
+    config_home = Path(
+        source.get("XDG_CONFIG_HOME", Path.home() / ".config")
+    ).expanduser()
+    return config_home / "offerloop" / "recruiting-reminder" / "ignored_senders.json"
+
+
+def load_ignored_senders(path=None, environ=None):
+    selected = Path(path) if path else default_ignored_senders_file(environ)
+    if not selected.exists():
+        return {
+            "ignored_companies": [],
+            "ignored_email_addresses": [],
+            "ignored_email_domains": [],
+        }
+    try:
+        payload = json.loads(selected.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {
+            "ignored_companies": [],
+            "ignored_email_addresses": [],
+            "ignored_email_domains": [],
+        }
+    return {
+        key: [str(value).strip() for value in payload.get(key, []) if str(value).strip()]
+        for key in (
+            "ignored_companies",
+            "ignored_email_addresses",
+            "ignored_email_domains",
+        )
+    }
+
+
+def _compact_text(value):
+    return re.sub(r"\s+", "", str(value or "")).casefold()
+
+
+def is_permanently_ignored(envelope, rules):
+    address = parseaddr(str(envelope.get("from") or ""))[1].casefold()
+    domain = address.rsplit("@", 1)[1] if "@" in address else ""
+    ignored_addresses = {value.casefold() for value in rules["ignored_email_addresses"]}
+    ignored_domains = {value.casefold().lstrip("@") for value in rules["ignored_email_domains"]}
+    if address and address in ignored_addresses:
+        return True
+    if domain and domain in ignored_domains:
+        return True
+
+    searchable = _compact_text(
+        " ".join(
+            str(envelope.get(key) or "")
+            for key in ("subject", "from", "body_preview")
+        )
+    )
+    return any(
+        _compact_text(company) in searchable
+        for company in rules["ignored_companies"]
+        if _compact_text(company)
+    )
 
 
 def default_env_file(environ=None):
@@ -172,21 +238,24 @@ def strip_html(html):
 
 
 def parse_envelope(uid, raw_headers, body_preview):
-    envelope = {"uid": uid, "subject": None, "from": None, "date": None, "body_preview": body_preview}
-    for line in raw_headers.split(b"\r\n"):
-        if not line:
-            continue
-        try:
-            decoded = line.decode("utf-8", errors="replace")
-        except Exception:
-            decoded = line.decode("latin-1", errors="replace")
-        if decoded.lower().startswith("subject:"):
-            envelope["subject"] = decode_mime_header(decoded[8:].strip())
-        elif decoded.lower().startswith("from:"):
-            envelope["from"] = decode_mime_header(decoded[5:].strip())
-        elif decoded.lower().startswith("date:"):
-            envelope["date"] = decoded[5:].strip()
-    return envelope
+    from email import policy
+    from email.parser import BytesParser
+
+    message = BytesParser(policy=policy.default).parsebytes(raw_headers)
+    message_id = str(message.get("Message-ID", "")).strip()
+    in_reply_to = str(message.get("In-Reply-To", "")).strip()
+    references = re.findall(r"<[^>]+>", str(message.get("References", "")))
+    return {
+        "uid": uid,
+        "source_mail_id": message_id or f"imap_uid:{uid}",
+        "message_id": message_id,
+        "in_reply_to": in_reply_to,
+        "references": references,
+        "subject": decode_mime_header(str(message.get("Subject", ""))) or None,
+        "from": decode_mime_header(str(message.get("From", ""))) or None,
+        "date": str(message.get("Date", "")) or None,
+        "body_preview": body_preview,
+    }
 
 
 def get_body_preview(conn, uid):
@@ -234,6 +303,35 @@ def imap_connect(host, port):
     return IMAP4_SSL(host, port)
 
 
+def check_connection(config=None, *, connect=imap_connect):
+    """Login and select the configured mailbox without reading any message."""
+    cfg = dict(load_config() if config is None else config)
+    required = ("IMAP_HOST", "IMAP_LOGIN", "IMAP_PASSWORD")
+    if any(not cfg.get(key) for key in required):
+        return {"ok": False, "error": "IMAP configuration incomplete"}
+    try:
+        port = int(cfg.get("IMAP_PORT", "993"))
+        conn = connect(cfg["IMAP_HOST"], port)
+    except Exception:
+        return {"ok": False, "error": "IMAP connection failed"}
+    mailbox = cfg.get("MAILBOX", "INBOX")
+    try:
+        conn.login(cfg["IMAP_LOGIN"], cfg["IMAP_PASSWORD"])
+        if is_netease(cfg["IMAP_HOST"]):
+            send_id(conn, cfg["IMAP_LOGIN"])
+        selected, _data = conn.select(mailbox)
+        if selected != "OK":
+            return {"ok": False, "error": "IMAP connection failed"}
+        return {"ok": True, "mailbox": mailbox}
+    except Exception:
+        return {"ok": False, "error": "IMAP connection failed"}
+    finally:
+        try:
+            conn.logout()
+        except Exception:
+            pass
+
+
 def require(cfg, key):
     val = cfg.get(key)
     if not val:
@@ -268,14 +366,22 @@ def fetch_recent(opts):
         uids = uids[-opts.max:] if opts.max else uids
 
         envelopes = []
+        ignored_rules = load_ignored_senders()
         for uid in uids:
             uid_s = uid.decode()
-            typ, data = conn.uid("fetch", uid, "(BODY.PEEK[HEADER.FIELDS (SUBJECT FROM DATE)])")
+            typ, data = conn.uid(
+                "fetch",
+                uid,
+                "(BODY.PEEK[HEADER.FIELDS (SUBJECT FROM DATE MESSAGE-ID IN-REPLY-TO REFERENCES)])",
+            )
             if typ != "OK" or not data or not data[0]:
                 continue
             raw_headers = data[0][1] if isinstance(data[0], tuple) else b""
             body_preview = get_body_preview(conn, uid) if opts.with_body else ""
-            envelopes.append(parse_envelope(uid_s, raw_headers, body_preview))
+            envelope = parse_envelope(uid_s, raw_headers, body_preview)
+            if is_permanently_ignored(envelope, ignored_rules):
+                continue
+            envelopes.append(envelope)
         return envelopes
     finally:
         try:
@@ -321,6 +427,11 @@ def main():
     p.add_argument("--with-body", action="store_true", help="include 500-char body preview")
     p.add_argument("--body", metavar="UID", help="fetch full body of one message by UID")
     p.add_argument(
+        "--check-connection",
+        action="store_true",
+        help="login and select the mailbox without reading messages",
+    )
+    p.add_argument(
         "--env-file",
         help="path to an IMAP .env file (also available as OFFERLOOP_IMAP_ENV)",
     )
@@ -332,6 +443,13 @@ def main():
     if args.body:
         out = fetch_body(args.body)
         print(out)
+        return
+
+    if args.check_connection:
+        result = check_connection()
+        print(json.dumps(result, ensure_ascii=False))
+        if not result["ok"]:
+            raise SystemExit(1)
         return
 
     envelopes = fetch_recent(args)

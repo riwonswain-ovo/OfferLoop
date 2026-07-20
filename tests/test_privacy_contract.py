@@ -16,12 +16,16 @@ PRIVATE_TOKEN = re.compile(
 ALLOWED_EMAIL_DOMAINS = {"example.com", "xx.com", "188.com"}
 
 
-def tracked_text_files():
+def repository_text_files():
     paths = subprocess.check_output(
-        ["git", "ls-files"], cwd=ROOT, text=True
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
+        cwd=ROOT,
+        text=True,
     ).splitlines()
     for relative in paths:
         path = ROOT / relative
+        if not path.is_file():
+            continue
         try:
             yield relative, path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
@@ -29,9 +33,13 @@ def tracked_text_files():
 
 
 class PrivacyContractTest(unittest.TestCase):
+    def test_untracked_service_sources_are_included_in_privacy_scan(self):
+        scanned = {relative for relative, _ in repository_text_files()}
+        self.assertIn("services/job-progress-sync/src/handler.js", scanned)
+
     def test_no_personal_contact_details_or_home_paths(self):
         findings = []
-        for relative, content in tracked_text_files():
+        for relative, content in repository_text_files():
             for match in EMAIL.finditer(content):
                 if match.group(1).lower() not in ALLOWED_EMAIL_DOMAINS:
                     findings.append(f"{relative}: non-placeholder email")
@@ -44,7 +52,7 @@ class PrivacyContractTest(unittest.TestCase):
     def test_no_concrete_secret_or_base_token_patterns(self):
         findings = [
             relative
-            for relative, content in tracked_text_files()
+            for relative, content in repository_text_files()
             if PRIVATE_TOKEN.search(content)
         ]
         self.assertEqual(findings, [])
