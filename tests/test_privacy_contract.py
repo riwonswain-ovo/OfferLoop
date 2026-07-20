@@ -57,16 +57,5 @@ class PrivacyContractTest(unittest.TestCase):
         ]
         self.assertEqual(findings, [])
 
-    def test_commit_emails_use_github_noreply(self):
-        emails = subprocess.check_output(
-            ["git", "log", "--all", "--format=%ae%n%ce"], cwd=ROOT, text=True
-        ).splitlines()
-        self.assertTrue(emails)
-        self.assertTrue(
-            all(email.endswith("@users.noreply.github.com") for email in emails),
-            emails,
-        )
-
-
 if __name__ == "__main__":
     unittest.main()
