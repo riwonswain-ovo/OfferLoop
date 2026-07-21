@@ -60,7 +60,8 @@ test("exchanges app credentials for a token and handles a webhook end to end", a
       event: "application.submitted",
       source_record_id: "rec_source",
       company: "示例公司",
-      source_record_url: "https://example.feishu.cn/base/source?record=rec_source",
+      announcement_url: "https://example.com/notice",
+      application_url: "https://example.com/apply",
       transitioned_at: "2026-07-17T19:00:00+08:00",
     }),
   });
@@ -112,7 +113,8 @@ test("reuses a valid tenant token across webhook requests", async () => {
       event: "application.submitted",
       source_record_id: "rec_source",
       company: "示例公司",
-      source_record_url: "https://example.feishu.cn/base/source",
+      announcement_url: "https://example.com/notice",
+      application_url: "https://example.com/apply",
       transitioned_at: "2026-07-17T19:00:00+08:00",
     },
   };

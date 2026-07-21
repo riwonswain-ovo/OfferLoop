@@ -34,8 +34,12 @@ class ProgressSyncTest(unittest.TestCase):
     def test_first_submission_builds_progress_record_with_blank_position(self):
         source = {
             "record_id": "rec_source",
-            "record_url": "https://example.feishu.cn/base/source?record=rec_source",
-            "fields": {"公司": "示例公司", "投递进度": "已投递"},
+            "fields": {
+                "公司": "示例公司",
+                "投递进度": "已投递",
+                "公告链接": "https://example.com/notice",
+                "投递链接": "https://example.com/apply",
+            },
         }
 
         result = build_progress_record(source, submitted_on=date(2026, 7, 17))
@@ -48,7 +52,8 @@ class ProgressSyncTest(unittest.TestCase):
                 "投递岗位": "",
                 "投递日期": "2026-07-17",
                 "岗位 JD": "",
-                "原招聘信息": source["record_url"],
+                "公告链接": "https://example.com/notice",
+                "投递链接": "https://example.com/apply",
                 "企业清单 record_id": "rec_source",
             },
         )
@@ -56,8 +61,12 @@ class ProgressSyncTest(unittest.TestCase):
     def test_repeat_submission_preserves_user_and_later_stage_fields(self):
         source = {
             "record_id": "rec_source",
-            "record_url": "https://example.feishu.cn/base/source?record=rec_source",
-            "fields": {"公司": "示例公司（更新）", "投递进度": "已投递"},
+            "fields": {
+                "公司": "示例公司（更新）",
+                "投递进度": "已投递",
+                "公告链接": "https://new.example/notice",
+                "投递链接": "https://new.example/apply",
+            },
         }
         existing = {
             "当前阶段": "二面",
@@ -80,13 +89,19 @@ class ProgressSyncTest(unittest.TestCase):
         self.assertEqual(result["投递日期"], "2026-07-10")
         self.assertEqual(result["岗位 JD"], "负责 AI 产品规划")
         self.assertEqual(result["公司"], "示例公司（更新）")
-        self.assertEqual(result["原招聘信息"], source["record_url"])
+        self.assertNotIn("原招聘信息", result)
+        self.assertEqual(result["公告链接"], "https://new.example/notice")
+        self.assertEqual(result["投递链接"], "https://new.example/apply")
 
     def test_sync_is_idempotent_by_enterprise_record_id(self):
         source = {
             "record_id": "rec_source",
-            "record_url": "https://example.feishu.cn/base/source?record=rec_source",
-            "fields": {"公司": "示例公司", "投递进度": "已投递"},
+            "fields": {
+                "公司": "示例公司",
+                "投递进度": "已投递",
+                "公告链接": "https://example.com/notice",
+                "投递链接": "https://example.com/apply",
+            },
         }
         repository = FakeProgressRepository()
 
@@ -112,7 +127,6 @@ class ProgressSyncTest(unittest.TestCase):
     def test_sync_skips_records_not_in_submitted_status(self):
         source = {
             "record_id": "rec_source",
-            "record_url": "https://example.feishu.cn/base/source?record=rec_source",
             "fields": {"公司": "示例公司", "投递进度": "感兴趣"},
         }
         repository = FakeProgressRepository()
@@ -129,7 +143,6 @@ class ProgressSyncTest(unittest.TestCase):
     def test_first_submission_requires_company(self):
         source = {
             "record_id": "rec_source",
-            "record_url": "https://example.feishu.cn/base/source?record=rec_source",
             "fields": {"公司": "", "投递进度": "已投递"},
         }
 
@@ -139,7 +152,6 @@ class ProgressSyncTest(unittest.TestCase):
     def test_historical_migration_can_preserve_unknown_submission_date(self):
         source = {
             "record_id": "rec_source",
-            "record_url": "https://example.feishu.cn/base/source?record=rec_source",
             "fields": {"公司": "历史公司", "投递进度": "已投递"},
         }
 

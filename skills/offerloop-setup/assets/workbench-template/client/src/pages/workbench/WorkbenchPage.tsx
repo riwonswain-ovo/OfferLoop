@@ -77,7 +77,8 @@ const PROGRESS_COLUMNS: DatasetColumn[] = [
   { key: '投递岗位', label: '投递岗位', width: 'min-w-48' },
   { key: '投递日期', label: '投递日期' },
   { key: '岗位 JD', label: '岗位 JD', width: 'min-w-64' },
-  { key: '原招聘信息', label: '招聘信息' },
+  { key: '公告链接', label: '公告入口' },
+  { key: '投递链接', label: '投递入口' },
 ];
 
 const EVENT_COLUMNS: DatasetColumn[] = [
@@ -129,7 +130,6 @@ const PROGRESS_STAGE_ORDER: string[] = [
 const LINK_FIELDS: string[] = [
   '公告链接',
   '投递链接',
-  '原招聘信息',
   '链接',
   '面试准备文档',
   '面试复盘文档',

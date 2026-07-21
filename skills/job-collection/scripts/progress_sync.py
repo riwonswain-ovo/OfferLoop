@@ -17,7 +17,8 @@ def build_progress_record(source, submitted_on: date | None):
         "投递岗位": "",
         "投递日期": submitted_on.isoformat() if submitted_on else "",
         "岗位 JD": "",
-        "原招聘信息": source["record_url"],
+        "公告链接": source.get("fields", {}).get("公告链接", ""),
+        "投递链接": source.get("fields", {}).get("投递链接", ""),
         "企业清单 record_id": source["record_id"],
     }
 
@@ -25,8 +26,10 @@ def build_progress_record(source, submitted_on: date | None):
 def merge_progress_record(existing, source, submitted_on: date | None):
     """Refresh source-owned fields without overwriting user or later-stage data."""
     result = dict(existing)
+    result.pop("原招聘信息", None)
     result["公司"] = source["fields"]["公司"]
-    result["原招聘信息"] = source["record_url"]
+    result["公告链接"] = source.get("fields", {}).get("公告链接", "")
+    result["投递链接"] = source.get("fields", {}).get("投递链接", "")
     result["企业清单 record_id"] = source["record_id"]
     if not result.get("当前阶段"):
         result["当前阶段"] = "已投递"

@@ -30,7 +30,8 @@ test("rejects a submitted event without a source record id", async () => {
       body: {
         event: "application.submitted",
         company: "示例公司",
-        source_record_url: "https://example.feishu.cn/base/source",
+        announcement_url: "https://example.com/notice",
+        application_url: "https://example.com/apply",
         transitioned_at: "2026-07-17T19:00:00+08:00",
       },
     },
@@ -55,7 +56,8 @@ test("rejects events other than an application entering submitted status", async
         event: "application.interested",
         source_record_id: "rec_source",
         company: "示例公司",
-        source_record_url: "https://example.feishu.cn/base/source",
+        announcement_url: "https://example.com/notice",
+        application_url: "https://example.com/apply",
         transitioned_at: "2026-07-17T19:00:00+08:00",
       },
     },
@@ -91,7 +93,6 @@ test("rejects incomplete submitted event fields before accessing Feishu", async 
         event: "application.submitted",
         source_record_id: "rec_source",
         company: "",
-        source_record_url: "",
         transitioned_at: "not-a-date",
       },
     },
@@ -102,7 +103,7 @@ test("rejects incomplete submitted event fields before accessing Feishu", async 
     status: 400,
     body: {
       ok: false,
-      error: "company, source_record_url and transitioned_at are required",
+      error: "company and transitioned_at are required",
     },
   });
 });
@@ -127,7 +128,8 @@ test("creates a progress record for the first submitted event", async () => {
         event: "application.submitted",
         source_record_id: "rec_source",
         company: "示例公司",
-        source_record_url: "https://example.feishu.cn/base/source?record=rec_source",
+        announcement_url: "https://example.com/notice",
+        application_url: "https://example.com/apply",
         transitioned_at: "2026-07-17T19:00:00+08:00",
       },
     },
@@ -145,7 +147,8 @@ test("creates a progress record for the first submitted event", async () => {
       "投递岗位": "",
       "投递日期": "2026-07-17",
       "岗位 JD": "",
-      "原招聘信息": "https://example.feishu.cn/base/source?record=rec_source",
+      "公告链接": "https://example.com/notice",
+      "投递链接": "https://example.com/apply",
       "企业清单 record_id": "rec_source",
     },
   ]);
@@ -165,6 +168,8 @@ test("repeat submission preserves user fields and later interview stage", async 
           "投递日期": "2026-07-10",
           "岗位 JD": "负责 AI 产品规划",
           "原招聘信息": "https://old.example/source",
+          "公告链接": "https://old.example/notice",
+          "投递链接": "https://old.example/apply",
           "企业清单 record_id": "rec_source",
         },
       };
@@ -181,7 +186,8 @@ test("repeat submission preserves user fields and later interview stage", async 
         event: "application.submitted",
         source_record_id: "rec_source",
         company: "新公司名",
-        source_record_url: "https://new.example/source",
+        announcement_url: "https://new.example/notice",
+        application_url: "https://new.example/apply",
         transitioned_at: "2026-07-18T19:00:00+08:00",
       },
     },
@@ -197,7 +203,9 @@ test("repeat submission preserves user fields and later interview stage", async 
   assert.equal(updates[0].fields["投递日期"], "2026-07-10");
   assert.equal(updates[0].fields["岗位 JD"], "负责 AI 产品规划");
   assert.equal(updates[0].fields["公司"], "新公司名");
-  assert.equal(updates[0].fields["原招聘信息"], "https://new.example/source");
+  assert.equal(updates[0].fields["公告链接"], "https://new.example/notice");
+  assert.equal(updates[0].fields["投递链接"], "https://new.example/apply");
+  assert.equal("原招聘信息" in updates[0].fields, false);
 });
 
 
@@ -209,7 +217,8 @@ test("identical retry does not write the progress record again", async () => {
     "投递岗位": "",
     "投递日期": "2026-07-17",
     "岗位 JD": "",
-    "原招聘信息": "https://example.feishu.cn/base/source?record=rec_source",
+    "公告链接": "https://example.com/notice",
+    "投递链接": "https://example.com/apply",
     "企业清单 record_id": "rec_source",
   };
   const repository = {
@@ -228,7 +237,8 @@ test("identical retry does not write the progress record again", async () => {
         event: "application.submitted",
         source_record_id: "rec_source",
         company: "示例公司",
-        source_record_url: existingFields["原招聘信息"],
+        announcement_url: existingFields["公告链接"],
+        application_url: existingFields["投递链接"],
         transitioned_at: "2026-07-18T19:00:00+08:00",
       },
     },

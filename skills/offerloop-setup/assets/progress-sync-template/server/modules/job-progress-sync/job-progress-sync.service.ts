@@ -23,7 +23,6 @@ const REQUIRED_ENV_NAMES: string[] = [
   'FEISHU_APP_SECRET',
   'SOURCE_BASE_TOKEN',
   'SOURCE_TABLE_ID',
-  'SOURCE_BASE_URL',
   'PROGRESS_BASE_TOKEN',
   'PROGRESS_TABLE_ID',
 ];
@@ -63,7 +62,6 @@ interface DeploymentConfig {
   appSecret: string;
   sourceBaseToken: string;
   sourceTableId: string;
-  sourceBaseUrl: string;
   progressBaseToken: string;
   progressTableId: string;
 }
@@ -79,7 +77,6 @@ function requireDeploymentConfig(env: NodeJS.ProcessEnv): DeploymentConfig {
     appSecret: String(env.FEISHU_APP_SECRET),
     sourceBaseToken: String(env.SOURCE_BASE_TOKEN),
     sourceTableId: String(env.SOURCE_TABLE_ID),
-    sourceBaseUrl: String(env.SOURCE_BASE_URL),
     progressBaseToken: String(env.PROGRESS_BASE_TOKEN),
     progressTableId: String(env.PROGRESS_TABLE_ID),
   };
@@ -135,13 +132,6 @@ function readUrl(value: unknown): string {
     }
   }
   return readText(value);
-}
-
-function urlCell(link: string): Record<string, string> {
-  return {
-    link,
-    text: '查看原招聘信息',
-  };
 }
 
 function formatShanghaiDate(value?: string): string {
@@ -211,7 +201,8 @@ export class JobProgressSyncService {
     const existing: FeishuRecord | null = await this.findProgressRecord(
       request.sourceRecordId,
     );
-    const sourceRecordUrl: string = this.buildSourceRecordUrl(request.sourceRecordId);
+    const announcementUrl: string = readUrl(sourceRecord.fields['公告链接']);
+    const applicationUrl: string = readUrl(sourceRecord.fields['投递链接']);
     const submittedDate: string = formatShanghaiDate(request.transitionedAt);
 
     if (existing === null) {
@@ -221,7 +212,8 @@ export class JobProgressSyncService {
         '投递岗位': '',
         '投递日期': submittedDate,
         '岗位 JD': '',
-        '原招聘信息': urlCell(sourceRecordUrl),
+        '公告链接': announcementUrl,
+        '投递链接': applicationUrl,
         '企业清单 record_id': request.sourceRecordId,
       };
       const recordId: string = await this.createProgressRecord(fields);
@@ -234,13 +226,15 @@ export class JobProgressSyncService {
       '投递岗位': readText(existing.fields['投递岗位']),
       '投递日期': existing.fields['投递日期'] || submittedDate,
       '岗位 JD': readText(existing.fields['岗位 JD']),
-      '原招聘信息': urlCell(readUrl(existing.fields['原招聘信息'])),
+      '公告链接': readUrl(existing.fields['公告链接']),
+      '投递链接': readUrl(existing.fields['投递链接']),
       '企业清单 record_id': readText(existing.fields['企业清单 record_id']),
     };
     const fields: Record<string, unknown> = {
       ...existingComparable,
       '公司': company,
-      '原招聘信息': urlCell(sourceRecordUrl),
+      '公告链接': announcementUrl,
+      '投递链接': applicationUrl,
       '企业清单 record_id': request.sourceRecordId,
     };
 
@@ -318,11 +312,6 @@ export class JobProgressSyncService {
       url,
       data: { fields: toWritableFields(fields) },
     });
-  }
-
-  private buildSourceRecordUrl(recordId: string): string {
-    const separator: string = this.config.sourceBaseUrl.includes('?') ? '&' : '?';
-    return `${this.config.sourceBaseUrl}${separator}record=${encodeURIComponent(recordId)}`;
   }
 
   private async feishuRequest<T>(config: AxiosRequestConfig): Promise<T> {

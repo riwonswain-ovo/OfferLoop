@@ -50,16 +50,17 @@ JSON body with only the minimum recruitment metadata:
   "event": "application.submitted",
   "source_record_id": "rec_example",
   "company": "示例公司",
-  "source_record_url": "https://example.feishu.cn/base/source?record=rec_example",
+  "announcement_url": "https://example.com/notice",
+  "application_url": "https://example.com/apply",
   "transitioned_at": "2026-07-17T19:00:00+08:00"
 }
 ```
 
 The target lookup key is `企业清单 record_id`. A first event creates one record
-with a blank `投递岗位` and `岗位 JD`; later retries preserve those user-edited
-fields, the first `投递日期`, and any later interview stage. Creation uses a
-stable Feishu `client_token`, so retrying the same source record remains
-idempotent.
+with a blank `投递岗位` and `岗位 JD`, while `公告链接` and `投递链接` mirror the
+enterprise record; later retries preserve user-edited fields, the first
+`投递日期`, and any later interview stage. Creation uses a stable Feishu
+`client_token`, so retrying the same source record remains idempotent.
 
 ## Feishu FaaS adapter
 
