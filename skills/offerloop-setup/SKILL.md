@@ -45,18 +45,26 @@ python3 scripts/preflight.py --capability '<collection|reminder|workspace|full>'
 ### 预检边界
 
 这不是完整安装或线上权限验证。预检仅检查本机 Python 版本、`lark-cli` 命令是否存在、四个
-OfferLoop Skill 文件是否存在，以及所选能力的本地定位配置、IMAP 配置字段和文件权限。
-它不检查 Node/npx（它们只用于安装），不确认 `lark-cli` profile 是否存在或已授权，也不访问
-飞书、邮箱、浏览器、妙搭或外部 Lark Skill。
+OfferLoop Skill 与所选能力必需的外部 Lark Skill 文件是否存在，以及本地定位配置、IMAP 配置字段
+和文件权限。Skill 会在当前安装目录、`~/.agents/skills`、`~/.codex/skills` 与已配置的
+`$CODEX_HOME/skills` 中查找；报告不输出这些本机路径。它不检查 Node/npx（它们只用于安装），
+不确认 `lark-cli` profile 是否存在或已授权，也不访问飞书、邮箱、浏览器或妙搭。
 
 因此，即使报告为 `ready`，也只能表述为“本机可检查条件已满足”；飞书应用 scope、应用版本发布、
 租户安装、Base/知识库共享、IMAP 连通性、个人日历授权、妙搭部署和工作台 OAuth 均须在用户确认后
 另行只读核验或配置。不要把 `ready` 表述为“已部署”或“已可用”。
 
 本仓库只包含 `offerloop-setup`、`job-collection`、`recruiting-reminder` 与
-`offerloop-workspace`。调用 `lark-base`、`lark-doc`、`lark-wiki`、`lark-calendar`、`lark-im`
-或 `lark-contact` 的能力，要求它们已在当前 Agent 环境中另行安装并在新会话中加载；它们不随
-OfferLoop 安装。缺失时报告准确的阻塞项，不要假设预检已经发现或修复它。
+`offerloop-workspace`。`collection` 核心流程直接使用 `lark-cli`；`reminder` 需要
+`lark-calendar`；`workspace` 需要 `lark-base`、`lark-doc`、`lark-wiki`；`full` 还组合需要
+`lark-shared` 与 `lark-apps`。只有通知已启用时才检查通知依赖：目标已登记时运行期只需要
+`lark-im`，仅在启用的用户目标仍需按姓名解析时才需要 `lark-contact`。这些外部 Skill 不随
+OfferLoop 安装；缺失时按预检给出的命令安装并新开 Agent 会话。
+
+`collection` 未登记 `progress_base_url` 时，将该可选定位报告为 `unverified`，并跳过跨 Base
+求职进展对账；这不属于 `needs_action`，也不阻塞企业信息同步。`reminder`、`workspace` 与
+`full` 中的对应合同仍要求求职进展定位。无论 Skill 目录是否存在，profile、scope、应用发布、
+租户安装和资源共享等线上条件一律保持 `unverified`，等待用户确认后的只读验收。
 
 ## 2. 仅保存非敏感定位信息
 

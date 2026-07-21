@@ -45,6 +45,8 @@ class JobCollectionConfigTest(unittest.TestCase):
         self.assertIn("scripts/progress_sync.py", content)
         self.assertIn("企业清单 record_id", content)
         self.assertIn("信息更新时间 desc, 公司 asc", content)
+        self.assertIn("没有配置 `progress_base_url` 时跳过跨 Base 对账", content)
+        self.assertIn("不能因此阻塞", content)
 
     def test_reference_docs_publish_the_exact_enterprise_schema(self):
         for path in (FIELD_CONTRACT, EXCEL_INSERT):
