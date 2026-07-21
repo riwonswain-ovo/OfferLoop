@@ -25,6 +25,7 @@ PUBLIC_LOCATOR_KEYS = {
     "schema_version",
 }
 PROGRESS_SYNC_KEYS = {"app_id", "endpoint", "workflow_id", "status"}
+NOTIFICATION_KEYS = {"status", "target_type", "target_name", "target_id", "identity"}
 
 
 def config_root(environ=None):
@@ -108,6 +109,56 @@ def update_progress_sync_config(path, updates):
     return data
 
 
+def update_notification_config(path, updates):
+    """Merge the explicitly approved Feishu notification destination."""
+    unknown = set(updates) - NOTIFICATION_KEYS
+    if unknown:
+        names = ", ".join(sorted(unknown))
+        raise ValueError(f"notifications cannot store secret or unknown keys: {names}")
+    filtered = {key: value for key, value in updates.items() if value is not None}
+    if filtered.get("status") not in (None, "enabled", "disabled"):
+        raise ValueError("notifications status must be enabled or disabled")
+    if filtered.get("target_type") not in (None, "user", "chat"):
+        raise ValueError("notifications target_type must be user or chat")
+    if filtered.get("identity") not in (None, "bot", "user"):
+        raise ValueError("notifications identity must be bot or user")
+    if "target_name" in filtered:
+        target_name = str(filtered["target_name"]).strip()
+        if not target_name:
+            raise ValueError("notifications target_name must not be empty")
+        filtered["target_name"] = target_name
+
+    data = load_config(path)
+    existing = data.get("notifications", {})
+    if existing is None:
+        existing = {}
+    if not isinstance(existing, dict):
+        raise ValueError("notifications must be a JSON object")
+    notification = dict(existing)
+    notification.update(filtered)
+
+    target_type = notification.get("target_type")
+    target_id = str(notification.get("target_id", "")).strip()
+    if target_id:
+        expected_prefix = {"user": "ou_", "chat": "oc_"}.get(target_type)
+        if expected_prefix is None or not target_id.startswith(expected_prefix):
+            raise ValueError("notifications target_id does not match target_type")
+    if notification.get("status") == "enabled":
+        missing = [
+            key
+            for key in ("target_type", "target_id", "identity")
+            if notification.get(key) in (None, "")
+        ]
+        if missing:
+            raise ValueError(
+                "notifications cannot be enabled without: " + ", ".join(missing)
+            )
+
+    data["notifications"] = notification
+    write_private_json(path, data)
+    return data
+
+
 def validate_workbench_url(value):
     parsed = urlparse(str(value))
     if parsed.scheme != "https" or not parsed.netloc:
@@ -159,6 +210,26 @@ def main():
         choices=("unverified", "enabled", "disabled"),
         help="sync bridge status; use enabled only after online verification",
     )
+    parser.add_argument(
+        "--notification-status",
+        choices=("enabled", "disabled"),
+        help="send one Feishu summary after a mutating skill run",
+    )
+    parser.add_argument(
+        "--notification-target-type",
+        choices=("user", "chat"),
+        help="notification destination type",
+    )
+    parser.add_argument("--notification-target-id", help="Feishu ou_xxx or oc_xxx")
+    parser.add_argument(
+        "--notification-target-name",
+        help="confirmed Feishu user or chat display name (not a secret)",
+    )
+    parser.add_argument(
+        "--notification-identity",
+        choices=("bot", "user"),
+        help="explicitly approved message sender identity",
+    )
     parser.add_argument("--init-imap", action="store_true")
     args = parser.parse_args()
 
@@ -185,6 +256,16 @@ def main():
     if any(value is not None for value in progress_sync_updates.values()):
         update_progress_sync_config(path, progress_sync_updates)
         print(f"Updated {path}")
+    notification_updates = {
+        "status": args.notification_status,
+        "target_type": args.notification_target_type,
+        "target_name": args.notification_target_name,
+        "target_id": args.notification_target_id,
+        "identity": args.notification_identity,
+    }
+    if any(value is not None for value in notification_updates.values()):
+        update_notification_config(path, notification_updates)
+        print(f"Updated {path}")
     if args.init_imap:
         destination, created = init_imap()
         action = "Created" if created else "Already exists"
@@ -192,6 +273,7 @@ def main():
     if not (
         any(value is not None for value in updates.values())
         or any(value is not None for value in progress_sync_updates.values())
+        or any(value is not None for value in notification_updates.values())
         or args.init_imap
     ):
         parser.print_help()

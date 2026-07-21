@@ -26,6 +26,7 @@ def build_progress_record(source, submitted_on: date | None):
 def merge_progress_record(existing, source, submitted_on: date | None):
     """Refresh source-owned fields without overwriting user or later-stage data."""
     result = dict(existing)
+    result.pop("原招聘信息", None)
     result["公司"] = source["fields"]["公司"]
     result["公告链接"] = source.get("fields", {}).get("公告链接", "")
     result["投递链接"] = source.get("fields", {}).get("投递链接", "")

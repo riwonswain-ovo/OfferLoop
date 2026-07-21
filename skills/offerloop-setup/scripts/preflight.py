@@ -171,6 +171,54 @@ def _selected_capabilities(capability):
     return status_model.expand_selection(capability)
 
 
+def _notification_check(config, capability):
+    notification = config.get("notifications")
+    if notification in (None, {}):
+        return _check(
+            f"local.{capability}_notification",
+            capability,
+            "ready",
+            "飞书消息通知未启用（可选）",
+        )
+    if not isinstance(notification, dict):
+        return _check(
+            f"local.{capability}_notification",
+            capability,
+            "needs_action",
+            "飞书消息通知配置格式无效",
+            "重新登记通知状态、目标和发送身份",
+        )
+    if notification.get("status") != "enabled":
+        return _check(
+            f"local.{capability}_notification",
+            capability,
+            "ready",
+            "飞书消息通知已停用（可选）",
+        )
+    target_type = notification.get("target_type")
+    target_id = str(notification.get("target_id", ""))
+    identity = notification.get("identity")
+    target_valid = (
+        (target_type == "user" and target_id.startswith("ou_"))
+        or (target_type == "chat" and target_id.startswith("oc_"))
+    )
+    if not target_valid or identity not in ("bot", "user"):
+        return _check(
+            f"local.{capability}_notification",
+            capability,
+            "needs_action",
+            "飞书消息通知定位不完整",
+            "重新登记匹配的通知目标和发送身份",
+        )
+    return _check(
+        f"local.{capability}_notification",
+        capability,
+        "unverified",
+        "飞书消息通知已登记，待在线验证",
+        "首次发送前确认接收方、摘要模板和发送身份并验证 IM 权限",
+    )
+
+
 def _capability_report(source, capability):
     selected = _selected_capabilities(capability)
     checks = []
@@ -269,6 +317,7 @@ def _capability_report(source, capability):
                 config.get(field), summary, f"登记 {summary.replace('已登记', '')} 地址"
             )
             checks.append(_check(check_id, "collection", status, result_summary, action))
+        checks.append(_notification_check(config, "collection"))
 
     if "reminder" in selected:
         for field, check_id, summary in (
@@ -279,6 +328,7 @@ def _capability_report(source, capability):
                 config.get(field), summary, f"登记 {summary.replace('已登记', '')} 地址"
             )
             checks.append(_check(check_id, "reminder", status, result_summary, action))
+        checks.append(_notification_check(config, "reminder"))
 
         imap_path = root / "recruiting-reminder" / ".env"
         imap_values = _env_values(imap_path)

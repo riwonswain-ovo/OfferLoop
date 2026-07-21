@@ -124,7 +124,8 @@ test("creates a progress record with a stable client token and Feishu date value
     "投递岗位": "",
     "投递日期": "2026-07-17",
     "岗位 JD": "",
-    "原招聘信息": "https://example.feishu.cn/base/source",
+    "公告链接": "https://example.com/notice",
+    "投递链接": "https://example.com/apply",
     "企业清单 record_id": "rec_source",
   };
 

@@ -13,7 +13,6 @@ const TEST_ENV: Record<string, string> = {
   FEISHU_APP_SECRET: 'test-secret',
   SOURCE_BASE_TOKEN: 'source-base',
   SOURCE_TABLE_ID: 'source-table',
-  SOURCE_BASE_URL: 'https://my.feishu.cn/base/source?table=source-table',
   PROGRESS_BASE_TOKEN: 'progress-base',
   PROGRESS_TABLE_ID: 'progress-table',
 };
@@ -73,7 +72,12 @@ describe('JobProgressSyncService', (): void => {
           data: {
             record: {
               record_id: 'rec_source',
-              fields: { 公司: '示例公司', 投递进度: ['已投递'] },
+              fields: {
+                公司: '示例公司',
+                投递进度: ['已投递'],
+                公告链接: 'https://example.com/notice',
+                投递链接: 'https://example.com/apply',
+              },
             },
           },
         };
@@ -112,10 +116,8 @@ describe('JobProgressSyncService', (): void => {
         投递岗位: '',
         投递日期: Date.parse('2026-07-17T00:00:00+08:00'),
         '岗位 JD': '',
-        原招聘信息: {
-          link: 'https://my.feishu.cn/base/source?table=source-table&record=rec_source',
-          text: '查看原招聘信息',
-        },
+        公告链接: 'https://example.com/notice',
+        投递链接: 'https://example.com/apply',
         '企业清单 record_id': 'rec_source',
       },
     });
@@ -133,7 +135,12 @@ describe('JobProgressSyncService', (): void => {
           data: {
             record: {
               record_id: 'rec_source',
-              fields: { 公司: '新公司名', 投递进度: '已投递' },
+              fields: {
+                公司: '新公司名',
+                投递进度: '已投递',
+                公告链接: 'https://new.example/notice',
+                投递链接: 'https://new.example/apply',
+              },
             },
           },
         };
@@ -151,7 +158,8 @@ describe('JobProgressSyncService', (): void => {
                   投递岗位: 'AI 产品经理',
                   投递日期: Date.parse('2026-07-10T00:00:00+08:00'),
                   '岗位 JD': '负责 AI 产品规划',
-                  原招聘信息: 'https://old.example/source',
+                  公告链接: 'https://old.example/notice',
+                  投递链接: 'https://old.example/apply',
                   '企业清单 record_id': 'rec_source',
                 },
               },
@@ -184,6 +192,8 @@ describe('JobProgressSyncService', (): void => {
         投递岗位: 'AI 产品经理',
         投递日期: Date.parse('2026-07-10T00:00:00+08:00'),
         '岗位 JD': '负责 AI 产品规划',
+        公告链接: 'https://new.example/notice',
+        投递链接: 'https://new.example/apply',
       },
     });
   });

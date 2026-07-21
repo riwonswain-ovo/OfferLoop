@@ -10,6 +10,7 @@ const RoutesComponent = () => {
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<WorkbenchPage />} />
+        <Route path="calendar-oauth-callback" element={<WorkbenchPage />} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>

@@ -4,9 +4,22 @@
   "display_name": "OfferLoop 招聘工作台",
   "stack": "nestjs-react-fullstack",
   "requires_fresh_miaoda_binding": true,
+  "deployment_contract": {
+    "workbench_page_size": 30,
+    "oauth_callback_path": "/calendar-oauth-callback",
+    "oauth_scopes": [
+      "calendar:calendar:readonly",
+      "calendar:calendar.event:read",
+      "offline_access"
+    ],
+    "calendar_primary_method": "POST",
+    "token_persistence": "encrypted_refresh_token_cookie_chunks"
+  },
   "required_environment": [
     "FEISHU_APP_ID",
     "FEISHU_APP_SECRET",
+    "FEISHU_CALENDAR_COOKIE_SECRET",
+    "WORKBENCH_PUBLIC_URL",
     "SOURCE_BASE_TOKEN",
     "SOURCE_TABLE_ID",
     "PROGRESS_BASE_TOKEN",

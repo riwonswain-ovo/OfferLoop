@@ -19,7 +19,7 @@ description: 以渐进方式配置、检查和部署 OfferLoop。适用于“安
 - 先运行离线预检；预检只读取本机命令、配置键名和文件状态，不访问飞书、工作台或邮箱。
 - 不要求用户在聊天中发送 App Secret、邮箱授权码、Cookie、token 或密码。
 - 同一个 lark-cli profile 可以承载 bot 和 user 身份，但必须按实际用途分别检查。
-- `job-collection` 的长期同步通常使用 `--as bot`；个人日历必须使用 `--as user`，不能静默改用 bot。
+- `job-collection` 的长期同步通常使用 `--as bot`；个人日历必须使用 `--as user`，不能静默改用 bot。工作台通过 OAuth 获取并轮换 user token，不要求用户复制 token。
 - 配置和运行状态属于用户配置目录，不能写进 Skill 安装目录，避免更新覆盖。
 - 任何写入飞书 Base、创建日程、读取邮件标题/正文/附件或启用工作流前，必须说明范围并获得用户确认。
 - 本 Skill 只负责首次配置、授权检查、资源定位、完整部署和验收；不负责日常首页维护，后者交给 `offerloop-workspace`。
@@ -60,9 +60,38 @@ python3 scripts/configure.py \
   --progress-sync-endpoint '<HTTPS_ENDPOINT>' \
   --progress-sync-workflow-id '<WORKFLOW_ID>' \
   --progress-sync-status enabled
+python3 scripts/configure.py \
+  --notification-target-type '<user|chat>' \
+  --notification-target-name '<用户姓名|群名称>' \
+  --notification-target-id '<ou_xxx|oc_xxx>' \
+  --notification-identity '<bot|user>' \
+  --notification-status enabled
 ```
 
 配置文件是 `~/.config/offerloop/config.json`（遵循 `XDG_CONFIG_HOME`），权限为 `0600`。其中不得保存密码、Cookie、App Secret、授权码或访问令牌。`workbench_url` 必须是没有用户名、密码或片段的 HTTPS 地址。
+
+飞书消息通知是可选能力。启用前必须让用户明确确认接收人或群、摘要模板和发送身份；保存
+`enabled` 即表示对 `job-collection` 与 `recruiting-reminder` 后续运行的一条最终摘要给予持续
+授权。目标 ID 只是非敏感定位信息；不得保存消息 token。停用时保留目标定位并把状态改为
+`disabled`。首次实际发送仍需按 `lark-im` 检查 scope、机器人入群或私聊关系。
+
+### 通知接入问答
+
+用户选择 `collection`、`reminder` 或 `full` 时，主动询问是否启用飞书结果通知；愿意启用时依次确认：
+
+1. 接收方式是私聊还是群聊；
+2. 目标用户姓名或目标群名称；
+3. 使用 bot 还是 user 身份发送；
+4. 使用两个业务 Skill 中定义的默认最终摘要模板，还是由用户提供自定义模板。
+
+完整读取 `lark-im` 和 `lark-contact`。群聊按名称调用 `im +chat-search`，用户按姓名调用
+`contact +search-user`；只接受唯一的精确匹配，零结果时引导检查可见范围，多个结果时展示必要的
+脱敏候选让用户选择，不取第一条。将确认后的名称和解析出的 `ou_`/`oc_` ID 一并保存。
+
+使用 bot 给群聊发消息时，还必须核对当前 profile 的 App ID、机器人能力、
+`im:chat:read`、`im:chat.members:read`、`im:message:send_as_bot`、应用版本已发布且已安装到租户，
+并用 `im +chat-members-list` 确认该 App ID 的机器人已加入目标群。任一条件缺失时保持
+`notifications.status=disabled`，逐步引导修复；不得通过发送测试消息代替只读核验。
 
 `full` 工作流优先复用公共配置 `progress_sync` 中已登记的同步应用、HTTPS endpoint 和 Base
 workflow，使用户手动改为 `已投递` 后立即同步；`job-collection` 的直接幂等对账作为补偿。
@@ -73,7 +102,9 @@ workflow，使用户手动改为 `已投递` 后立即同步；`job-collection` 
 ## 一键部署完整空间
 
 用户明确说“部署”“一键部署”或“创建完整 OfferLoop”时，完整阅读
-`references/one-click-deploy.md`。先运行：
+`references/one-click-deploy.md`。只要部署范围包含工作台，还必须完整阅读
+`references/workbench-golden-path.md`，把其中发布前门禁和发布后浏览器验收作为完成条件，不能把
+“代码已推送”“页面能打开”或“用户点过授权”当作部署成功。先运行：
 
 ```bash
 python3 scripts/deployment_plan.py --capability full --json
@@ -122,5 +153,14 @@ python3 ../recruiting-reminder/scripts/fetch_mail.py --check-connection
 - 缺少 Python 或 lark-cli：先处理预检中的 `blocked` 项，暂停后续飞书操作。
 - bot 核验失败：检查应用 scope、版本发布、租户安装和目标 Base 权限；不要对 bot 执行 `auth login`。
 - user 核验失败：按最小 scope 发起 split-flow 授权；不要把个人日历查询改为 bot。
+- 工作台回调出现 `csrf token not found in header`：回调地址错误地直指了 API；改为专用前端
+  `/calendar-oauth-callback`，再由页面通过妙搭请求客户端同源 POST 到令牌交换接口。不要关闭 CSRF。
+- 工作台授权后显示空白、400/503 或“授权会话过长”：按 `workbench-golden-path.md` 核对 Cookie
+  契约；浏览器只持久化分片加密的 refresh token，access token 只能在服务端单次请求内使用。
+- 工作台显示已连接但日历读取失败：先确认 OAuth 同时请求 `calendar:calendar:readonly`、
+  `calendar:calendar.event:read`、`offline_access`，再确认主日历调用是 `POST
+  /calendar/v4/calendars/primary`，不能使用 GET。
+- 工作台首屏超过 10 秒：检查是否在首屏扫描全部 Base、全部视图或全部记录；恢复为元数据先行、
+  当前 Base/当前视图按需读取，每页固定 30 条，并用线上 Trace 验证后再交付。
 - IMAP 连通失败：确认 IMAP 已启用，并使用授权码或应用专用密码，不使用网页登录密码。
 - 配置在更新后丢失：检查 `.env` 或状态是否误放在旧 Skill 目录，按 onboarding 迁入用户配置目录。

@@ -28,6 +28,7 @@ TEMPLATE_DIRECTORIES = {
 }
 PHASES = (
     ("preflight", "检查 Python、lark-cli、四个 Skill 与选定 profile"),
+    ("bot_setup", "按需启用机器人能力、发布并安装应用，验证目标群成员关系"),
     ("bases", "创建或接管求职企业清单、求职进展与笔面试中心"),
     ("workspace", "创建私有知识库、固定目录和使用指南"),
     ("workbench", "发布招聘工作台"),
@@ -122,6 +123,7 @@ def build_plan(config, capability="full"):
         ],
         "confirmations": [
             "创建或接管 Base、知识库、工作台和即时同步服务前的一次总确认",
+            "启用通知时确认接收方式、目标名称、发送身份和最终摘要模板",
             "用户填写 IMAP 授权码后的一次仅连通性检查确认",
         ],
         "safety": {"stores_secrets": False, "creates_resources": False, "reads_mail": False},

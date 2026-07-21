@@ -98,6 +98,7 @@ def materialize(template: str, destination: Path, dry_run: bool = False) -> dict
         "dry_run": dry_run,
         "binding_preserved": True,
         "required_environment": manifest.get("required_environment", []),
+        "deployment_contract": manifest.get("deployment_contract", {}),
     }
 
 
