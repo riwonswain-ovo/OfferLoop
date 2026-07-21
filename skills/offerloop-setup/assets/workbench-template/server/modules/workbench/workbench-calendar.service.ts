@@ -23,10 +23,14 @@ const FEISHU_API_ROOT = 'https://open.feishu.cn/open-apis';
 const FEISHU_AUTHORIZE_URL =
   'https://accounts.feishu.cn/open-apis/authen/v1/authorize';
 const FEISHU_OAUTH_SCOPE =
-  'calendar:calendar.event:read offline_access';
-const TOKEN_COOKIE = 'offerloop-calendar-session';
+  'calendar:calendar:readonly calendar:calendar.event:read offline_access';
+const TOKEN_COOKIE_NAMES = [
+  'offerloop-calendar-session-v2-0',
+  'offerloop-calendar-session-v2-1',
+  'offerloop-calendar-session-v2-2',
+];
+const TOKEN_COOKIE_CHUNK_SIZE = 3000;
 const STATE_COOKIE = 'offerloop-calendar-oauth-state';
-const TOKEN_SAFETY_WINDOW_MS = 5 * 60 * 1000;
 const STATE_LIFETIME_MS = 10 * 60 * 1000;
 const RECRUITING_EVENT_PATTERN =
   /(笔试|测评|机试|面试|群面|[一二三四五]面|HR\s*面)/iu;
@@ -65,6 +69,8 @@ interface FeishuCalendarEventPage {
 interface FeishuOAuthTokenResponse {
   code: number;
   msg?: string;
+  error?: string;
+  error_description?: string;
   access_token?: string;
   expires_in?: number;
   refresh_token?: string;
@@ -74,10 +80,13 @@ interface FeishuOAuthTokenResponse {
 
 interface CalendarTokenSession {
   userId: string;
-  accessToken: string;
-  accessTokenExpiresAt: number;
   refreshToken: string;
   refreshTokenExpiresAt: number;
+}
+
+interface CalendarTokenBundle {
+  accessToken: string;
+  session: CalendarTokenSession;
 }
 
 interface CalendarOAuthState {
@@ -89,13 +98,13 @@ interface CalendarOAuthState {
 interface CalendarLoadResult {
   response: WorkbenchCalendarResponse;
   stateCookie?: string;
-  tokenCookie?: string;
+  tokenCookieParts?: string[];
   tokenCookieMaxAgeMs?: number;
-  clearTokenCookie?: boolean;
+  clearTokenCookies?: boolean;
 }
 
 interface CalendarOAuthResult {
-  tokenCookie: string;
+  tokenCookieParts: string[];
   tokenCookieMaxAgeMs: number;
 }
 
@@ -109,7 +118,7 @@ export class WorkbenchCalendarService {
     cookieHeader: string,
     userId: string,
   ): Promise<CalendarLoadResult> {
-    const encryptedSession: string = this.readCookie(cookieHeader, TOKEN_COOKIE);
+    const encryptedSession: string = this.readTokenCookie(cookieHeader);
     const session: CalendarTokenSession | null = encryptedSession
       ? this.decrypt<CalendarTokenSession>(encryptedSession)
       : null;
@@ -117,13 +126,9 @@ export class WorkbenchCalendarService {
       return this.createAuthorizationResult(userId);
     }
 
-    let activeSession: CalendarTokenSession = session;
-    let tokenCookie: string | undefined;
+    let tokenBundle: CalendarTokenBundle;
     try {
-      if (Date.now() >= session.accessTokenExpiresAt - TOKEN_SAFETY_WINDOW_MS) {
-        activeSession = await this.refreshTokenSession(session);
-        tokenCookie = this.encrypt(activeSession);
-      }
+      tokenBundle = await this.refreshTokenSession(session);
     } catch (error: unknown) {
       this.logger.warn(
         '个人日历授权已失效，需要重新连接',
@@ -131,18 +136,20 @@ export class WorkbenchCalendarService {
       );
       return {
         ...this.createAuthorizationResult(userId),
-        clearTokenCookie: true,
+        clearTokenCookies: true,
       };
     }
 
     try {
       const events: WorkbenchCalendarEvent[] =
-        await this.readCalendarEvents(activeSession.accessToken);
+        await this.readCalendarEvents(tokenBundle.accessToken);
       return {
         response: { connected: true, events },
-        tokenCookie,
+        tokenCookieParts: this.splitTokenCookie(
+          this.encrypt(tokenBundle.session),
+        ),
         tokenCookieMaxAgeMs:
-          activeSession.refreshTokenExpiresAt - Date.now(),
+          tokenBundle.session.refreshTokenExpiresAt - Date.now(),
       };
     } catch (error: unknown) {
       this.logger.error(
@@ -155,9 +162,11 @@ export class WorkbenchCalendarService {
           events: [],
           message: '个人日历暂时读取失败，请稍后刷新。',
         },
-        tokenCookie,
+        tokenCookieParts: this.splitTokenCookie(
+          this.encrypt(tokenBundle.session),
+        ),
         tokenCookieMaxAgeMs:
-          activeSession.refreshTokenExpiresAt - Date.now(),
+          tokenBundle.session.refreshTokenExpiresAt - Date.now(),
       };
     }
   }
@@ -182,16 +191,19 @@ export class WorkbenchCalendarService {
       grant_type: 'authorization_code',
       client_id: this.requireEnv('FEISHU_APP_ID'),
       client_secret: this.requireEnv('FEISHU_APP_SECRET'),
-      code,
+      code: code.replace(/ /gu, '+'),
       redirect_uri: this.getCallbackUrl(),
     });
-    const session: CalendarTokenSession = this.createTokenSession(
+    const tokenBundle: CalendarTokenBundle = this.createTokenBundle(
       token,
       oauthState.userId,
     );
     return {
-      tokenCookie: this.encrypt(session),
-      tokenCookieMaxAgeMs: session.refreshTokenExpiresAt - Date.now(),
+      tokenCookieParts: this.splitTokenCookie(
+        this.encrypt(tokenBundle.session),
+      ),
+      tokenCookieMaxAgeMs:
+        tokenBundle.session.refreshTokenExpiresAt - Date.now(),
     };
   }
 
@@ -211,8 +223,8 @@ export class WorkbenchCalendarService {
     return path || '/';
   }
 
-  getTokenCookieName(): string {
-    return TOKEN_COOKIE;
+  getTokenCookieNames(): string[] {
+    return TOKEN_COOKIE_NAMES;
   }
 
   getStateCookieName(): string {
@@ -231,11 +243,12 @@ export class WorkbenchCalendarService {
       state: oauthState.nonce,
       scope: FEISHU_OAUTH_SCOPE,
     });
+    const authorizationQuery: string = params.toString().replace(/\+/gu, '%20');
     return {
       response: {
         connected: false,
         events: [],
-        authorizationUrl: `${FEISHU_AUTHORIZE_URL}?${params.toString()}`,
+        authorizationUrl: `${FEISHU_AUTHORIZE_URL}?${authorizationQuery}`,
         message: '连接飞书个人日历后，将自动展示未来 7 天笔面试安排。',
       },
       stateCookie: this.encrypt(oauthState),
@@ -244,7 +257,7 @@ export class WorkbenchCalendarService {
 
   private async refreshTokenSession(
     session: CalendarTokenSession,
-  ): Promise<CalendarTokenSession> {
+  ): Promise<CalendarTokenBundle> {
     if (Date.now() >= session.refreshTokenExpiresAt) {
       throw new ServiceUnavailableException('个人日历刷新授权已过期');
     }
@@ -254,7 +267,7 @@ export class WorkbenchCalendarService {
       client_secret: this.requireEnv('FEISHU_APP_SECRET'),
       refresh_token: session.refreshToken,
     });
-    return this.createTokenSession(token, session.userId);
+    return this.createTokenBundle(token, session.userId);
   }
 
   private async requestOAuthToken(
@@ -265,35 +278,51 @@ export class WorkbenchCalendarService {
         this.httpService.post<FeishuOAuthTokenResponse>(
           `${FEISHU_API_ROOT}/authen/v2/oauth/token`,
           body,
-          { headers: { 'Content-Type': 'application/json; charset=utf-8' } },
+          {
+            headers: { 'Content-Type': 'application/json; charset=utf-8' },
+            validateStatus: (): boolean => true,
+          },
         ),
       );
     const token: FeishuOAuthTokenResponse = response.data;
     if (
+      response.status >= 400
+      ||
       token.code !== 0
       || !token.access_token
       || !token.refresh_token
     ) {
-      this.logger.error(
-        `飞书 OAuth 令牌获取失败：${token.code} ${token.msg ?? ''}`.trim(),
+      const errorCode: string = String(
+        token.error ?? token.code ?? response.status,
       );
-      throw new ServiceUnavailableException('飞书个人日历授权失败');
+      const errorDescription: string = String(
+        token.error_description ?? token.msg ?? '',
+      );
+      this.logger.error(
+        `飞书 OAuth 令牌获取失败：HTTP ${response.status} `
+        + `${errorCode} ${errorDescription}`.trim(),
+      );
+      throw new ServiceUnavailableException(
+        `飞书个人日历授权失败（${errorCode}`
+        + `${errorDescription ? `：${errorDescription}` : ''}）`,
+      );
     }
     return token;
   }
 
-  private createTokenSession(
+  private createTokenBundle(
     token: FeishuOAuthTokenResponse,
     userId: string,
-  ): CalendarTokenSession {
+  ): CalendarTokenBundle {
     const now: number = Date.now();
     return {
-      userId,
       accessToken: String(token.access_token),
-      accessTokenExpiresAt: now + Number(token.expires_in ?? 7200) * 1000,
-      refreshToken: String(token.refresh_token),
-      refreshTokenExpiresAt:
-        now + Number(token.refresh_token_expires_in ?? 604800) * 1000,
+      session: {
+        userId,
+        refreshToken: String(token.refresh_token),
+        refreshTokenExpiresAt:
+          now + Number(token.refresh_token_expires_in ?? 604800) * 1000,
+      },
     };
   }
 
@@ -306,8 +335,9 @@ export class WorkbenchCalendarService {
     const primaryResponse: AxiosResponse<
       FeishuEnvelope<FeishuPrimaryCalendarData>
     > = await firstValueFrom(
-      this.httpService.get<FeishuEnvelope<FeishuPrimaryCalendarData>>(
+      this.httpService.post<FeishuEnvelope<FeishuPrimaryCalendarData>>(
         `${FEISHU_API_ROOT}/calendar/v4/calendars/primary`,
+        undefined,
         { headers },
       ),
     );
@@ -369,7 +399,7 @@ export class WorkbenchCalendarService {
   }
 
   private getCallbackUrl(): string {
-    return `${this.getPublicUrl()}/api/workbench/calendar/oauth/callback`;
+    return `${this.getPublicUrl()}/calendar-oauth-callback`;
   }
 
   private requireEnv(name: string): string {
@@ -387,6 +417,27 @@ export class WorkbenchCalendarService {
       .map((part: string): string => part.trim())
       .find((part: string): boolean => part.startsWith(prefix));
     return rawCookie ? decodeURIComponent(rawCookie.slice(prefix.length)) : '';
+  }
+
+  private readTokenCookie(cookieHeader: string): string {
+    const parts: string[] = TOKEN_COOKIE_NAMES.map(
+      (name: string): string => this.readCookie(cookieHeader, name),
+    );
+    const firstMissingIndex: number = parts.findIndex(
+      (part: string): boolean => !part,
+    );
+    return (firstMissingIndex === -1 ? parts : parts.slice(0, firstMissingIndex))
+      .join('');
+  }
+
+  private splitTokenCookie(value: string): string[] {
+    const parts: string[] = value.match(
+      new RegExp(`.{1,${TOKEN_COOKIE_CHUNK_SIZE}}`, 'gu'),
+    ) ?? [];
+    if (parts.length > TOKEN_COOKIE_NAMES.length) {
+      throw new ServiceUnavailableException('个人日历授权会话过长');
+    }
+    return parts;
   }
 
   private getEncryptionKey(): Buffer {

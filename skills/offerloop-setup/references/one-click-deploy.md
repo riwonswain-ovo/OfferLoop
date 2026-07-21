@@ -28,11 +28,11 @@ python3 scripts/deployment_plan.py --capability full --write-checkpoint --json
    python3 scripts/materialize_app_template.py --template progress-sync --destination '<SYNC_APP_DIR>' --json
    ```
 
-   模板清单中的 `required_environment` 只列变量名；按新建的三个 Base 和飞书应用填写妙搭环境变量，不把值写入 Skill、本地 Git 或 checkpoint。工作台必须设置发布后的 `WORKBENCH_PUBLIC_URL` 和随机生成的 `FEISHU_CALENDAR_COOKIE_SECRET`；后者只进入妙搭环境变量，不回显、不写入 checkpoint。飞书应用需开通 `calendar:calendar.event:read` 与 `offline_access`，并把 `<WORKBENCH_PUBLIC_URL>/api/workbench/calendar/oauth/callback` 精确登记为安全设置中的重定向 URL，随后发布应用权限版本。禁止把静态 user access token 写入环境变量。铺设脚本必须保留新应用自己的 `.git`、`.spark`、`.spark_project`、`.env*`，再依次安装依赖、运行测试与类型检查、提交、推送和发布。模板不存在、无法访问或无法验证时停止并报告，禁止临时创建功能不完整的替代应用。
+   模板清单中的 `required_environment` 只列变量名；按新建的三个 Base 和飞书应用填写妙搭环境变量，不把值写入 Skill、本地 Git 或 checkpoint。工作台必须设置发布后的 `WORKBENCH_PUBLIC_URL` 和随机生成的 `FEISHU_CALENDAR_COOKIE_SECRET`；后者只进入妙搭环境变量，不回显、不写入 checkpoint。飞书应用需开通 `calendar:calendar:readonly`、`calendar:calendar.event:read` 与 `offline_access`，并把 `<WORKBENCH_PUBLIC_URL>/calendar-oauth-callback` 精确登记为安全设置中的重定向 URL，随后发布应用权限版本。回跳先落到专用前端路由，再由页面通过同源请求完成令牌交换，禁止把跨站 OAuth 302 直接指向妙搭 API。禁止把静态 user access token 写入环境变量。铺设脚本必须保留新应用自己的 `.git`、`.spark`、`.spark_project`、`.env*`，再依次安装依赖、运行测试与类型检查、提交、推送和发布。模板不存在、无法访问或无法验证时停止并报告，禁止临时创建功能不完整的替代应用。
 5. 创建且只启用一条“企业清单：投递进度变为已投递 → 求职进展” workflow。同步服务必须以企业主表 record ID 幂等 upsert，且不覆盖人工填写的岗位、JD、投递日期或更后阶段。
 6. 将非敏感 locator 写入 `~/.config/offerloop/config.json`：profile、三个 Base URL、知识库 space/home、工作台 HTTPS URL、schema version 与 `progress_sync` 定位。询问是否启用飞书通知；用户选择后按目标名称解析唯一 ID，并在 bot 群聊场景确认同一 App ID 的机器人已入群，再保存通知名称、ID、身份和状态。不得写入 App Secret、OpenAPI key、Cookie 或 IMAP 授权码。
 7. 仅创建 IMAP 模板。让用户在本机填写后，再获得第二次确认运行 `fetch_mail.py --check-connection`；不得搜索或读取邮件。
-8. 发布工作台后，让用户在页面点击一次“连接飞书日历”并亲自完成 OAuth；工作台只在 HttpOnly 加密 Cookie 中保存并轮换 user token，不把 token 写入公共配置。完整读取 `verification-matrix.md` 后运行只读验收。即时联动演练需要临时记录时，验证后精确删除企业和进展两侧记录。
+8. 发布工作台后，让用户在页面点击一次“连接飞书日历”并亲自完成 OAuth；工作台只在分片的 HttpOnly 加密 Cookie 中保存并轮换 refresh token，access token 由服务端按请求即时换取且不持久化，不把任何 token 写入公共配置。完整读取 `verification-matrix.md` 后运行只读验收。即时联动演练需要临时记录时，验证后精确删除企业和进展两侧记录。
 
 ## 幂等与恢复
 

@@ -160,10 +160,10 @@ user 身份缺权限时，按 lark-cli split-flow 进行最小授权：先用 `-
 工作台读取个人日历使用独立的浏览器 OAuth，不复用或导出 lark-cli token。部署工作台时：
 
 1. 为飞书应用开通 `calendar:calendar.event:read` 与 `offline_access` 并发布权限版本；
-2. 将 `<WORKBENCH_PUBLIC_URL>/api/workbench/calendar/oauth/callback` 精确加入应用安全设置的重定向 URL；
+2. 将 `<WORKBENCH_PUBLIC_URL>/calendar-oauth-callback` 精确加入应用安全设置的重定向 URL；飞书先回跳专用前端路由，再由页面通过同源请求完成令牌交换，避免低代码网关拦截跨站 OAuth 回调；
 3. 在妙搭线上环境设置 `WORKBENCH_PUBLIC_URL` 与随机的 `FEISHU_CALENDAR_COOKIE_SECRET`，禁止回显或保存后者；
 4. 用户打开工作台并点击“连接飞书日历”，亲自同意授权；
-5. 工作台在 HttpOnly 加密 Cookie 中保存 access/refresh token，并在 access token 过期前轮换。Refresh Token 失效后，页面重新显示连接按钮。
+5. 工作台只在分片的 HttpOnly 加密 Cookie 中保存 refresh token；每次读取日历时由服务端即时换取 access token，并仅在本次请求的内存中使用，同时轮换 refresh token。Refresh Token 失效后，页面重新显示连接按钮。
 
 不得要求用户在聊天中发送 user access token、refresh token 或 Cookie，也不得把静态
 `FEISHU_CALENDAR_USER_ACCESS_TOKEN` 写入妙搭环境变量。

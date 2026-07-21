@@ -63,7 +63,11 @@ const WorkbenchCalendar: React.FC<WorkbenchCalendarProps> = ({
           <div className="flex flex-wrap gap-2">
             {!loading && !calendar?.connected && calendar?.authorizationUrl ? (
               <Button asChild size="sm">
-                <a href={calendar.authorizationUrl}>
+                <a
+                  href={calendar.authorizationUrl}
+                  target="_blank"
+                  rel="noopener"
+                >
                   <Link2 />
                   连接飞书日历
                 </a>

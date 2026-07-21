@@ -11,6 +11,7 @@ import type {
 } from '@shared/api.interface';
 
 import {
+  completeWorkbenchCalendarOAuth,
   getWorkbench,
   getWorkbenchCalendar,
   getWorkbenchDataset,
@@ -96,6 +97,8 @@ const useWorkbenchData = (): WorkbenchDataState => {
   const [progressPage, setProgressPage] = useState<number>(1);
   const [eventPage, setEventPage] = useState<number>(1);
   const pageTokensRef = useRef<Map<string, string[]>>(new Map());
+  const oauthCompletionStartedRef = useRef<boolean>(false);
+  const initialLoadStartedRef = useRef<boolean>(false);
   const datasetCacheRef =
     useRef<Map<string, Map<number, WorkbenchDataset>>>(new Map());
 
@@ -276,9 +279,81 @@ const useWorkbenchData = (): WorkbenchDataState => {
     }
   };
 
+  const completeCalendarOAuth = async (): Promise<void> => {
+    const params: URLSearchParams = new URLSearchParams(window.location.search);
+    const isOAuthCallback: boolean = window.location.pathname.endsWith(
+      '/calendar-oauth-callback',
+    );
+    if (!isOAuthCallback) {
+      await loadCalendar();
+      return;
+    }
+    if (oauthCompletionStartedRef.current) {
+      return;
+    }
+    oauthCompletionStartedRef.current = true;
+    const code: string = String(params.get('code') ?? '');
+    const state: string = String(params.get('state') ?? '');
+    const denied: boolean = params.get('error') === 'access_denied';
+    const workbenchPath: string = window.location.pathname.replace(
+      /\/calendar-oauth-callback$/u,
+      '',
+    );
+    window.history.replaceState({}, document.title, workbenchPath);
+    if (denied) {
+      setCalendar({
+        connected: false,
+        events: [],
+        message: '你已取消个人日历授权，可稍后重新连接。',
+      });
+      setCalendarLoading(false);
+      return;
+    }
+    if (!code || !state) {
+      setCalendar({
+        connected: false,
+        events: [],
+        message: '个人日历授权回跳缺少必要参数，请重新连接。',
+      });
+      setCalendarLoading(false);
+      return;
+    }
+    setCalendarLoading(true);
+    try {
+      const completion: { connected: boolean; message?: string } =
+        await completeWorkbenchCalendarOAuth(code, state);
+      if (!completion.connected) {
+        setCalendar({
+          connected: false,
+          events: [],
+          message: completion.message ?? '飞书个人日历授权失败',
+        });
+        setCalendarLoading(false);
+        return;
+      }
+      await loadCalendar();
+    } catch (error: unknown) {
+      const responseMessage: unknown = (
+        error as { response?: { data?: { message?: unknown } } }
+      ).response?.data?.message;
+      setCalendar({
+        connected: false,
+        events: [],
+        message: typeof responseMessage === 'string'
+          ? responseMessage
+          : '个人日历授权未能完成，请重新连接。',
+      });
+      setCalendarLoading(false);
+    }
+  };
+
   useEffect(() => {
+    if (initialLoadStartedRef.current) {
+      return;
+    }
+    initialLoadStartedRef.current = true;
     void loadWorkbench();
-    void loadCalendar();
+    void completeCalendarOAuth();
   }, []);
 
   const selectCompanyView = async (viewId: string): Promise<void> => {

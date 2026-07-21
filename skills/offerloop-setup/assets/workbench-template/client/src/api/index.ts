@@ -50,7 +50,25 @@ const getWorkbenchCalendar = async (): Promise<WorkbenchCalendarResponse> => {
   }
 };
 
+const completeWorkbenchCalendarOAuth = async (
+  code: string,
+  state: string,
+): Promise<{ connected: boolean; message?: string }> => {
+  try {
+    const response = await axiosForBackend({
+      url: '/api/workbench/calendar/oauth/complete',
+      method: 'POST',
+      data: { code, state },
+    });
+    return response.data as { connected: boolean; message?: string };
+  } catch (error: unknown) {
+    logger.error('完成 OfferLoop 个人日历授权失败', error);
+    throw error;
+  }
+};
+
 export {
+  completeWorkbenchCalendarOAuth,
   getWorkbench,
   getWorkbenchCalendar,
   getWorkbenchDataset,

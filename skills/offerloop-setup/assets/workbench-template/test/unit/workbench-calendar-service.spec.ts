@@ -31,16 +31,6 @@ describe('WorkbenchCalendarService', () => {
 
   it('completes OAuth and reads only recruiting calendar events', async () => {
     const get = jest.fn((url: string) => {
-      if (url.endsWith('/calendar/v4/calendars/primary')) {
-        return of({
-          data: {
-            code: 0,
-            data: {
-              calendars: [{ calendar: { calendar_id: 'primary-calendar' } }],
-            },
-          },
-        });
-      }
       if (url.includes('/events/instance_view')) {
         return of({
           data: {
@@ -66,8 +56,23 @@ describe('WorkbenchCalendarService', () => {
       }
       throw new Error(`Unexpected GET ${url}`);
     });
-    const post = jest.fn((url: string) => {
+    const post = jest.fn((url: string, body?: { [key: string]: string }) => {
+      if (url.endsWith('/calendar/v4/calendars/primary')) {
+        return of({
+          data: {
+            code: 0,
+            data: {
+              calendars: [{ calendar: { calendar_id: 'primary-calendar' } }],
+            },
+          },
+        });
+      }
       if (url.endsWith('/authen/v2/oauth/token')) {
+        if (body?.grant_type === 'authorization_code') {
+          expect(body.code).toBe('authorization+code');
+        } else {
+          expect(body?.refresh_token).toBe('refresh-token');
+        }
         return of({
           data: {
             code: 0,
@@ -92,12 +97,18 @@ describe('WorkbenchCalendarService', () => {
     );
     const state: string = String(authorizationUrl.searchParams.get('state'));
     const oauth: CalendarOAuthResult = await service.completeOAuth(
-      'authorization-code',
+      'authorization code',
       state,
       `${service.getStateCookieName()}=${disconnected.stateCookie}`,
     );
+    const tokenCookieHeader: string = oauth.tokenCookieParts
+      .map(
+        (part: string, index: number): string =>
+          `${service.getTokenCookieNames()[index]}=${part}`,
+      )
+      .join('; ');
     const connected: CalendarLoadResult = await service.getCalendar(
-      `${service.getTokenCookieName()}=${oauth.tokenCookie}`,
+      tokenCookieHeader,
       'miaoda-user',
     );
     const response: WorkbenchCalendarResponse = connected.response;
@@ -106,7 +117,16 @@ describe('WorkbenchCalendarService', () => {
     expect(authorizationUrl.searchParams.get('scope')).toContain(
       'calendar:calendar.event:read',
     );
+    expect(authorizationUrl.searchParams.get('scope')).toContain(
+      'calendar:calendar:readonly',
+    );
+    expect(authorizationUrl.searchParams.get('redirect_uri')).toBe(
+      'https://example.com/app/app_test/calendar-oauth-callback',
+    );
     expect(response.connected).toBe(true);
+    expect(oauth.tokenCookieParts.every(
+      (part: string): boolean => part.length <= 3000,
+    )).toBe(true);
     expect(response.events).toHaveLength(1);
     expect(response.events[0].eventId).toBe('exam-event');
   });

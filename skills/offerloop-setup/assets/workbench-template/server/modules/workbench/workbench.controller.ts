@@ -1,7 +1,9 @@
 import {
   BadRequestException,
+  Body,
   Controller,
   Get,
+  Post,
   Query,
   Req,
   Res,
@@ -70,13 +72,8 @@ export class WorkbenchController {
       String(request.userContext?.userId ?? ''),
     );
     const cookiePath: string = this.calendarService.getCookiePath();
-    if (result.clearTokenCookie) {
-      response.clearCookie(this.calendarService.getTokenCookieName(), {
-        httpOnly: true,
-        secure: true,
-        sameSite: 'lax',
-        path: cookiePath,
-      });
+    if (result.clearTokenCookies) {
+      this.clearTokenCookies(response, cookiePath);
     }
     if (result.stateCookie) {
       response.cookie(
@@ -91,49 +88,48 @@ export class WorkbenchController {
         },
       );
     }
-    if (result.tokenCookie) {
-      response.cookie(
-        this.calendarService.getTokenCookieName(),
-        result.tokenCookie,
-        {
-          httpOnly: true,
-          secure: true,
-          sameSite: 'lax',
-          path: cookiePath,
-          maxAge: Math.max(result.tokenCookieMaxAgeMs ?? 0, 60_000),
-        },
+    if (result.tokenCookieParts) {
+      this.setTokenCookies(
+        response,
+        cookiePath,
+        result.tokenCookieParts,
+        result.tokenCookieMaxAgeMs ?? 0,
       );
     }
     return result.response;
   }
 
-  @Get('calendar/oauth/callback')
+  @Post('calendar/oauth/complete')
   async completeCalendarOAuth(
-    @Query('code') code: string,
-    @Query('state') state: string,
+    @Body('code') code: string,
+    @Body('state') state: string,
     @Req() request: Request,
-    @Res() response: Response,
-  ): Promise<void> {
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<{ connected: boolean; message?: string }> {
     if (!code || !state) {
       throw new BadRequestException('飞书日历授权回调缺少必要参数');
     }
-    const result: CalendarOAuthResult =
-      await this.calendarService.completeOAuth(
+    let result: CalendarOAuthResult;
+    try {
+      result = await this.calendarService.completeOAuth(
         code,
         state,
         String(request.headers.cookie ?? ''),
       );
+    } catch (error: unknown) {
+      return {
+        connected: false,
+        message: error instanceof Error
+          ? error.message
+          : '飞书个人日历授权失败',
+      };
+    }
     const cookiePath: string = this.calendarService.getCookiePath();
-    response.cookie(
-      this.calendarService.getTokenCookieName(),
-      result.tokenCookie,
-      {
-        httpOnly: true,
-        secure: true,
-        sameSite: 'lax',
-        path: cookiePath,
-        maxAge: Math.max(result.tokenCookieMaxAgeMs, 60_000),
-      },
+    this.setTokenCookies(
+      response,
+      cookiePath,
+      result.tokenCookieParts,
+      result.tokenCookieMaxAgeMs,
     );
     response.clearCookie(this.calendarService.getStateCookieName(), {
       httpOnly: true,
@@ -141,6 +137,46 @@ export class WorkbenchController {
       sameSite: 'lax',
       path: cookiePath,
     });
-    response.redirect(`${this.calendarService.getPublicUrl()}?calendar=connected`);
+    return { connected: true };
+  }
+
+  private setTokenCookies(
+    response: Response,
+    path: string,
+    parts: string[],
+    maxAgeMs: number,
+  ): void {
+    this.calendarService.getTokenCookieNames().forEach(
+      (name: string, index: number): void => {
+        const value: string | undefined = parts[index];
+        if (!value) {
+          response.clearCookie(name, {
+            httpOnly: true,
+            secure: true,
+            sameSite: 'lax',
+            path,
+          });
+          return;
+        }
+        response.cookie(name, value, {
+          httpOnly: true,
+          secure: true,
+          sameSite: 'lax',
+          path,
+          maxAge: Math.max(maxAgeMs, 60_000),
+        });
+      },
+    );
+  }
+
+  private clearTokenCookies(response: Response, path: string): void {
+    this.calendarService.getTokenCookieNames().forEach((name: string): void => {
+      response.clearCookie(name, {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'lax',
+        path,
+      });
+    });
   }
 }
