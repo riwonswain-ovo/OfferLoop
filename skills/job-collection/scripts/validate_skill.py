@@ -89,6 +89,37 @@ def validate_scope(errors: list[str]) -> None:
             errors.append(f"{path.relative_to(ROOT)}: unsupported platform-search file exists")
 
 
+def validate_current_contract(errors: list[str]) -> None:
+    """Reject legacy instructions that previously overrode the 13-field contract."""
+    legacy_patterns = {
+        "legacy numbered sort": re.compile(r"信息更新时间\s*desc\s*,\s*编号"),
+        "legacy fixed view count": re.compile(r"48\s*个\s*grid|48/48|6/6.*已投递"),
+        "legacy 22-column schema": re.compile(r"主表\s*22\s*列|飞书主表\s*22\s*列"),
+        "legacy sequence allocation": re.compile(r"当前主表最大编号\s*\+\s*1|下一批起始编号"),
+    }
+    for path in text_files():
+        if path == ROOT / "scripts/validate_skill.py":
+            continue
+        content = path.read_text(encoding="utf-8")
+        for label, pattern in legacy_patterns.items():
+            match = pattern.search(content)
+            if match:
+                line = content.count("\n", 0, match.start()) + 1
+                errors.append(f"{path.relative_to(ROOT)}:{line}: {label}")
+
+    required_markers = {
+        "references/lark-onboarding.md": ["+record-get", "--base-token", "网络错误分层"],
+        "references/tencent-smartsheet-source.md": ["Chrome 扩展恢复 SOP", "每日更新", "tabs.finalize"],
+        "references/excel-insert.md": ["no operation produced", "安全短前缀"],
+        "references/personal-excel-source.md": ["13 字段契约", "每次只传一个 `--record-id`"],
+    }
+    for relative, markers in required_markers.items():
+        content = (ROOT / relative).read_text(encoding="utf-8")
+        for marker in markers:
+            if marker not in content:
+                errors.append(f"{relative}: missing recovery marker {marker!r}")
+
+
 def main() -> int:
     errors: list[str] = []
     missing = sorted(path for path in REQUIRED_FILES if not (ROOT / path).is_file())
@@ -97,6 +128,7 @@ def main() -> int:
     validate_references(errors)
     validate_private_data(errors)
     validate_scope(errors)
+    validate_current_contract(errors)
 
     if errors:
         print("Skill validation failed:", file=sys.stderr)
