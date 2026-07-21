@@ -121,13 +121,31 @@ npx skills add riwonswain-ovo/OfferLoop -g
    cp -a ~/.local/state/offerloop ~/.local/state/offerloop.backup-$(date +%Y%m%d)
    ```
 
-2. 重新执行安装命令，确保四个 Skill 都更新到同一版本：
+2. 如果最初通过 `npx skills add` 安装，使用正式更新命令，确保四个 Skill 都更新到 GitHub
+   默认分支 `main` 的同一版本：
 
    ```bash
-   npx skills add riwonswain-ovo/OfferLoop -g
+   npx skills update offerloop-setup job-collection recruiting-reminder offerloop-workspace -g -y
    ```
 
-   手动安装的用户只替换全局 Skills 目录中的四个 Skill 文件夹；**保留** `~/.config/offerloop/` 和 `~/.local/state/offerloop/`。
+   如果命令提示 `No installed skills found matching`，说明旧安装没有来源追踪。先把旧 Skill
+   目录移动到可恢复备份，再从 GitHub `main` 重新登记安装：
+
+   ```bash
+   offerloop_backup="$HOME/.codex/skills/offerloop-backup-$(date +%Y%m%d-%H%M%S)"
+   mkdir -p "$offerloop_backup"
+   for skill in offerloop-setup job-collection recruiting-reminder offerloop-workspace; do
+     if [ -d "$HOME/.codex/skills/$skill" ]; then
+       mv "$HOME/.codex/skills/$skill" "$offerloop_backup/"
+     fi
+   done
+   npx skills add riwonswain-ovo/OfferLoop -g -a codex \
+     -s offerloop-setup job-collection recruiting-reminder offerloop-workspace -y --copy
+   ```
+
+   手动安装的用户也可以按相同方式备份后替换四个 Skill 文件夹。无论哪种方式，都必须
+   **保留** `~/.config/offerloop/` 和 `~/.local/state/offerloop/`；这些用户配置和状态不在 Skill
+   安装目录中。更新后重新开始一个 Agent 会话，让 Skill 目录重新加载。
 
 3. 先运行只读迁移检查：
 
