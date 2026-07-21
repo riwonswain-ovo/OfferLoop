@@ -73,17 +73,53 @@ IMAP 邮箱 → recruiting-reminder → 笔面试中心 → 飞书个人日历
 
 ## 新用户：从这里开始
 
-### 1. 安装
+### 最小成功契约
+
+对新用户而言，**最小成功**是：在同一个 Agent 环境中安装并发现下面四个 OfferLoop Skill，
+重新开启一个 Agent 会话，然后让 `offerloop-setup` 对你选定的一项能力做只读本机检查。
+这表示安装和本地引导已就绪；它不表示已经拥有飞书权限、已经连通邮箱，或已经部署完整工作台。
+
+- `offerloop-setup`
+- `job-collection`
+- `recruiting-reminder`
+- `offerloop-workspace`
+
+四个 Skill 是本仓库唯一随包提供的 Skill。它们不会替你安装 Node、Python、`lark-cli`，也不会
+创建飞书应用、授予权限或安装下文列出的外部 Lark Skill。
+
+### 1. 安装前准备
+
+请先在本机准备以下条件：
+
+- Node.js（包含 `npx`），用于执行安装命令；可用 `node --version` 与 `npx --version` 确认。
+- Python 3.10 或更高版本；可用 `python3 --version` 确认。
+- 已安装的 `lark-cli`；可用 `lark-cli --help` 确认命令可运行。推荐按 [Lark 官方 CLI 安装说明](https://github.com/larksuite/cli) 执行：
+
+  ```bash
+  npx @larksuite/cli@latest install
+  npx skills add larksuite/cli -g -y
+  ```
+
+  第一条安装命令行工具，第二条安装其配套的 Lark Agent Skills；后续还需要在本机初始化并选择实际可用的 profile。
+- 可登录的飞书/Lark 账号，以及对要读取或管理的资源拥有相应权限。飞书应用、租户安装、文档共享和管理员权限不是由 OfferLoop 安装命令提供的。
+
+`node`/`npx` 只用于安装；OfferLoop 的离线预检不会检查它们。请按所用 Agent 与
+`lark-cli` 的官方安装说明完成安装，不要在聊天中粘贴 App Secret、密码、Cookie、token 或邮箱授权码。
+
+### 2. 安装四个 OfferLoop Skill
 
 ```bash
-npx skills add riwonswain-ovo/OfferLoop -g
+npx skills add riwonswain-ovo/OfferLoop -g \
+  -s offerloop-setup job-collection recruiting-reminder offerloop-workspace -y
 ```
 
-安装完成后，应能发现四个独立 Skill：`offerloop-setup`、`job-collection`、`recruiting-reminder` 和 `offerloop-workspace`。
+手动安装时，也必须将仓库 `skills/` 下的上述**四个**目录分别复制到 Agent 的全局 Skills 目录；
+不要把仓库根目录作为一个 Skill，也不要合并四份 `SKILL.md`。
 
-如果你手动安装，请将仓库 `skills/` 下的四个目录分别复制到 Agent 的全局 Skills 目录；不要把仓库根目录作为一个 Skill，也不要合并四份 `SKILL.md`。
+**安装后必须结束当前 Agent 会话，并新开一个会话。** Skill 目录通常在会话开始时加载；在
+同一会话中继续对话，Agent 可能仍然发现不到刚安装的 Skill。
 
-### 2. 先做只读预检
+### 3. 选择能力，并先做只读预检
 
 告诉 Agent：
 
@@ -91,15 +127,40 @@ npx skills add riwonswain-ovo/OfferLoop -g
 请调用 offerloop-setup。我第一次使用 OfferLoop，先只读检查环境和我想启用的能力；不要创建或修改飞书资源。
 ```
 
-预检会区分 `ready`、`needs_action`、`blocked` 和 `unverified`。`unverified` 表示本地配置齐全但尚未连接真实飞书或邮箱验证，不是错误。
+预检会区分 `ready`、`needs_action`、`blocked` 和 `unverified`。它仅检查 Python 版本、
+`lark-cli` 是否在路径中、四个 OfferLoop Skill 是否存在，以及本地配置/文件权限；它不验证
+`lark-cli` profile 是否真实可用，也不访问飞书、邮箱、妙搭或浏览器。`ready` 因而只表示本机
+可检查的条件已满足；`unverified` 表示仍需后续只读在线核验，不是错误。
 
-### 3. 确认部署计划后再创建资源
+### 4. 按能力补齐人工前置条件
+
+以下前置条件需要你或租户管理员在飞书/邮件/妙搭中完成。它们不会由安装或离线预检自动完成。
+
+| 能力 | 使用前需人工完成 | 该操作依赖的外部 Lark Skill（不随 OfferLoop 打包） |
+|---|---|---|
+| `collection` | 配置可用的 bot profile；给来源 Base 查看权限、给目标 Base 编辑权限；如需 workflow，再给应用相应管理权限。没有自建应用权限时，请管理员提供或安装已发布应用。 | 核心同步直接使用 `lark-cli`；可选飞书通知需要 `lark-im`，按姓名查找通知对象还需要 `lark-contact`。 |
+| `reminder` | 在本机填写 IMAP 配置并使用邮箱服务商的授权码/应用专用密码；配置笔面试中心和求职进展 Base；若要建日历，完成 user 身份的最小日历授权。 | 创建或更新个人日历需要 `lark-calendar`；可选通知需要 `lark-im`。 |
+| `workspace` | 对三张 Base、知识库空间和首页有访问权限；登记工作台 HTTPS 地址。若要创建或整理知识库，需有对应的创建/编辑权限。 | 创建或整理空间需要 `lark-base`、`lark-doc` 和 `lark-wiki`。只读本地定位检查不调用它们。 |
+| `full` | 完成前三项；为即时同步准备飞书应用、Base workflow 和可访问的 HTTPS 同步端点；如部署工作台，还需要妙搭创建、配置、发布和环境变量管理权限，以及租户管理员对应用/权限版本的发布或安装支持。 | 组合使用上列外部 Skill；如启用消息通知，还会需要 `lark-im`/`lark-contact`。 |
+
+外部 Lark Skill 在本仓库中**没有捆绑**。在要求 Agent 创建 Base、整理知识库、写日历或发送通知前，
+请先按所用 Agent 的方式单独安装或启用表中所列 Skill，并再次新开会话让它们加载。缺少某项时，
+只能使用不依赖它的能力，或请管理员/具备权限的同事完成对应配置。
+
+> 当前版本限制：`collection` 的预检仍会要求登记“求职进展”Base，即使你尚未启用即时进展联动。
+> 因此只配置企业清单的用户会看到 `needs_action`，不能把该项预检报告为 `ready`。不要为了消除
+> 这一提示而猜测或伪造 Base 地址；该预检契约将在后续修复中按“仅同步招聘信息”的最小配置调整。
+
+### 5. 确认部署计划后再创建资源
 
 ```text
 请调用 offerloop-setup，一键部署完整 OfferLoop。先展示部署计划；创建 Base、知识库和工作台前向我确认一次，IMAP 只创建本地模板。
 ```
 
-完整部署会创建三张 Base、私有知识库、工作台模板和即时同步定位信息。飞书扫码、邮箱授权码和任何真实在线验证都需要你亲自完成；不要在聊天中发送密码、token 或 App Secret。
+完整部署会创建三张 Base、私有知识库、工作台模板和即时同步定位信息。它还依赖上表中的
+补充 Lark Skill、`lark-cli`、飞书应用/租户权限及妙搭权限；若这些条件尚未具备，先停在计划或
+只读核验阶段，不把“模板已安装”当作部署完成。飞书扫码、邮箱授权码和任何真实在线验证都需要
+你亲自完成；不要在聊天中发送密码、token 或 App Secret。
 
 ## 旧用户如何升级
 

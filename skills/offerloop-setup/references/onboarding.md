@@ -1,18 +1,37 @@
 # OfferLoop 新用户接入
 
-本接入指南采用渐进配置：只配置用户当前要用的能力。请先在 `offerloop-setup` 中选择
+本接入指南采用渐进配置：只配置用户当前要用的能力。先确认四个 OfferLoop Skill
+（`offerloop-setup`、`job-collection`、`recruiting-reminder`、`offerloop-workspace`）已安装在
+同一个 Agent 环境，并在安装后新开会话让它们加载；再在 `offerloop-setup` 中选择
 `collection`、`reminder`、`workspace` 或 `full`，并运行对应的离线预检。
+
+这一步是新用户的最小成功：Skill 能被发现并能开始只读本机引导。它不是飞书、邮箱、妙搭或
+工作台已经配置完成的声明。本仓库只提供上述四个 OfferLoop Skill；运行时、飞书身份和外部
+Lark Skill 都需要单独准备。
 
 ## 1. 能力与最小配置
 
 | 用户目标 | 必需配置 | 本次不需要 |
 | --- | --- | --- |
-| `collection`：同步招聘信息 | Python 3.10+、lark-cli、bot profile、企业清单 Base、至少一个合法信息源 | IMAP、个人日历、知识库 |
-| `reminder`：整理笔试和面试 | Python 3.10+、IMAP、本地提醒配置、笔面试中心与求职进展定位、个人日历 user 授权 | 招聘信息源、工作台 |
-| `workspace`：使用固定入口 | lark-cli、知识库空间/首页、企业清单/求职进展/笔面试中心定位、工作台 HTTPS 地址 | IMAP、日历、信息源 |
-| `full`：完整闭环 | 上述全部，以及企业清单与求职进展 Base 定位 | 无 |
+| `collection`：同步招聘信息 | Python 3.10+、lark-cli、可用 bot profile、企业清单 Base、至少一个合法信息源；来源可查看、目标可编辑 | IMAP、个人日历、知识库 |
+| `reminder`：整理笔试和面试 | Python 3.10+、lark-cli、IMAP、本地提醒配置、笔面试中心与求职进展定位；建日历时完成 user 日历授权 | 招聘信息源、工作台 |
+| `workspace`：使用固定入口 | Python 3.10+、lark-cli、知识库空间/首页、企业清单/求职进展/笔面试中心定位、工作台 HTTPS 地址 | IMAP、日历、信息源 |
+| `full`：完整闭环 | 上述全部，以及飞书应用、Base workflow、HTTPS 同步端点；部署工作台时还需妙搭创建/发布/环境配置权限与租户安装支持 | 无 |
 
 安装整个仓库不代表要完成所有授权。未选能力应显示为 `not_selected`，而非失败。
+
+### 运行时和外部 Skill 依赖
+
+- 安装 OfferLoop 前，本机需要 Node.js（含 `npx`）；它们只用于安装，不是离线预检项目。
+- 所有能力需要 Python 3.10+ 与 `lark-cli`。预检只能看到 `lark-cli` 命令是否存在，不能证明某个 profile 已初始化、应用已发布或有资源权限。
+- 知识库创建/整理需要 `lark-base`、`lark-doc`、`lark-wiki`；个人日历读写需要 `lark-calendar`；消息通知需要 `lark-im`，按姓名寻找通知对象还需要 `lark-contact`。这些均为外部 Lark Skill，**不随 OfferLoop 打包**，必须在当前 Agent 环境中另行安装/启用并新开会话加载。
+- 推荐从 [Lark 官方 CLI](https://github.com/larksuite/cli) 安装命令行工具及其配套 Skill：先运行 `npx @larksuite/cli@latest install`，再运行 `npx skills add larksuite/cli -g -y`；随后仍须由用户或管理员按本指南配置应用、profile 与资源权限。
+- 飞书应用 scope、应用版本发布、租户管理员安装、机器人入群、Base/知识库共享、妙搭应用创建/发布和环境变量权限，都需要用户或管理员在飞书/妙搭中手动完成。不能由 Skill 安装、离线预检或 Agent 自动取得。
+- App Secret、密码、Cookie、token、邮箱授权码只能在用户本机的安全配置流程中填写，绝不发送到聊天。
+
+当前版本有一项已知预检限制：选择 `collection` 时，即使尚未启用即时进展联动，离线预检也会要求
+`progress_base_url`。因此只有企业清单的用户会得到 `needs_action`，不得通过猜测或伪造地址将其
+伪报为 `ready`；后续预检修复会使该定位仅在启用进展联动时成为必需项。
 
 ## 2. 先做离线预检
 
@@ -22,8 +41,11 @@
 python3 scripts/preflight.py --capability '<collection|reminder|workspace|full>' --json
 ```
 
-它不访问飞书、浏览器、工作台或邮箱。报告中的 `blocked` 与 `needs_action` 需要先处理；
-`unverified` 表示需要后续只读在线核验，不能靠猜测填充。
+它不访问飞书、浏览器、工作台或邮箱。它只检查 Python 版本、`lark-cli` 命令、四个 OfferLoop
+Skill、本地配置字段及 IMAP 配置文件状态；不验证 Node/npx、profile 可用性、外部 Lark Skill、
+飞书权限、IMAP 连通性或妙搭权限。报告中的 `blocked` 与 `needs_action` 需要先处理；
+`unverified` 表示需要后续只读在线核验，不能靠猜测填充。即使报告为 `ready`，也不得宣称完整
+部署或线上能力已经可用。
 
 ## 3. 飞书身份模型
 
