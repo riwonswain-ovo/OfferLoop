@@ -103,6 +103,19 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertIn("旧双 Base", migration)
         self.assertIn("永久保留", migration)
 
+    def test_readme_has_tracked_and_legacy_skill_upgrade_paths(self):
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn(
+            "npx skills update offerloop-setup job-collection "
+            "recruiting-reminder offerloop-workspace -g -y",
+            readme,
+        )
+        self.assertIn("No installed skills found matching", readme)
+        self.assertIn("offerloop-backup-$(date +%Y%m%d-%H%M%S)", readme)
+        self.assertIn("npx skills add riwonswain-ovo/OfferLoop -g -a codex", readme)
+        self.assertIn("~/.config/offerloop/", readme)
+        self.assertIn("~/.local/state/offerloop/", readme)
+
     def test_no_scaffold_placeholders_remain(self):
         for skill_file in SKILLS.glob("*/SKILL.md"):
             self.assertNotIn("TODO", skill_file.read_text(encoding="utf-8"), skill_file)
