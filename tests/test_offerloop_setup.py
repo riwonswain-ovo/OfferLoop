@@ -5,6 +5,7 @@ import os
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -38,6 +39,14 @@ materialize_app_template = load_module(
 
 
 class OfferLoopSetupTest(unittest.TestCase):
+    def make_skill_root(self, parent, *external_skills):
+        root = Path(parent) / "skills"
+        for name in (*preflight.BUNDLED_SKILLS, *external_skills):
+            skill = root / name
+            skill.mkdir(parents=True, exist_ok=True)
+            (skill / "SKILL.md").write_text(f"# {name}\n", encoding="utf-8")
+        return root
+
     def test_not_selected_capability_is_not_failure(self):
         report = status_model.build_report(selected={"collection"}, checks=[])
 
@@ -99,6 +108,241 @@ class OfferLoopSetupTest(unittest.TestCase):
 
             self.assertEqual(result["capabilities"]["reminder"]["status"], "not_selected")
             self.assertNotIn("imap_config", {check["id"] for check in result["checks"]})
+
+    def test_collection_without_progress_locator_marks_it_optional(self):
+        with tempfile.TemporaryDirectory() as directory:
+            environment = {"XDG_CONFIG_HOME": directory}
+            path = configure.config_file(environment)
+            configure.write_private_json(
+                path,
+                {
+                    "lark_profile": "codex",
+                    "target_base_url": "https://example.feishu.cn/base/source",
+                },
+            )
+            skill_root = self.make_skill_root(directory)
+
+            with mock.patch.object(
+                preflight.shutil, "which", return_value="/usr/local/bin/lark-cli"
+            ):
+                report = preflight.run_checks(
+                    environment,
+                    capability="collection",
+                    skills_roots=[skill_root],
+                )
+
+            checks = {
+                (check["capability"], check["id"]): check
+                for check in report["checks"]
+            }
+            progress = checks[("collection", "local.progress_locator")]
+            self.assertEqual(progress["status"], "unverified")
+            self.assertIn("可选", progress["summary"])
+            self.assertNotEqual(
+                report["capabilities"]["collection"]["status"], "needs_action"
+            )
+
+    def test_progress_locator_remains_required_outside_collection(self):
+        with tempfile.TemporaryDirectory() as directory:
+            environment = {"XDG_CONFIG_HOME": directory}
+            path = configure.config_file(environment)
+            configure.write_private_json(
+                path,
+                {
+                    "lark_profile": "codex",
+                    "target_base_url": "https://example.feishu.cn/base/source",
+                    "reminder_base_url": "https://example.feishu.cn/base/reminder",
+                    "wiki_space_id": "space_example",
+                    "workspace_home_node_token": "wikcnExample",
+                    "workbench_url": "https://example.feishuapp.com/app/workbench",
+                },
+            )
+            skill_root = self.make_skill_root(
+                directory,
+                "lark-apps",
+                "lark-base",
+                "lark-calendar",
+                "lark-doc",
+                "lark-shared",
+                "lark-wiki",
+            )
+
+            report = preflight.run_checks(
+                environment,
+                capability="full",
+                skills_roots=[skill_root],
+            )
+            checks = {
+                (check["capability"], check["id"]): check
+                for check in report["checks"]
+            }
+            self.assertEqual(
+                checks[("collection", "local.progress_locator")]["status"],
+                "unverified",
+            )
+            self.assertEqual(
+                checks[("reminder", "local.progress_locator")]["status"],
+                "needs_action",
+            )
+            self.assertEqual(
+                checks[("workspace", "local.workspace_locators")]["status"],
+                "needs_action",
+            )
+            self.assertEqual(
+                checks[("integration", "local.progress_sync_bridge")]["status"],
+                "needs_action",
+            )
+
+    def test_external_lark_skills_are_capability_specific(self):
+        cases = {
+            "collection": set(),
+            "reminder": {"lark-calendar"},
+            "workspace": {"lark-base", "lark-doc", "lark-wiki"},
+            "full": {
+                "lark-apps",
+                "lark-base",
+                "lark-calendar",
+                "lark-doc",
+                "lark-shared",
+                "lark-wiki",
+            },
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            skill_root = self.make_skill_root(directory)
+            for capability, expected in cases.items():
+                report = preflight.run_checks(
+                    {"XDG_CONFIG_HOME": directory},
+                    capability=capability,
+                    skills_roots=[skill_root],
+                )
+                missing = set()
+                for check in report["checks"]:
+                    if (
+                        check["id"] == "local.external_skills"
+                        and check["status"] == "blocked"
+                    ):
+                        missing.update(
+                            name
+                            for name in expected
+                            if name in check["summary"]
+                        )
+                self.assertEqual(missing, expected, capability)
+
+    def test_external_skills_can_be_discovered_across_supported_roots(self):
+        with tempfile.TemporaryDirectory() as directory:
+            locations = {
+                "lark-base": Path(directory) / ".agents" / "skills",
+                "lark-doc": Path(directory) / ".codex" / "skills",
+                "lark-wiki": Path(directory) / "custom-codex" / "skills",
+            }
+            for name, root in locations.items():
+                skill = root / name
+                skill.mkdir(parents=True)
+                (skill / "SKILL.md").write_text(f"# {name}\n", encoding="utf-8")
+
+            report = preflight.run_checks(
+                {
+                    "HOME": directory,
+                    "CODEX_HOME": str(Path(directory) / "custom-codex"),
+                    "XDG_CONFIG_HOME": directory,
+                },
+                capability="workspace",
+            )
+
+            external = next(
+                check
+                for check in report["checks"]
+                if check["capability"] == "workspace"
+                and check["id"] == "local.external_skills"
+            )
+            self.assertEqual(external["status"], "ready")
+            self.assertIn("未验证线上权限", external["summary"])
+
+    def test_enabled_registered_notification_only_requires_lark_im(self):
+        with tempfile.TemporaryDirectory() as directory:
+            environment = {"XDG_CONFIG_HOME": directory}
+            path = configure.config_file(environment)
+            configure.write_private_json(
+                path,
+                {
+                    "lark_profile": "codex",
+                    "target_base_url": "https://example.feishu.cn/base/source",
+                    "notifications": {
+                        "status": "enabled",
+                        "target_type": "user",
+                        "target_name": "Example User",
+                        "target_id": "ou_example",
+                        "identity": "bot",
+                    },
+                },
+            )
+            skill_root = self.make_skill_root(directory)
+
+            report = preflight.run_checks(
+                environment,
+                capability="collection",
+                skills_roots=[skill_root],
+            )
+            external = next(
+                check
+                for check in report["checks"]
+                if check["capability"] == "collection"
+                and check["id"] == "local.external_skills"
+            )
+            self.assertEqual(external["status"], "blocked")
+            self.assertIn("lark-im", external["summary"])
+            self.assertNotIn("lark-contact", external["summary"])
+
+            im_skill = skill_root / "lark-im"
+            im_skill.mkdir()
+            (im_skill / "SKILL.md").write_text("# lark-im\n", encoding="utf-8")
+            ready_report = preflight.run_checks(
+                environment,
+                capability="collection",
+                skills_roots=[skill_root],
+            )
+            ready_external = next(
+                check
+                for check in ready_report["checks"]
+                if check["capability"] == "collection"
+                and check["id"] == "local.external_skills"
+            )
+            self.assertEqual(ready_external["status"], "ready")
+
+    def test_dependency_recovery_actions_are_executable_and_redacted(self):
+        with tempfile.TemporaryDirectory(prefix="offerloop-private-root-") as directory:
+            secret_marker = Path(directory).name
+            skill_root = self.make_skill_root(directory)
+            with mock.patch.object(preflight.shutil, "which", return_value=None):
+                report = preflight.run_checks(
+                    {"XDG_CONFIG_HOME": directory},
+                    capability="workspace",
+                    skills_roots=[skill_root],
+                )
+
+            lark_cli = next(
+                check for check in report["checks"] if check["id"] == "local.lark_cli"
+            )
+            self.assertIn(
+                "npx @larksuite/cli@latest install", lark_cli["next_action"]
+            )
+            self.assertIn(
+                "npx skills add larksuite/cli -g -y", lark_cli["next_action"]
+            )
+            self.assertIn("新开 Agent 会话", lark_cli["next_action"])
+
+            external = next(
+                check
+                for check in report["checks"]
+                if check["capability"] == "workspace"
+                and check["id"] == "local.external_skills"
+            )
+            for name in ("lark-base", "lark-doc", "lark-wiki"):
+                self.assertIn(name, external["summary"])
+                self.assertIn(name, external["next_action"])
+            serialized = json.dumps(report)
+            self.assertNotIn(secret_marker, serialized)
+            self.assertNotIn(str(skill_root), serialized)
 
     def test_initialized_imap_template_is_not_ready_before_user_fills_it(self):
         with tempfile.TemporaryDirectory() as directory:

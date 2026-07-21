@@ -116,6 +116,27 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertIn("~/.config/offerloop/", readme)
         self.assertIn("~/.local/state/offerloop/", readme)
 
+    def test_setup_docs_match_capability_preflight_and_recovery(self):
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        setup = (SKILLS / "offerloop-setup" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        onboarding = (
+            SKILLS / "offerloop-setup" / "references" / "onboarding.md"
+        ).read_text(encoding="utf-8")
+        for text in (readme, onboarding):
+            self.assertNotIn("当前版本限制", text)
+            self.assertIn("未登记 `progress_base_url`", text)
+            self.assertIn("不会因此", text)
+            self.assertIn("阻塞企业信息同步", text)
+            self.assertIn("lark-shared", text)
+            self.assertIn("lark-apps", text)
+        for text in (readme, onboarding):
+            self.assertIn("npx @larksuite/cli@latest install", text)
+            self.assertIn("npx skills add larksuite/cli -g -y", text)
+        self.assertIn("目标已登记时运行期只需要", setup)
+        self.assertIn("线上条件一律保持 `unverified`", setup)
+
     def test_no_scaffold_placeholders_remain(self):
         for skill_file in SKILLS.glob("*/SKILL.md"):
             self.assertNotIn("TODO", skill_file.read_text(encoding="utf-8"), skill_file)

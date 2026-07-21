@@ -128,9 +128,10 @@ npx skills add riwonswain-ovo/OfferLoop -g \
 ```
 
 预检会区分 `ready`、`needs_action`、`blocked` 和 `unverified`。它仅检查 Python 版本、
-`lark-cli` 是否在路径中、四个 OfferLoop Skill 是否存在，以及本地配置/文件权限；它不验证
-`lark-cli` profile 是否真实可用，也不访问飞书、邮箱、妙搭或浏览器。`ready` 因而只表示本机
-可检查的条件已满足；`unverified` 表示仍需后续只读在线核验，不是错误。
+`lark-cli` 是否在路径中、四个 OfferLoop Skill 与所选能力必需的外部 Lark Skill 是否存在，
+以及本地配置/文件权限；它不验证 `lark-cli` profile、飞书 scope、应用发布、租户安装或资源权限，
+也不访问飞书、邮箱、妙搭或浏览器。`ready` 因而只表示对应的本机条件已满足；线上条件保持
+`unverified`，需要后续只读核验，不是错误。
 
 ### 4. 按能力补齐人工前置条件
 
@@ -138,18 +139,18 @@ npx skills add riwonswain-ovo/OfferLoop -g \
 
 | 能力 | 使用前需人工完成 | 该操作依赖的外部 Lark Skill（不随 OfferLoop 打包） |
 |---|---|---|
-| `collection` | 配置可用的 bot profile；给来源 Base 查看权限、给目标 Base 编辑权限；如需 workflow，再给应用相应管理权限。没有自建应用权限时，请管理员提供或安装已发布应用。 | 核心同步直接使用 `lark-cli`；可选飞书通知需要 `lark-im`，按姓名查找通知对象还需要 `lark-contact`。 |
+| `collection` | 配置可用的 bot profile；给来源 Base 查看权限、给目标 Base 编辑权限；如需 workflow，再给应用相应管理权限。没有自建应用权限时，请管理员提供或安装已发布应用。 | 核心同步直接使用 `lark-cli`；只有已启用的飞书通知需要 `lark-im`。首次按用户姓名登记目标时才需要 `lark-contact`，目标 ID 已登记后运行期不需要它。 |
 | `reminder` | 在本机填写 IMAP 配置并使用邮箱服务商的授权码/应用专用密码；配置笔面试中心和求职进展 Base；若要建日历，完成 user 身份的最小日历授权。 | 创建或更新个人日历需要 `lark-calendar`；可选通知需要 `lark-im`。 |
 | `workspace` | 对三张 Base、知识库空间和首页有访问权限；登记工作台 HTTPS 地址。若要创建或整理知识库，需有对应的创建/编辑权限。 | 创建或整理空间需要 `lark-base`、`lark-doc` 和 `lark-wiki`。只读本地定位检查不调用它们。 |
-| `full` | 完成前三项；为即时同步准备飞书应用、Base workflow 和可访问的 HTTPS 同步端点；如部署工作台，还需要妙搭创建、配置、发布和环境变量管理权限，以及租户管理员对应用/权限版本的发布或安装支持。 | 组合使用上列外部 Skill；如启用消息通知，还会需要 `lark-im`/`lark-contact`。 |
+| `full` | 完成前三项；为即时同步准备飞书应用、Base workflow 和可访问的 HTTPS 同步端点；如部署工作台，还需要妙搭创建、配置、发布和环境变量管理权限，以及租户管理员对应用/权限版本的发布或安装支持。 | 组合使用 `lark-calendar`、`lark-base`、`lark-doc`、`lark-wiki`、`lark-shared` 与 `lark-apps`；只有启用通知时才增加相应通知依赖。 |
 
 外部 Lark Skill 在本仓库中**没有捆绑**。在要求 Agent 创建 Base、整理知识库、写日历或发送通知前，
 请先按所用 Agent 的方式单独安装或启用表中所列 Skill，并再次新开会话让它们加载。缺少某项时，
 只能使用不依赖它的能力，或请管理员/具备权限的同事完成对应配置。
 
-> 当前版本限制：`collection` 的预检仍会要求登记“求职进展”Base，即使你尚未启用即时进展联动。
-> 因此只配置企业清单的用户会看到 `needs_action`，不能把该项预检报告为 `ready`。不要为了消除
-> 这一提示而猜测或伪造 Base 地址；该预检契约将在后续修复中按“仅同步招聘信息”的最小配置调整。
+`collection` 只要求企业清单定位；未登记 `progress_base_url` 时，预检会把可选的求职进展
+定位标为 `unverified`，`job-collection` 会跳过跨 Base 对账并在摘要中标为“未启用”；不会因此阻塞企业信息同步。
+`reminder`、`workspace` 和 `full` 仍按各自合同要求求职进展定位。
 
 ### 5. 确认部署计划后再创建资源
 

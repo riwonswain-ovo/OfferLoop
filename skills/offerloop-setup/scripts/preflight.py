@@ -16,6 +16,26 @@ SKILL_ROOT = Path(__file__).resolve().parents[1]
 SKILLS_ROOT = SKILL_ROOT.parent
 STATUS_MODEL_PATH = Path(__file__).with_name("status_model.py")
 
+BUNDLED_SKILLS = (
+    "offerloop-setup",
+    "offerloop-workspace",
+    "job-collection",
+    "recruiting-reminder",
+)
+EXTERNAL_SKILLS_BY_CAPABILITY = {
+    "collection": (),
+    "reminder": ("lark-calendar",),
+    "workspace": ("lark-base", "lark-doc", "lark-wiki"),
+    "integration": ("lark-shared", "lark-apps"),
+}
+LARK_CLI_RECOVERY = (
+    "运行 `npx @larksuite/cli@latest install` 安装 lark-cli；再运行 "
+    "`npx skills add larksuite/cli -g -y` 安装官方 Lark Skills，然后新开 Agent 会话"
+)
+LARK_SKILLS_RECOVERY = (
+    "运行 `npx skills add larksuite/cli -g -y` 安装官方 Lark Skills，然后新开 Agent 会话"
+)
+
 
 def _load_status_model():
     spec = importlib.util.spec_from_file_location(
@@ -64,17 +84,97 @@ def state_root(environ=None):
     return Path(source.get("XDG_STATE_HOME", Path.home() / ".local" / "state")) / "offerloop"
 
 
+def _skill_roots(source, override=None):
+    """Return supported local Skill roots without exposing them in reports."""
+    if override is not None:
+        candidates = [override] if isinstance(override, (str, Path)) else override
+    else:
+        home = Path(source.get("HOME", Path.home()))
+        candidates = [
+            SKILLS_ROOT,
+            home / ".agents" / "skills",
+            home / ".codex" / "skills",
+        ]
+        codex_home = source.get("CODEX_HOME")
+        if codex_home:
+            candidates.append(Path(codex_home) / "skills")
+
+    roots = []
+    seen = set()
+    for candidate in candidates:
+        path = Path(candidate).expanduser()
+        try:
+            identity = path.resolve(strict=False)
+        except OSError:
+            identity = path.absolute()
+        if identity in seen:
+            continue
+        seen.add(identity)
+        roots.append(path)
+    return tuple(roots)
+
+
+def _skill_is_installed(name, roots):
+    return any((root / name / "SKILL.md").is_file() for root in roots)
+
+
+def _required_external_skills(capability, config):
+    required = set(EXTERNAL_SKILLS_BY_CAPABILITY[capability])
+    notification = config.get("notifications")
+    if capability in {"collection", "reminder"} and isinstance(notification, dict):
+        if notification.get("status") == "enabled":
+            required.add("lark-im")
+            target_id = str(notification.get("target_id", ""))
+            if notification.get("target_type") == "user" and not target_id.startswith("ou_"):
+                required.add("lark-contact")
+    return tuple(sorted(required))
+
+
+def _external_skills_check(config, capability, roots):
+    required = _required_external_skills(capability, config)
+    if not required:
+        return _check(
+            "local.external_skills",
+            capability,
+            "ready",
+            "此能力核心流程直接使用 lark-cli，无额外 Lark Skill 依赖",
+        )
+
+    missing = tuple(name for name in required if not _skill_is_installed(name, roots))
+    if missing:
+        names = "、".join(missing)
+        return _check(
+            "local.external_skills",
+            capability,
+            "blocked",
+            f"缺少所选能力需要的外部 Lark Skill：{names}",
+            f"缺少：{names}。{LARK_SKILLS_RECOVERY}",
+        )
+    return _check(
+        "local.external_skills",
+        capability,
+        "ready",
+        "已发现所选能力需要的外部 Lark Skill（未验证线上权限）："
+        + "、".join(required),
+    )
+
+
+def _online_permissions_check(capability):
+    return _check(
+        "online.permissions",
+        capability,
+        "unverified",
+        "飞书身份、资源访问与线上权限尚未验证",
+        "获得用户确认后，按 verification-matrix 执行只读在线验收",
+    )
+
+
 def _legacy_checks(source):
     """Preserve the original no-argument API for older callers."""
     root = config_root(source)
     skills = {
         name: (SKILLS_ROOT / name / "SKILL.md").is_file()
-        for name in (
-            "offerloop-setup",
-            "offerloop-workspace",
-            "job-collection",
-            "recruiting-reminder",
-        )
+        for name in BUNDLED_SKILLS
     }
     public_config = root / "config.json"
     locator_status = {name: False for name in WORKSPACE_LOCATORS}
@@ -160,11 +260,10 @@ def _check(check_id, capability, status, summary, next_action=""):
 
 
 def _status_for_present(value, summary, action):
-    return ("ready", summary, "") if value not in (None, "") else (
-        "needs_action",
-        summary,
-        action,
-    )
+    if value not in (None, ""):
+        return "ready", summary, ""
+    missing_summary = summary.replace("已登记", "未登记", 1)
+    return "needs_action", missing_summary, action
 
 
 def _selected_capabilities(capability):
@@ -219,9 +318,10 @@ def _notification_check(config, capability):
     )
 
 
-def _capability_report(source, capability):
+def _capability_report(source, capability, skills_roots=None):
     selected = _selected_capabilities(capability)
     checks = []
+    roots = _skill_roots(source, skills_roots)
     root = config_root(source)
     config_path = root / "config.json"
     config, config_state = _read_config(config_path)
@@ -243,14 +343,10 @@ def _capability_report(source, capability):
         common_action = "将 config.json 权限收紧为 0600"
 
     bundled_skills = {
-        name: (SKILLS_ROOT / name / "SKILL.md").is_file()
-        for name in (
-            "offerloop-setup",
-            "offerloop-workspace",
-            "job-collection",
-            "recruiting-reminder",
-        )
+        name: _skill_is_installed(name, roots)
+        for name in BUNDLED_SKILLS
     }
+    lark_cli_path = shutil.which("lark-cli")
 
     for selected_capability in sorted(selected):
         checks.extend(
@@ -269,9 +365,9 @@ def _capability_report(source, capability):
                 _check(
                     "local.lark_cli",
                     selected_capability,
-                    "ready" if shutil.which("lark-cli") else "blocked",
-                    "lark-cli 可用" if shutil.which("lark-cli") else "未找到 lark-cli",
-                    "安装并初始化 lark-cli" if not shutil.which("lark-cli") else "",
+                    "ready" if lark_cli_path else "blocked",
+                    "lark-cli 可用" if lark_cli_path else "未找到 lark-cli",
+                    LARK_CLI_RECOVERY if not lark_cli_path else "",
                 ),
                 _check(
                     "local.skills",
@@ -291,6 +387,12 @@ def _capability_report(source, capability):
                     common_summary,
                     common_action,
                 ),
+                _external_skills_check(
+                    config,
+                    selected_capability,
+                    roots,
+                ),
+                _online_permissions_check(selected_capability),
             ]
         )
         profile_status, profile_summary, profile_action = _status_for_present(
@@ -309,14 +411,39 @@ def _capability_report(source, capability):
         )
 
     if "collection" in selected:
-        for field, check_id, summary in (
-            ("target_base_url", "local.collection_locator", "已登记求职企业清单"),
-            ("progress_base_url", "local.progress_locator", "已登记求职进展"),
-        ):
-            status, result_summary, action = _status_for_present(
-                config.get(field), summary, f"登记 {summary.replace('已登记', '')} 地址"
+        status, result_summary, action = _status_for_present(
+            config.get("target_base_url"),
+            "已登记求职企业清单",
+            "登记求职企业清单地址",
+        )
+        checks.append(
+            _check(
+                "local.collection_locator",
+                "collection",
+                status,
+                result_summary,
+                action,
             )
-            checks.append(_check(check_id, "collection", status, result_summary, action))
+        )
+        if config.get("progress_base_url") in (None, ""):
+            checks.append(
+                _check(
+                    "local.progress_locator",
+                    "collection",
+                    "unverified",
+                    "未登记求职进展（可选，跨 Base 对账未启用）",
+                    "如需跨 Base 对账，再登记求职进展地址",
+                )
+            )
+        else:
+            checks.append(
+                _check(
+                    "local.progress_locator",
+                    "collection",
+                    "ready",
+                    "已登记求职进展（可选）",
+                )
+            )
         checks.append(_notification_check(config, "collection"))
 
     if "reminder" in selected:
@@ -409,11 +536,11 @@ def _capability_report(source, capability):
     return status_model.build_report(selected=selected, checks=checks)
 
 
-def run_checks(environ=None, capability=None):
+def run_checks(environ=None, capability=None, skills_roots=None):
     source = dict(os.environ if environ is None else environ)
     if capability is None:
         return _legacy_checks(source)
-    return _capability_report(source, capability)
+    return _capability_report(source, capability, skills_roots=skills_roots)
 
 
 def main():
