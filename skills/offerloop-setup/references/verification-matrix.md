@@ -58,7 +58,7 @@ python3 skills/recruiting-reminder/scripts/fetch_mail.py --check-connection
 | 文档入口可读取 | user | `wiki +node-get` 或 `docx` 读取 | 使用指南和入口文档存在 |
 | 工作台可访问 | 浏览器 / HTTP GET | 访问 `workbench_url` | 返回可加载的页面外壳；不提交表单、不写入数据 |
 | 工作台首屏性能 | 浏览器 / Trace | 首次打开后查询 `GET /api/workbench` Trace | 首屏接口按需读取默认视图，每个数据集最多 30 条，不扫描所有视图记录 |
-| 工作台日历 OAuth | 浏览器 | 用户亲自点击“连接飞书日历”并同意授权 | 回到工作台后显示个人日历已连接；token 不进入聊天、Git 或公共配置 |
+| 工作台日历 OAuth | 浏览器 | 按 `workbench-golden-path.md` 完成两权限授权并刷新一次 | 连接按钮消失、日历 Base 按钮保留、未来 7 天读取成功；刷新后仍连接，且无 CSRF、会话过长或读取失败提示 |
 | Base 入口可读取 | user | 对已配置各 Base 执行 `+url-resolve`、`+base-get` | 入口没有失效 |
 
 知识库读取示例：
@@ -70,6 +70,10 @@ lark-cli wiki +node-list --space-id '<SPACE_ID>' --as user
 
 不要在验收中移动知识库节点、创建文档或更改成员权限。OAuth 同意必须由用户本人操作；
 验收只观察连接状态和未来 7 天只读结果，不读取或展示 token/Cookie。
+
+首屏还需记录从刷新到可交互的耗时并查看 `GET /api/workbench` 与当前数据集请求 Trace。默认视图
+不得预读全部 Base/子视图记录，每个请求最多返回 30 条；若常规网络下首屏超过 10 秒，保持
+`needs_action` 并先排查全量扫描、重复 React 初始化请求和串行 Base 请求，不把慢页面交付为 ready。
 
 ## 4. `integration`：求职进展即时联动
 

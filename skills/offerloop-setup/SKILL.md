@@ -102,7 +102,9 @@ workflow，使用户手动改为 `已投递` 后立即同步；`job-collection` 
 ## 一键部署完整空间
 
 用户明确说“部署”“一键部署”或“创建完整 OfferLoop”时，完整阅读
-`references/one-click-deploy.md`。先运行：
+`references/one-click-deploy.md`。只要部署范围包含工作台，还必须完整阅读
+`references/workbench-golden-path.md`，把其中发布前门禁和发布后浏览器验收作为完成条件，不能把
+“代码已推送”“页面能打开”或“用户点过授权”当作部署成功。先运行：
 
 ```bash
 python3 scripts/deployment_plan.py --capability full --json
@@ -151,5 +153,14 @@ python3 ../recruiting-reminder/scripts/fetch_mail.py --check-connection
 - 缺少 Python 或 lark-cli：先处理预检中的 `blocked` 项，暂停后续飞书操作。
 - bot 核验失败：检查应用 scope、版本发布、租户安装和目标 Base 权限；不要对 bot 执行 `auth login`。
 - user 核验失败：按最小 scope 发起 split-flow 授权；不要把个人日历查询改为 bot。
+- 工作台回调出现 `csrf token not found in header`：回调地址错误地直指了 API；改为专用前端
+  `/calendar-oauth-callback`，再由页面通过妙搭请求客户端同源 POST 到令牌交换接口。不要关闭 CSRF。
+- 工作台授权后显示空白、400/503 或“授权会话过长”：按 `workbench-golden-path.md` 核对 Cookie
+  契约；浏览器只持久化分片加密的 refresh token，access token 只能在服务端单次请求内使用。
+- 工作台显示已连接但日历读取失败：先确认 OAuth 同时请求 `calendar:calendar:readonly`、
+  `calendar:calendar.event:read`、`offline_access`，再确认主日历调用是 `POST
+  /calendar/v4/calendars/primary`，不能使用 GET。
+- 工作台首屏超过 10 秒：检查是否在首屏扫描全部 Base、全部视图或全部记录；恢复为元数据先行、
+  当前 Base/当前视图按需读取，每页固定 30 条，并用线上 Trace 验证后再交付。
 - IMAP 连通失败：确认 IMAP 已启用，并使用授权码或应用专用密码，不使用网页登录密码。
 - 配置在更新后丢失：检查 `.env` 或状态是否误放在旧 Skill 目录，按 onboarding 迁入用户配置目录。

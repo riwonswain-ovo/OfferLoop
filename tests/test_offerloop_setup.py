@@ -509,6 +509,76 @@ class OfferLoopSetupTest(unittest.TestCase):
                 [path for path in root.rglob("*") if path.is_symlink()], []
             )
 
+    def test_workbench_template_locks_the_known_good_calendar_contract(self):
+        root = (
+            ROOT
+            / "skills"
+            / "offerloop-setup"
+            / "assets"
+            / "workbench-template"
+        )
+        manifest = json.loads((root / "template.json").read_text(encoding="utf-8"))
+        contract = manifest["deployment_contract"]
+        self.assertEqual(contract["workbench_page_size"], 30)
+        self.assertEqual(contract["oauth_callback_path"], "/calendar-oauth-callback")
+        self.assertEqual(
+            contract["oauth_scopes"],
+            [
+                "calendar:calendar:readonly",
+                "calendar:calendar.event:read",
+                "offline_access",
+            ],
+        )
+        self.assertEqual(contract["calendar_primary_method"], "POST")
+        self.assertEqual(
+            contract["token_persistence"],
+            "encrypted_refresh_token_cookie_chunks",
+        )
+
+        service = (
+            root / "server/modules/workbench/workbench-calendar.service.ts"
+        ).read_text(encoding="utf-8")
+        controller = (
+            root / "server/modules/workbench/workbench.controller.ts"
+        ).read_text(encoding="utf-8")
+        client_api = (root / "client/src/api/index.ts").read_text(encoding="utf-8")
+        client_hook = (
+            root / "client/src/pages/workbench/useWorkbenchData.ts"
+        ).read_text(encoding="utf-8")
+        app = (root / "client/src/app.tsx").read_text(encoding="utf-8")
+
+        self.assertIn(
+            "calendar:calendar:readonly calendar:calendar.event:read offline_access",
+            service,
+        )
+        self.assertIn("this.httpService.post<FeishuEnvelope<FeishuPrimaryCalendarData>>", service)
+        self.assertIn("/calendar/v4/calendars/primary", service)
+        self.assertIn("interface CalendarTokenSession", service)
+        token_session = service.split("interface CalendarTokenSession", 1)[1].split(
+            "interface CalendarTokenBundle", 1
+        )[0]
+        self.assertIn("refreshToken", token_session)
+        self.assertNotIn("accessToken", token_session)
+        self.assertIn("@Post('calendar/oauth/complete')", controller)
+        self.assertNotIn("@Get('calendar/oauth/callback')", controller)
+        self.assertIn("method: 'POST'", client_api)
+        self.assertIn("oauthCompletionStartedRef", client_hook)
+        self.assertIn("initialLoadStartedRef", client_hook)
+        self.assertIn('path="calendar-oauth-callback"', app)
+
+        guide = (
+            ROOT
+            / "skills/offerloop-setup/references/workbench-golden-path.md"
+        ).read_text(encoding="utf-8")
+        for required_text in (
+            "csrf token not found in header",
+            "授权会话过长",
+            "POST /open-apis/calendar/v4/calendars/primary",
+            "每页固定 30 条",
+            "再刷新一次",
+        ):
+            self.assertIn(required_text, guide)
+
     def test_materializer_preserves_new_app_binding_and_private_files(self):
         with tempfile.TemporaryDirectory() as directory:
             destination = Path(directory)
@@ -527,6 +597,25 @@ class OfferLoopSetupTest(unittest.TestCase):
             self.assertEqual(private_env.read_text(encoding="utf-8"), "PRIVATE=value\n")
             self.assertTrue((destination / "package.json").is_file())
             self.assertFalse((destination / "template.json").exists())
+
+    def test_workbench_materializer_reports_the_deployment_contract(self):
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory)
+            (destination / ".spark").mkdir()
+            (destination / ".spark" / "meta.json").write_text(
+                '{"app_id":"app_new_user"}\n', encoding="utf-8"
+            )
+
+            result = materialize_app_template.materialize(
+                "workbench", destination, dry_run=True
+            )
+
+            self.assertEqual(
+                result["deployment_contract"]["calendar_primary_method"], "POST"
+            )
+            self.assertEqual(
+                result["deployment_contract"]["workbench_page_size"], 30
+            )
 
     def test_materializer_requires_a_real_miaoda_binding(self):
         with tempfile.TemporaryDirectory() as directory:
