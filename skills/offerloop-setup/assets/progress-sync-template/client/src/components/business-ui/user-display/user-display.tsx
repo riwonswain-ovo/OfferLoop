@@ -5,13 +5,7 @@ import React from 'react';
 import { normalizeUser, isValidUserId } from '@client/src/components/business-ui/utils/user';
 import type { UserInput } from '@client/src/components/business-ui/types/user';
 import { UserWithAvatar } from '@client/src/components/business-ui/user-display/user-with-avatar';
-import { UserProfile } from '@client/src/components/business-ui/user-profile/user-profile';
 import { cn } from '@/lib/utils';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@client/src/components/ui/popover';
 
 export interface IUserDisplayProps {
   /**
@@ -22,7 +16,8 @@ export interface IUserDisplayProps {
   className?: string;
   style?: React.CSSProperties;
   showLabel?: boolean;
-  showUserProfile?: boolean;
+  /** 已弃用；模板不再加载远程 UserProfile。 */
+  showUserProfile?: false;
   userId?: string;
   user_id?: string;
 }
@@ -74,25 +69,12 @@ export const UserDisplay: React.FC<IUserDisplayProps> = ({
   return (
     <div className={cn('flex flex-wrap gap-1', className)} style={style}>
       {normalizedUsers.map((user) => (
-        <Popover key={user.user_id}>
-          <PopoverTrigger asChild>
-            <div>
-              <UserWithAvatar
-                data={user}
-                size={size}
-                showLabel={showLabel}
-                className="cursor-pointer hover:bg-[rgba(31,35,41,0.15)] active:bg-[rgba(31,35,41,0.2)]"
-              />
-            </div>
-          </PopoverTrigger>
-          <PopoverContent
-            align="start"
-            sideOffset={8}
-            className="w-[320px] border-0 border-border/50 bg-card p-0 shadow-[0px_8px_24px_8px_rgba(31,35,41,0.04),0px_6px_12px_rgba(31,35,41,0.04),0px_4px_8px_-8px_rgba(31,35,41,0.06)]"
-          >
-            <UserProfile value={user} />
-          </PopoverContent>
-        </Popover>
+        <UserWithAvatar
+          key={user.user_id}
+          data={user}
+          size={size}
+          showLabel={showLabel}
+        />
       ))}
     </div>
   );
