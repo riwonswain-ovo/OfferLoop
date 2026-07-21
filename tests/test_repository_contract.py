@@ -162,6 +162,36 @@ class RepositoryContractTest(unittest.TestCase):
             self.assertNotIn('"prepare"', package)
             self.assertNotIn("core.hooksPath", package)
 
+    def test_templates_do_not_ship_unused_remote_profile_scaffold(self):
+        assets = SKILLS / "offerloop-setup" / "assets"
+        for directory in ("workbench-template", "progress-sync-template"):
+            source = assets / directory / "client" / "src"
+            profile_scaffold = (
+                source / "components" / "business-ui" / "user-profile"
+            )
+            self.assertFalse(any(profile_scaffold.glob("*")))
+            source_text = "\n".join(
+                path.read_text(encoding="utf-8")
+                for path in source.rglob("*.ts*")
+            )
+            self.assertNotIn("jsAPITicket", source_text)
+            self.assertNotIn("redirectURLRef", source_text)
+
+    def test_release_gate_pins_real_skills_cli_and_documents_residual_risk(self):
+        acceptance = (ROOT / "scripts" / "cold_install_acceptance.py").read_text(
+            encoding="utf-8"
+        )
+        workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(
+            encoding="utf-8"
+        )
+        security = (ROOT / "SECURITY.md").read_text(encoding="utf-8")
+        self.assertIn('SKILLS_CLI_VERSION = "1.5.19"', acceptance)
+        self.assertIn("--copy", acceptance)
+        self.assertIn("--skill", acceptance)
+        self.assertIn("cold_install_acceptance.py", workflow)
+        self.assertIn("untrusted_external", security)
+        self.assertIn("residual risk", security)
+
 
 if __name__ == "__main__":
     unittest.main()
