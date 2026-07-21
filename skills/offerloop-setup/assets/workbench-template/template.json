@@ -7,6 +7,8 @@
   "required_environment": [
     "FEISHU_APP_ID",
     "FEISHU_APP_SECRET",
+    "FEISHU_CALENDAR_COOKIE_SECRET",
+    "WORKBENCH_PUBLIC_URL",
     "SOURCE_BASE_TOKEN",
     "SOURCE_TABLE_ID",
     "PROGRESS_BASE_TOKEN",

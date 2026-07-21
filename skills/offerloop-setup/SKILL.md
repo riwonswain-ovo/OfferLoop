@@ -19,7 +19,7 @@ description: 以渐进方式配置、检查和部署 OfferLoop。适用于“安
 - 先运行离线预检；预检只读取本机命令、配置键名和文件状态，不访问飞书、工作台或邮箱。
 - 不要求用户在聊天中发送 App Secret、邮箱授权码、Cookie、token 或密码。
 - 同一个 lark-cli profile 可以承载 bot 和 user 身份，但必须按实际用途分别检查。
-- `job-collection` 的长期同步通常使用 `--as bot`；个人日历必须使用 `--as user`，不能静默改用 bot。
+- `job-collection` 的长期同步通常使用 `--as bot`；个人日历必须使用 `--as user`，不能静默改用 bot。工作台通过 OAuth 获取并轮换 user token，不要求用户复制 token。
 - 配置和运行状态属于用户配置目录，不能写进 Skill 安装目录，避免更新覆盖。
 - 任何写入飞书 Base、创建日程、读取邮件标题/正文/附件或启用工作流前，必须说明范围并获得用户确认。
 - 本 Skill 只负责首次配置、授权检查、资源定位、完整部署和验收；不负责日常首页维护，后者交给 `offerloop-workspace`。

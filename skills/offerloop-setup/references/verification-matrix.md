@@ -57,6 +57,8 @@ python3 skills/recruiting-reminder/scripts/fetch_mail.py --check-connection
 | 知识库节点可读取 | user | `wiki +node-get`、`wiki +node-list` | 配置的根节点与子节点可读取 |
 | 文档入口可读取 | user | `wiki +node-get` 或 `docx` 读取 | 使用指南和入口文档存在 |
 | 工作台可访问 | 浏览器 / HTTP GET | 访问 `workbench_url` | 返回可加载的页面外壳；不提交表单、不写入数据 |
+| 工作台首屏性能 | 浏览器 / Trace | 首次打开后查询 `GET /api/workbench` Trace | 首屏接口按需读取默认视图，每个数据集最多 30 条，不扫描所有视图记录 |
+| 工作台日历 OAuth | 浏览器 | 用户亲自点击“连接飞书日历”并同意授权 | 回到工作台后显示个人日历已连接；token 不进入聊天、Git 或公共配置 |
 | Base 入口可读取 | user | 对已配置各 Base 执行 `+url-resolve`、`+base-get` | 入口没有失效 |
 
 知识库读取示例：
@@ -66,7 +68,8 @@ lark-cli wiki +node-get --node-token '<NODE_TOKEN>' --as user
 lark-cli wiki +node-list --space-id '<SPACE_ID>' --as user
 ```
 
-不要在验收中移动知识库节点、创建文档或更改成员权限。
+不要在验收中移动知识库节点、创建文档或更改成员权限。OAuth 同意必须由用户本人操作；
+验收只观察连接状态和未来 7 天只读结果，不读取或展示 token/Cookie。
 
 ## 4. `integration`：求职进展即时联动
 

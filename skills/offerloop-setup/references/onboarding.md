@@ -145,7 +145,7 @@ python3 ../recruiting-reminder/scripts/fetch_mail.py --check-connection
 
 它只登录、选择邮箱文件夹和登出，不会搜索、获取或展示任何邮件。
 
-## 6. 日历最小权限
+## 6. 日历最小权限与工作台 OAuth
 
 `recruiting-reminder` 至少需要：
 
@@ -156,6 +156,17 @@ python3 ../recruiting-reminder/scripts/fetch_mail.py --check-connection
 user 身份缺权限时，按 lark-cli split-flow 进行最小授权：先用 `--no-wait --json` 取得授权
 链接和 device code，向用户展示链接/二维码；用户完成授权后，再执行 device-code 完成登录。
 不要缓存或公开授权材料。仅使用 `collection` 或 `workspace` 时不要求这些权限。
+
+工作台读取个人日历使用独立的浏览器 OAuth，不复用或导出 lark-cli token。部署工作台时：
+
+1. 为飞书应用开通 `calendar:calendar.event:read` 与 `offline_access` 并发布权限版本；
+2. 将 `<WORKBENCH_PUBLIC_URL>/api/workbench/calendar/oauth/callback` 精确加入应用安全设置的重定向 URL；
+3. 在妙搭线上环境设置 `WORKBENCH_PUBLIC_URL` 与随机的 `FEISHU_CALENDAR_COOKIE_SECRET`，禁止回显或保存后者；
+4. 用户打开工作台并点击“连接飞书日历”，亲自同意授权；
+5. 工作台在 HttpOnly 加密 Cookie 中保存 access/refresh token，并在 access token 过期前轮换。Refresh Token 失效后，页面重新显示连接按钮。
+
+不得要求用户在聊天中发送 user access token、refresh token 或 Cookie，也不得把静态
+`FEISHU_CALENDAR_USER_ACCESS_TOKEN` 写入妙搭环境变量。
 
 ## 7. 用户状态目录与迁移
 
