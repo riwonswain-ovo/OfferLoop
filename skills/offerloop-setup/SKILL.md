@@ -60,9 +60,38 @@ python3 scripts/configure.py \
   --progress-sync-endpoint '<HTTPS_ENDPOINT>' \
   --progress-sync-workflow-id '<WORKFLOW_ID>' \
   --progress-sync-status enabled
+python3 scripts/configure.py \
+  --notification-target-type '<user|chat>' \
+  --notification-target-name '<用户姓名|群名称>' \
+  --notification-target-id '<ou_xxx|oc_xxx>' \
+  --notification-identity '<bot|user>' \
+  --notification-status enabled
 ```
 
 配置文件是 `~/.config/offerloop/config.json`（遵循 `XDG_CONFIG_HOME`），权限为 `0600`。其中不得保存密码、Cookie、App Secret、授权码或访问令牌。`workbench_url` 必须是没有用户名、密码或片段的 HTTPS 地址。
+
+飞书消息通知是可选能力。启用前必须让用户明确确认接收人或群、摘要模板和发送身份；保存
+`enabled` 即表示对 `job-collection` 与 `recruiting-reminder` 后续运行的一条最终摘要给予持续
+授权。目标 ID 只是非敏感定位信息；不得保存消息 token。停用时保留目标定位并把状态改为
+`disabled`。首次实际发送仍需按 `lark-im` 检查 scope、机器人入群或私聊关系。
+
+### 通知接入问答
+
+用户选择 `collection`、`reminder` 或 `full` 时，主动询问是否启用飞书结果通知；愿意启用时依次确认：
+
+1. 接收方式是私聊还是群聊；
+2. 目标用户姓名或目标群名称；
+3. 使用 bot 还是 user 身份发送；
+4. 使用两个业务 Skill 中定义的默认最终摘要模板，还是由用户提供自定义模板。
+
+完整读取 `lark-im` 和 `lark-contact`。群聊按名称调用 `im +chat-search`，用户按姓名调用
+`contact +search-user`；只接受唯一的精确匹配，零结果时引导检查可见范围，多个结果时展示必要的
+脱敏候选让用户选择，不取第一条。将确认后的名称和解析出的 `ou_`/`oc_` ID 一并保存。
+
+使用 bot 给群聊发消息时，还必须核对当前 profile 的 App ID、机器人能力、
+`im:chat:read`、`im:chat.members:read`、`im:message:send_as_bot`、应用版本已发布且已安装到租户，
+并用 `im +chat-members-list` 确认该 App ID 的机器人已加入目标群。任一条件缺失时保持
+`notifications.status=disabled`，逐步引导修复；不得通过发送测试消息代替只读核验。
 
 `full` 工作流优先复用公共配置 `progress_sync` 中已登记的同步应用、HTTPS endpoint 和 Base
 workflow，使用户手动改为 `已投递` 后立即同步；`job-collection` 的直接幂等对账作为补偿。

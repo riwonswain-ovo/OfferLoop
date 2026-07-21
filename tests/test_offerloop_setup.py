@@ -357,6 +357,75 @@ class OfferLoopSetupTest(unittest.TestCase):
             self.assertEqual(saved["progress_sync"]["status"], "enabled")
             self.assertEqual(saved["progress_sync"]["workflow_id"], "wkf_example")
 
+    def test_notification_config_is_optional_and_validated(self):
+        with tempfile.TemporaryDirectory() as directory:
+            environment = {"XDG_CONFIG_HOME": directory}
+            path = configure.config_file(environment)
+            configure.write_private_json(path, {"lark_profile": "codex"})
+
+            result = configure.update_notification_config(
+                path,
+                {
+                    "status": "enabled",
+                    "target_type": "user",
+                    "target_name": "Example User",
+                    "target_id": "ou_example",
+                    "identity": "bot",
+                },
+            )
+
+            self.assertEqual(result["lark_profile"], "codex")
+            self.assertEqual(result["notifications"]["status"], "enabled")
+            self.assertEqual(result["notifications"]["target_name"], "Example User")
+            report = preflight.run_checks(environment, capability="collection")
+            checks = {check["id"]: check for check in report["checks"]}
+            self.assertEqual(
+                checks["local.collection_notification"]["status"], "unverified"
+            )
+            self.assertNotIn("ou_example", json.dumps(report))
+
+    def test_notification_config_rejects_mismatched_or_incomplete_targets(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = configure.config_file({"XDG_CONFIG_HOME": directory})
+            with self.assertRaisesRegex(ValueError, "does not match"):
+                configure.update_notification_config(
+                    path,
+                    {"target_type": "chat", "target_id": "ou_wrong"},
+                )
+            with self.assertRaisesRegex(ValueError, "cannot be enabled"):
+                configure.update_notification_config(path, {"status": "enabled"})
+            with self.assertRaisesRegex(ValueError, "unknown keys"):
+                configure.update_notification_config(path, {"access_token": "nope"})
+
+    def test_configure_cli_can_enable_notifications(self):
+        with tempfile.TemporaryDirectory() as directory:
+            environment = dict(os.environ, XDG_CONFIG_HOME=directory)
+            subprocess.run(
+                [
+                    "python3",
+                    str(ROOT / "skills/offerloop-setup/scripts/configure.py"),
+                    "--notification-target-type",
+                    "chat",
+                    "--notification-target-name",
+                    "秋招进度群",
+                    "--notification-target-id",
+                    "oc_example",
+                    "--notification-identity",
+                    "bot",
+                    "--notification-status",
+                    "enabled",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+                env=environment,
+            )
+
+            saved = configure.load_config(configure.config_file(environment))
+            self.assertEqual(saved["notifications"]["target_type"], "chat")
+            self.assertEqual(saved["notifications"]["target_name"], "秋招进度群")
+            self.assertEqual(saved["notifications"]["identity"], "bot")
+
     def test_preflight_reports_workspace_locator_readiness_without_values(self):
         with tempfile.TemporaryDirectory() as directory:
             path = configure.config_file({"XDG_CONFIG_HOME": directory})

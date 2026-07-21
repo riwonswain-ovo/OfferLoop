@@ -59,6 +59,12 @@ python3 scripts/configure.py \
   --progress-sync-endpoint '<HTTPS_ENDPOINT>' \
   --progress-sync-workflow-id '<WORKFLOW_ID>' \
   --progress-sync-status enabled
+python3 scripts/configure.py \
+  --notification-target-type '<user|chat>' \
+  --notification-target-name '<用户姓名|群名称>' \
+  --notification-target-id '<ou_xxx|oc_xxx>' \
+  --notification-identity '<bot|user>' \
+  --notification-status enabled
 ```
 
 `collection` 的长期同步通常以 bot 写入企业清单；`reminder` 在确认后写入笔面试中心，
@@ -69,6 +75,42 @@ python3 scripts/configure.py \
 定位器必须是非敏感元数据；缺少任何一项时保留为 `unverified`，不得根据标题或 record 猜测
 目标，也不得另建一套同步应用。
 `enabled` 只能在线核验成功后写入；endpoint 必须是无用户名、密码和片段的绝对 HTTPS URL。
+
+飞书消息通知可选。启用前必须确认固定接收方、最终摘要内容和发送身份；`user` 目标使用
+`ou_` 开头的 open ID，`chat` 目标使用 `oc_` 开头的 chat ID。该确认可作为后续运行的持续
+授权，但只允许每次业务运行发送一条约定摘要。首次发送前按 `lark-im` 验证权限与会话关系；
+未启用时两个业务 Skill 正常运行，不把通知缺失视为失败。
+
+### 通知配置对话
+
+不要要求普通用户查找飞书 ID。按顺序询问并记录：
+
+1. 私聊或群聊；
+2. 目标用户姓名或目标群名称；
+3. bot 或 user 发送身份；
+4. 默认最终摘要模板或自定义模板。
+
+群名称使用选定身份执行 `lark-cli im +chat-search --query '<群名称>' --disable-search-by-user`；
+用户姓名使用 user 身份执行 `lark-cli contact +search-user --query '<姓名>'`。只在唯一精确匹配或
+用户完成消歧后保存名称与 ID。bot 群聊还要用 `im +chat-members-list --member-types bot` 对照
+当前 profile App ID；列表中没有该 App ID 时，不得启用通知。
+
+### 安装并入群机器人
+
+当用户选择 bot 而当前 profile 尚不可用时，按以下顺序引导，不把“应用配置完成”误报为
+“机器人已装好”：
+
+1. 在飞书开发者后台创建或选择企业自建应用，并启用机器人能力；App Secret 只在本机通过
+   `lark-cli config init --new` 配置，不进入聊天。
+2. 开通最小权限：业务能力所需 Base 权限，以及通知所需的 `im:chat:read`、
+   `im:chat.members:read`、`im:message:send_as_bot`。
+3. 创建并发布应用版本，再由租户管理员安装或更新应用；只保存已选 profile，不保存密钥。
+4. 让群管理员把该应用机器人加入目标群。机器人能获取 tenant token 不代表已经入群。
+5. 用 bot 身份精确搜索目标群，再列出 bot 成员并按 App ID 验证；只读核验通过后才保存
+   `notifications.status=enabled`。
+
+私聊通知同样需要机器人与目标用户已建立可发送关系。任何首次真实测试消息仍属于对外发送，
+必须再次展示接收方、内容和身份并获得明确确认。
 
 ## 5. 邮箱配置与最小验证
 

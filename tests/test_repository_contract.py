@@ -38,6 +38,38 @@ class RepositoryContractTest(unittest.TestCase):
             text = (SKILLS / name / "SKILL.md").read_text(encoding="utf-8")
             self.assertIn("offerloop-setup", text, name)
 
+    def test_business_skills_define_opt_in_feishu_notifications(self):
+        for name in ("job-collection", "recruiting-reminder"):
+            text = (SKILLS / name / "SKILL.md").read_text(encoding="utf-8")
+            self.assertIn("## 飞书消息通知", text, name)
+            self.assertIn("notifications", text, name)
+            self.assertIn("lark-im", text, name)
+            self.assertIn("idempotency key", text, name)
+            self.assertIn("通知失败", text, name)
+            self.assertIn("不回滚", text, name)
+
+    def test_setup_guides_notification_choices_and_bot_installation(self):
+        setup = (SKILLS / "offerloop-setup" / "SKILL.md").read_text(encoding="utf-8")
+        onboarding = (
+            SKILLS / "offerloop-setup" / "references" / "onboarding.md"
+        ).read_text(encoding="utf-8")
+        for expected in (
+            "私聊还是群聊",
+            "目标用户姓名或目标群名称",
+            "bot 还是 user",
+            "im +chat-search",
+            "im +chat-members-list",
+        ):
+            self.assertIn(expected, setup)
+        for expected in (
+            "启用机器人能力",
+            "发布应用版本",
+            "安装或更新应用",
+            "加入目标群",
+            "im:message:send_as_bot",
+        ):
+            self.assertIn(expected, onboarding)
+
     def test_workspace_collaboration_boundaries_are_documented(self):
         setup = (SKILLS / "offerloop-setup" / "SKILL.md").read_text(encoding="utf-8")
         collection = (SKILLS / "job-collection" / "SKILL.md").read_text(
