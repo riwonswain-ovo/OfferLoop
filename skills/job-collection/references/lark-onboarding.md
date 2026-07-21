@@ -116,3 +116,32 @@ Base 授权应引导用户在目标文档右上角使用：
 | 交互运行成功、定时任务失败 | 运行环境 | 检查 automation 固定的 profile、app ID 和凭证可读性 |
 
 只有 profile 身份、scope、Base 权限、最小写入和 workflow 五项全部通过，才进入来源扫描和业务写入。
+
+## CLI 方言与回读兼容
+
+不同 lark-cli 版本的 shortcut 名称和 token 参数可能变化。每次首次运行或升级后先读取本机帮助：
+
+```bash
+lark-cli base --help
+lark-cli base +record-get --help
+lark-cli base +record-list --help
+```
+
+当前受支持方言使用 `+table-list`、`+record-list`、`+record-get`、`+record-search`、
+`+record-batch-update` 等带 `+` 的 shortcut，并使用 `--base-token`。所有业务命令仍必须显式带
+`--profile <PROFILE> --as bot`。帮助中不存在某个 shortcut 时停止并按本机帮助选择等价命令，
+不得直接粘贴旧版无 `+` 命令。
+
+写后回读采用保守兼容路径：一次只传一个 `--record-id`，不传 `--field-id`，读取完整 JSON 后
+在本地按 `fields`/`field_id_list` 投影。重复 `--record-id` 或同时投影触发的参数解析错误只说明
+CLI 客户端路径失败，不得据此把已成功写入判定为不存在。批量读使用 `+record-list` 或
+`+record-search`。
+
+## 网络错误分层
+
+`accounts.feishu.cn` 或 OpenAPI 域名 DNS 失败属于网络层，不是 bot scope 或 Base 文档权限错误：
+
+1. 使用完全相同的 profile、identity 和命令重试一次；宿主有网络沙箱时申请该命令的网络权限。
+2. 重试成功后继续，不修改 profile、不切换身份。
+3. 重试仍失败时停止依赖飞书的读取和写入，保留所有来源旧游标。
+4. 不用自动化记忆、旧 JSON、浏览器历史或临时文件替代实时「信息源登记」与用户偏好。
