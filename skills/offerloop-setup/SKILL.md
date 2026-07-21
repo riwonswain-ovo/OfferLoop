@@ -42,6 +42,22 @@ python3 scripts/preflight.py --capability '<collection|reminder|workspace|full>'
 
 不要把 `not_selected` 或 `unverified` 报为“配置失败”。修复 `blocked` 和 `needs_action` 后，重新运行同一条预检命令。
 
+### 预检边界
+
+这不是完整安装或线上权限验证。预检仅检查本机 Python 版本、`lark-cli` 命令是否存在、四个
+OfferLoop Skill 文件是否存在，以及所选能力的本地定位配置、IMAP 配置字段和文件权限。
+它不检查 Node/npx（它们只用于安装），不确认 `lark-cli` profile 是否存在或已授权，也不访问
+飞书、邮箱、浏览器、妙搭或外部 Lark Skill。
+
+因此，即使报告为 `ready`，也只能表述为“本机可检查条件已满足”；飞书应用 scope、应用版本发布、
+租户安装、Base/知识库共享、IMAP 连通性、个人日历授权、妙搭部署和工作台 OAuth 均须在用户确认后
+另行只读核验或配置。不要把 `ready` 表述为“已部署”或“已可用”。
+
+本仓库只包含 `offerloop-setup`、`job-collection`、`recruiting-reminder` 与
+`offerloop-workspace`。调用 `lark-base`、`lark-doc`、`lark-wiki`、`lark-calendar`、`lark-im`
+或 `lark-contact` 的能力，要求它们已在当前 Agent 环境中另行安装并在新会话中加载；它们不随
+OfferLoop 安装。缺失时报告准确的阻塞项，不要假设预检已经发现或修复它。
+
 ## 2. 仅保存非敏感定位信息
 
 完整阅读 `references/onboarding.md`，再按用户选择配置。只有用户确认保存时，才写入这些公开定位信息：
