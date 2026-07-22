@@ -33,15 +33,31 @@ EXTERNAL_SKILLS_BY_CAPABILITY = {
 LARK_CLI_RECOVERY = (
     "运行 `npx @larksuite/cli@latest install` 安装 lark-cli；再运行 "
     "Agent 对应的 `npx skills add larksuite/cli -g -a codex -y`、"
-    "`-a claude-code`、`-a hermes-agent` 或 `-a openclaw` 安装官方 Lark Skills，"
-    "然后新开 Agent 会话"
+    "`-a claude-code` 或 `-a hermes-agent` 安装官方 Lark Skills，"
+    "然后新开 Agent 会话。WorkBuddy 请在“专家·技能·连接器”中启用飞书连接器，"
+    "再新建任务"
 )
 LARK_SKILLS_RECOVERY = (
     "运行 Agent 对应的 `npx skills add larksuite/cli -g -a codex -y`、"
-    "`-a claude-code`、`-a hermes-agent` 或 `-a openclaw` "
-    "安装官方 Lark Skills，然后新开 Agent 会话"
+    "`-a claude-code` 或 `-a hermes-agent` "
+    "安装官方 Lark Skills，然后新开 Agent 会话；WorkBuddy 请在"
+    "“专家·技能·连接器”中启用飞书连接器，再新建任务"
 )
 MIN_LARK_CLI_VERSION = (1, 0, 73)
+MIN_PYTHON_VERSION = (3, 10)
+PYTHON_REEXEC_GUARD = "OFFERLOOP_PYTHON_REEXEC"
+PYTHON_CANDIDATES = tuple(
+    (name, ()) for name in (
+        "python3.15",
+        "python3.14",
+        "python3.13",
+        "python3.12",
+        "python3.11",
+        "python3.10",
+        "python3",
+        "python",
+    )
+) + (("py", ("-3",)),)
 
 
 def _load_status_model():
@@ -103,19 +119,9 @@ def _skill_roots(source, override=None):
             home / ".codex" / "skills",
             home / ".claude" / "skills",
             home / ".hermes" / "skills",
+            home / ".workbuddy" / "skills",
+            home / ".workbuddy" / "connectors" / "skills",
         ]
-        openclaw_state = source.get("OPENCLAW_STATE_DIR")
-        if openclaw_state:
-            value = str(openclaw_state)
-            if value.startswith("~/") or value.startswith("~\\"):
-                openclaw_root = home / value[2:]
-            elif value == "~":
-                openclaw_root = home
-            else:
-                openclaw_root = Path(value).expanduser()
-        else:
-            openclaw_root = home / ".openclaw"
-        candidates.append(openclaw_root / "skills")
         codex_home = source.get("CODEX_HOME")
         if codex_home:
             candidates.append(Path(codex_home) / "skills")
@@ -141,8 +147,36 @@ def _skill_roots(source, override=None):
     return tuple(roots)
 
 
+def _skill_frontmatter_name(skill_file):
+    try:
+        text = skill_file.read_text(encoding="utf-8")[:4096]
+    except OSError:
+        return None
+    match = re.match(r"^---\r?\n(.*?)\r?\n---", text, re.DOTALL)
+    if not match:
+        return None
+    name_match = re.search(
+        r"^name:\s*['\"]?([^'\"\r\n]+)['\"]?\s*$",
+        match.group(1),
+        re.MULTILINE,
+    )
+    return name_match.group(1).strip() if name_match else None
+
+
 def _skill_is_installed(name, roots):
-    return any((root / name / "SKILL.md").is_file() for root in roots)
+    for root in roots:
+        direct = root / name / "SKILL.md"
+        if direct.is_file():
+            return True
+        if not root.is_dir():
+            continue
+        # WorkBuddy may store UI imports under generated directory names and
+        # connector Skills under one grouping directory.
+        for pattern in ("*/SKILL.md", "*/*/SKILL.md"):
+            for skill_file in root.glob(pattern):
+                if _skill_frontmatter_name(skill_file) == name:
+                    return True
+    return False
 
 
 def _required_external_skills(capability, config):
@@ -208,6 +242,56 @@ def _run_local_command(command, *, environ, timeout=5):
         )
     except (OSError, subprocess.SubprocessError):
         return None
+
+
+def _supported_python_command(environ):
+    """Find a Python 3.10+ executable visible to the current Agent."""
+    current = Path(sys.executable).resolve(strict=False)
+    for executable_name, prefix in PYTHON_CANDIDATES:
+        executable = shutil.which(executable_name, path=environ.get("PATH"))
+        if not executable:
+            continue
+        candidate = Path(executable).resolve(strict=False)
+        if candidate == current and sys.version_info < MIN_PYTHON_VERSION:
+            continue
+        completed = _run_local_command(
+            [
+                executable,
+                *prefix,
+                "-c",
+                "import sys; print('.'.join(map(str, sys.version_info[:3])))",
+            ],
+            environ=environ,
+        )
+        if completed is None or completed.returncode != 0:
+            continue
+        version = _version_tuple(completed.stdout)
+        if version is not None and version >= MIN_PYTHON_VERSION + (0,):
+            return executable, prefix
+    return None
+
+
+def _reexec_under_supported_python(environ=None):
+    """Recover when an Agent's `python3` points at an older system Python."""
+    if sys.version_info >= MIN_PYTHON_VERSION:
+        return False
+
+    source = dict(os.environ if environ is None else environ)
+    if source.get(PYTHON_REEXEC_GUARD) == "1":
+        return False
+
+    command = _supported_python_command(source)
+    if command is None:
+        return False
+
+    executable, prefix = command
+    source[PYTHON_REEXEC_GUARD] = "1"
+    os.execve(
+        executable,
+        [executable, *prefix, str(Path(__file__).resolve()), *sys.argv[1:]],
+        source,
+    )
+    return True
 
 
 def _version_tuple(text):
@@ -695,6 +779,7 @@ def run_checks(environ=None, capability=None, skills_roots=None):
 
 
 def main():
+    _reexec_under_supported_python()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--json", action="store_true")
     parser.add_argument(

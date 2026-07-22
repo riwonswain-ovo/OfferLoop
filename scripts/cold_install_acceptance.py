@@ -22,19 +22,21 @@ AGENT_ROOTS = {
     "codex": Path(".codex/skills"),
     "claude-code": Path(".claude/skills"),
     "hermes-agent": Path(".hermes/skills"),
-    "openclaw": Path(".openclaw/skills"),
+    "workbuddy": Path(".workbuddy/skills"),
 }
 LARK_CLI_RECOVERY = (
     "运行 `npx @larksuite/cli@latest install` 安装 lark-cli；再运行 "
     "Agent 对应的 `npx skills add larksuite/cli -g -a codex -y`、"
-    "`-a claude-code`、`-a hermes-agent` 或 `-a openclaw` 安装官方 Lark Skills，"
-    "然后新开 Agent 会话"
+    "`-a claude-code` 或 `-a hermes-agent` 安装官方 Lark Skills，"
+    "然后新开 Agent 会话。WorkBuddy 请在“专家·技能·连接器”中启用飞书连接器，"
+    "再新建任务"
 )
 WORKSPACE_SKILLS_RECOVERY = (
     "缺少：lark-base、lark-doc、lark-wiki。运行 "
     "Agent 对应的 `npx skills add larksuite/cli -g -a codex -y`、"
-    "`-a claude-code`、`-a hermes-agent` 或 `-a openclaw` "
-    "安装官方 Lark Skills，然后新开 Agent 会话"
+    "`-a claude-code` 或 `-a hermes-agent` "
+    "安装官方 Lark Skills，然后新开 Agent 会话；WorkBuddy 请在"
+    "“专家·技能·连接器”中启用飞书连接器，再新建任务"
 )
 
 

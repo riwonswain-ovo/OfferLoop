@@ -115,11 +115,11 @@ class RepositoryContractTest(unittest.TestCase):
     def test_readme_has_safe_cross_agent_install_and_upgrade_paths(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         self.assertIn("scripts/install_offerloop.py --agent", readme)
-        self.assertIn("--agent openclaw", readme)
+        self.assertIn("--agent claude-code", readme)
         self.assertIn("--upgrade", readme)
         self.assertIn(".offerloop-backups/", readme)
         self.assertIn("WorkBuddy", readme)
-        self.assertIn("unsupported", readme)
+        self.assertIn("~/.workbuddy/skills/", readme)
         self.assertIn("~/.config/offerloop/", readme)
         self.assertIn("~/.local/state/offerloop/", readme)
 
@@ -192,7 +192,7 @@ class RepositoryContractTest(unittest.TestCase):
             encoding="utf-8"
         )
         security = (ROOT / "SECURITY.md").read_text(encoding="utf-8")
-        for agent in ("codex", "claude-code", "hermes-agent", "openclaw"):
+        for agent in ("codex", "claude-code", "hermes-agent"):
             self.assertIn(f'"{agent}"', acceptance)
         self.assertIn("install_offerloop.py", acceptance)
         self.assertIn("already_installed", acceptance)
@@ -210,13 +210,14 @@ class RepositoryContractTest(unittest.TestCase):
             '"codex"',
             '"claude-code"',
             '"hermes-agent"',
-            '"openclaw"',
             '"workbuddy"',
         ):
             self.assertIn(expected, installer)
         self.assertIn(
-            'ALL_AGENTS = (*STANDARD_AGENTS, "workbuddy")', installer
+            'STANDARD_AGENTS = ("codex", "claude-code", "hermes-agent", "workbuddy")',
+            installer,
         )
+        self.assertIn("ALL_AGENTS = STANDARD_AGENTS", installer)
 
     def test_business_instructions_are_not_codex_specific(self):
         for skill_file in SKILLS.glob("*/SKILL.md"):
