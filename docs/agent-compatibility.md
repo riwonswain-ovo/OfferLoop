@@ -18,7 +18,7 @@
 
 - `installed`：四个 Skill 已复制。
 - `already_installed`：目标内容与当前版本完全一致。
-- `conflict`：同名目录内容不同，未覆盖。
+- `conflict`：目标目录内容不同，或 Hermes 的 `skills.external_dirs` 中存在会造成运行时歧义的同名副本；未覆盖。
 - `upgraded`：在 Skills 根目录的上级 `.offerloop-backups/` 保留可恢复备份后已替换，避免备份被递归加载。
 - `shadowed`：安装完成，但 OpenClaw 更高优先级目录中存在不同版本。
 - `installed_but_hidden`：文件已安装，但 allowlist 或 OpenClaw 发现结果没有暴露全部 Skill。
@@ -26,6 +26,13 @@
 - `unsupported`：目标尚未获得足够的真实产品契约来安全安装。
 
 JSON 结果与安装清单不记录用户名、私有绝对路径、App ID、token、密码或其他凭证。
+
+## Hermes 特别说明
+
+Hermes 会同时扫描 `~/.hermes/skills/` 和 `config.yaml` 中登记的 `skills.external_dirs`。同名 Skill
+同时存在于两个根时，原生列表可能仍显示该名称，但显式预加载会因候选歧义而失败。安装器会在写入前
+检查这些外部根：默认返回 `conflict`；只有用户明确使用 `--upgrade` 时，才将旧外部副本备份到
+对应根目录上级的 `.offerloop-backups/` 并清理重复项。备份不放在任何 Skills 根内，避免再次被扫描。
 
 ## OpenClaw 特别说明
 

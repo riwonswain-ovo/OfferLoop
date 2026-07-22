@@ -141,6 +141,11 @@ py -3 scripts/install_offerloop.py --agent openclaw
 `--agent all`；WorkBuddy 会明确返回 `unsupported`，不会伪装安装成功。重复安装是幂等的；发现不同内容时默认
 返回 `conflict`，只有明确使用 `--upgrade` 才会先备份后替换。
 
+Hermes 如果在 `config.yaml` 的 `skills.external_dirs` 中同时发现同名 OfferLoop Skill，裸名称加载会
+变成歧义。统一安装器会在默认模式下返回 `conflict`，不会继续复制；确认这些是旧版 OfferLoop
+副本后使用 `--upgrade`，安装器会先将外部重复副本移到其 Skills 根目录上级的
+`.offerloop-backups/`，再以 `~/.hermes/skills/` 中的新版作为唯一生效来源。
+
 OpenClaw 的高级替代安装方式是对四个 Skill 分别运行：
 
 ```bash
@@ -230,6 +235,9 @@ openclaw skills install ./skills/offerloop-setup --global
    不覆盖原文件。无论原来是手动安装还是其他工具安装，都必须
    **保留** `~/.config/offerloop/` 和 `~/.local/state/offerloop/`；这些用户配置和状态不在 Skill
    安装目录中。更新后重新开始一个 Agent 会话，让 Skill 目录重新加载。
+
+   Hermes 用户若配置了 `skills.external_dirs`，`--upgrade` 也会备份并移走其中的同名旧副本，
+   避免 `hermes --skills offerloop-setup` 因多个候选而拒绝加载。
 
 3. 先运行只读迁移检查：
 

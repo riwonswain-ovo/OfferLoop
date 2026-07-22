@@ -648,6 +648,114 @@ def _openclaw_discovered(environ=None) -> bool | None:
         return None
 
 
+def _yaml_scalar(value: str) -> str:
+    """Return a conservative YAML scalar without requiring PyYAML."""
+    value = value.split(" #", 1)[0].strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        return value[1:-1]
+    return value
+
+
+def _hermes_external_dir_values(config_path: Path) -> list[str]:
+    """Read the small ``skills.external_dirs`` subset used by Hermes."""
+    try:
+        text = config_path.read_text(encoding="utf-8")
+    except OSError:
+        return []
+
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        payload = None
+    if isinstance(payload, dict):
+        skills = payload.get("skills")
+        raw = skills.get("external_dirs") if isinstance(skills, dict) else None
+        if isinstance(raw, str):
+            return [raw]
+        if isinstance(raw, list):
+            return [str(item) for item in raw if str(item).strip()]
+        return []
+
+    lines = text.splitlines()
+    skills_indent = None
+    external_indent = None
+    values: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        indent = len(line) - len(line.lstrip())
+        if skills_indent is None:
+            if re.fullmatch(r"skills:\s*(?:#.*)?", stripped):
+                skills_indent = indent
+            continue
+        if indent <= skills_indent:
+            break
+        if external_indent is None:
+            match = re.fullmatch(r"external_dirs:\s*(.*)", stripped)
+            if not match:
+                continue
+            external_indent = indent
+            inline = match.group(1).strip()
+            if not inline:
+                continue
+            if inline.startswith("[") and inline.endswith("]"):
+                values.extend(
+                    _yaml_scalar(item)
+                    for item in inline[1:-1].split(",")
+                    if _yaml_scalar(item)
+                )
+            else:
+                value = _yaml_scalar(inline)
+                if value:
+                    values.append(value)
+            break
+        item = re.fullmatch(r"-\s+(.+)", stripped)
+        if item:
+            value = _yaml_scalar(item.group(1))
+            if value:
+                values.append(value)
+            continue
+        if indent <= external_indent:
+            break
+    return values
+
+
+def _hermes_external_roots(home: Path, root: Path, environ=None) -> tuple[Path, ...]:
+    source = dict(os.environ if environ is None else environ)
+    hermes_home = root.parent
+    roots = []
+    seen = set()
+    for value in _hermes_external_dir_values(hermes_home / "config.yaml"):
+        expanded = value
+        for key, env_value in source.items():
+            expanded = expanded.replace(f"${{{key}}}", str(env_value))
+        candidate = _expand_home_path(expanded, home)
+        if not candidate.is_absolute():
+            candidate = hermes_home / candidate
+        try:
+            candidate = candidate.resolve()
+            local_root = root.resolve()
+        except OSError:
+            continue
+        if candidate == local_root or candidate in seen or not candidate.is_dir():
+            continue
+        seen.add(candidate)
+        roots.append(candidate)
+    return tuple(roots)
+
+
+def _hermes_external_duplicates(
+    home: Path, root: Path, environ=None
+) -> dict[str, list[tuple[Path, Path]]]:
+    duplicates: dict[str, list[tuple[Path, Path]]] = {}
+    for external_root in _hermes_external_roots(home, root, environ):
+        for name in SKILL_NAMES:
+            for candidate in _skill_directories(external_root, name):
+                duplicates.setdefault(name, []).append((external_root, candidate))
+    return duplicates
+
+
 def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> dict:
     source = dict(os.environ if environ is None else environ)
     home = Path(source.get("HOME", Path.home())).expanduser()
@@ -668,11 +776,21 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
     source_digests = {
         name: tree_digest(SKILLS_SOURCE / name) for name in SKILL_NAMES
     }
+    hermes_duplicates = (
+        _hermes_external_duplicates(home, root, source)
+        if agent == "hermes-agent"
+        else {}
+    )
     operations = []
     conflicts = []
     for name in SKILL_NAMES:
         destination = root / name
-        if not destination.exists():
+        if name in hermes_duplicates and not upgrade:
+            operations.append((name, "conflict"))
+            conflicts.append(name)
+        elif name in hermes_duplicates and upgrade:
+            operations.append((name, "upgraded"))
+        elif not destination.exists():
             operations.append((name, "installed"))
         elif destination.is_dir() and tree_digest(destination) == source_digests[name]:
             operations.append((name, "already_installed"))
@@ -683,6 +801,12 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
             conflicts.append(name)
 
     if conflicts:
+        next_action = "检查同名目录；确认属于旧版 OfferLoop 后使用 --upgrade"
+        if agent == "hermes-agent" and hermes_duplicates:
+            next_action = (
+                "Hermes 的 skills.external_dirs 中存在同名 Skill；"
+                "确认属于旧版 OfferLoop 后使用 --upgrade 备份并清理重复副本"
+            )
         return {
             "agent": agent,
             "target": agent_target_label(agent, source),
@@ -690,7 +814,7 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
             "skills": [
                 {"name": name, "status": status} for name, status in operations
             ],
-            "next_action": "检查同名目录；确认属于旧版 OfferLoop 后使用 --upgrade",
+            "next_action": next_action,
         }
 
     if dry_run:
@@ -742,20 +866,46 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
             )
             if tree_digest(staged) != source_digests[name]:
                 raise RuntimeError(f"{name}: staged copy failed integrity validation")
-            destination = root / name
-            backup = None
-            if destination.exists():
-                # Keep backups outside the Skills discovery root. OpenClaw supports
-                # grouped Skills, so an in-root backup could itself become active.
-                backup = root.parent / ".offerloop-backups" / timestamp / name
-                backup.parent.mkdir(parents=True, exist_ok=True)
-                destination.replace(backup)
-            try:
-                staged.replace(destination)
-            except Exception:
-                if backup and backup.exists() and not destination.exists():
-                    backup.replace(destination)
-                raise
+        external_backups: list[tuple[Path, Path]] = []
+        try:
+            for name, candidates in hermes_duplicates.items():
+                for index, (external_root, candidate) in enumerate(candidates, 1):
+                    relative = candidate.relative_to(external_root)
+                    backup = (
+                        external_root.parent
+                        / ".offerloop-backups"
+                        / timestamp
+                        / "hermes-external"
+                        / f"source-{index}"
+                        / relative
+                    )
+                    backup.parent.mkdir(parents=True, exist_ok=True)
+                    candidate.replace(backup)
+                    external_backups.append((backup, candidate))
+
+            for name, status in operations:
+                staged = stage / name
+                destination = root / name
+                backup = None
+                if destination.exists() and status != "already_installed":
+                    # Keep backups outside the Skills discovery root. OpenClaw supports
+                    # grouped Skills, so an in-root backup could itself become active.
+                    backup = root.parent / ".offerloop-backups" / timestamp / name
+                    backup.parent.mkdir(parents=True, exist_ok=True)
+                    destination.replace(backup)
+                if status != "already_installed":
+                    try:
+                        staged.replace(destination)
+                    except Exception:
+                        if backup and backup.exists() and not destination.exists():
+                            backup.replace(destination)
+                        raise
+        except Exception:
+            for backup, candidate in reversed(external_backups):
+                if backup.exists() and not candidate.exists():
+                    candidate.parent.mkdir(parents=True, exist_ok=True)
+                    backup.replace(candidate)
+            raise
 
     statuses = {status for _, status in operations}
     overall = "already_installed"

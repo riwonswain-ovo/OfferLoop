@@ -105,6 +105,71 @@ class OfferLoopInstallerTest(unittest.TestCase):
             self.assertEqual(len(backups), 1)
             self.assertEqual(backups[0].read_text(encoding="utf-8"), "user content\n")
 
+    def test_hermes_external_skill_collision_is_not_silently_installed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            external_root = home / ".agents" / "skills"
+            duplicate = external_root / "offerloop-setup"
+            duplicate.mkdir(parents=True)
+            (duplicate / "SKILL.md").write_text("old shared copy\n", encoding="utf-8")
+            hermes_home = home / ".hermes"
+            hermes_home.mkdir()
+            (hermes_home / "config.yaml").write_text(
+                "skills:\n  external_dirs:\n"
+                f"  - {external_root}\n",
+                encoding="utf-8",
+            )
+            environment = {"HOME": directory, "PATH": ""}
+
+            report = self.installer.install_agent("hermes-agent", environ=environment)
+
+            self.assertEqual(report["status"], "conflict")
+            self.assertIn("skills.external_dirs", report["next_action"])
+            self.assertEqual(
+                (duplicate / "SKILL.md").read_text(encoding="utf-8"),
+                "old shared copy\n",
+            )
+            self.assertFalse((hermes_home / "skills").exists())
+
+    def test_hermes_upgrade_backs_up_and_removes_external_duplicate(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            external_root = home / ".agents" / "skills"
+            duplicate = external_root / "offerloop-setup"
+            duplicate.mkdir(parents=True)
+            (duplicate / "SKILL.md").write_text("old shared copy\n", encoding="utf-8")
+            hermes_home = home / ".hermes"
+            hermes_home.mkdir()
+            (hermes_home / "config.yaml").write_text(
+                "skills:\n"
+                f"  external_dirs: [{external_root}]\n",
+                encoding="utf-8",
+            )
+            environment = {"HOME": directory, "PATH": ""}
+
+            report = self.installer.install_agent(
+                "hermes-agent", environ=environment, upgrade=True
+            )
+
+            self.assertEqual(report["status"], "upgraded")
+            self.assertFalse(duplicate.exists())
+            self.assertTrue(
+                (hermes_home / "skills" / "offerloop-setup" / "SKILL.md").is_file()
+            )
+            backups = list(
+                (external_root.parent / ".offerloop-backups").glob(
+                    "*/hermes-external/*/offerloop-setup/SKILL.md"
+                )
+            )
+            self.assertEqual(len(backups), 1)
+            self.assertEqual(
+                backups[0].read_text(encoding="utf-8"), "old shared copy\n"
+            )
+            repeated = self.installer.install_agent(
+                "hermes-agent", environ=environment
+            )
+            self.assertEqual(repeated["status"], "already_installed")
+
     def test_dry_run_does_not_create_target(self):
         with tempfile.TemporaryDirectory() as directory:
             environment = {"HOME": directory, "PATH": ""}
