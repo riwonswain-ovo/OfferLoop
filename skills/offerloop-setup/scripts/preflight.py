@@ -705,7 +705,9 @@ def main():
     args = parser.parse_args()
     result = run_checks(capability=args.capability)
     if args.json:
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        # JSON is a machine-facing interface.  ASCII escapes keep it valid
+        # when a Windows Agent captures stdout through a legacy code page.
+        print(json.dumps(result, ensure_ascii=True, indent=2))
     else:
         for name, value in result.items():
             print(f"{name}: {value}")

@@ -84,6 +84,30 @@ class OfferLoopSetupTest(unittest.TestCase):
             with mock.patch.object(preflight.os, "name", "nt"):
                 self.assertFalse(preflight._permissions_too_open(path))
 
+    def test_preflight_json_is_safe_for_windows_legacy_code_pages(self):
+        with tempfile.TemporaryDirectory() as directory:
+            environment = dict(os.environ)
+            environment.update(
+                {
+                    "XDG_CONFIG_HOME": directory,
+                    "PYTHONIOENCODING": "cp1252",
+                }
+            )
+            completed = subprocess.run(
+                [
+                    os.sys.executable,
+                    str(ROOT / "skills/offerloop-setup/scripts/preflight.py"),
+                    "--capability",
+                    "collection",
+                    "--json",
+                ],
+                env=environment,
+                check=True,
+                text=True,
+                stdout=subprocess.PIPE,
+            )
+            self.assertIn("checks", json.loads(completed.stdout))
+
     def test_preflight_discovers_all_bundled_skills(self):
         with tempfile.TemporaryDirectory() as directory:
             result = preflight.run_checks({"XDG_CONFIG_HOME": directory})
