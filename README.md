@@ -12,7 +12,7 @@
 
 </div>
 
-> **0.1.0-alpha.1**：OfferLoop 现提供 Codex、Claude Code 和 Hermes 的统一安装器。腾讯 WorkBuddy 仍处于真实应用契约验证阶段，安装器不会把未认证包误报为可用。旧用户请先阅读 [旧用户如何升级](#旧用户如何升级)。
+> **0.1.0-alpha.1**：OfferLoop 现提供 Codex、Claude Code、Hermes 和腾讯 WorkBuddy 的统一安装器。运行时与线上能力仍按 Agent 分别认证，不因文件安装成功而统一宣称可用。旧用户请先阅读 [旧用户如何升级](#旧用户如何升级)。
 
 ## 这次更新了什么
 
@@ -80,9 +80,9 @@ IMAP 邮箱 → recruiting-reminder → 笔面试中心 → 飞书个人日历
 | Codex | `~/.codex/skills/` | 自动测试通过 | 目录契约已验证 | 自动测试通过 | 需按飞书权限逐项验证 |
 | Claude Code | `~/.claude/skills/` | 自动测试通过 | 目录契约已验证 | 自动测试通过 | 需按飞书权限逐项验证 |
 | Hermes | `~/.hermes/skills/` | 自动测试通过 | 目录契约已验证 | 自动测试通过 | 需按飞书权限逐项验证 |
-| 腾讯 WorkBuddy | 由产品导入 | 未认证 | 未认证 | 未认证 | 未认证 |
+| 腾讯 WorkBuddy | `~/.workbuddy/skills/` | 自动测试通过 | 本机 5.1.7 通过 | 真实运行通过；本机依赖待升级 | 需按飞书权限逐项验证 |
 
-更细的状态含义和 WorkBuddy 发布门禁见 [多 Agent 兼容说明](docs/agent-compatibility.md)。
+更细的状态含义和 WorkBuddy 安装边界见 [多 Agent 兼容说明](docs/agent-compatibility.md)。
 
 ### 最小成功契约
 
@@ -110,7 +110,8 @@ IMAP 邮箱 → recruiting-reminder → 笔面试中心 → 飞书个人日历
   npx skills add larksuite/cli -g -a claude-code -y
   ```
 
-  使用 Codex 或 Hermes 时，将 `claude-code` 换成 `codex` 或 `hermes-agent`。
+  使用 Codex 或 Hermes 时，将 `claude-code` 换成 `codex` 或 `hermes-agent`。WorkBuddy 不使用这条
+  Agent 参数；请在“专家·技能·连接器”中启用飞书连接器。
 
   第一条安装命令行工具，第二条安装其配套的 Lark Agent Skills；后续还需要在本机初始化并选择实际可用的 profile。
 - 可登录的飞书/Lark 账号，以及对要读取或管理的资源拥有相应权限。飞书应用、租户安装、文档共享和管理员权限不是由 OfferLoop 安装命令提供的。
@@ -128,7 +129,7 @@ cd OfferLoop
 python3 scripts/install_offerloop.py --agent claude-code
 ```
 
-将上面的 Agent 参数设为 `codex`、`claude-code` 或 `hermes-agent`。
+将上面的 Agent 参数设为 `codex`、`claude-code`、`hermes-agent` 或 `workbuddy`。
 
 Windows PowerShell 使用：
 
@@ -137,13 +138,17 @@ py -3 scripts/install_offerloop.py --agent claude-code
 ```
 
 可先用 `--dry-run` 查看目标和冲突，用 `--json` 获取机器可读结果。需要同时安装所有已列目标时可用
-`--agent all`；WorkBuddy 会明确返回 `unsupported`，不会伪装安装成功。重复安装是幂等的；发现不同内容时默认
+`--agent all`。重复安装是幂等的；发现不同内容时默认
 返回 `conflict`，只有明确使用 `--upgrade` 才会先备份后替换。
 
 Hermes 如果在 `config.yaml` 的 `skills.external_dirs` 中同时发现同名 OfferLoop Skill，裸名称加载会
 变成歧义。统一安装器会在默认模式下返回 `conflict`，不会继续复制；确认这些是旧版 OfferLoop
 副本后使用 `--upgrade`，安装器会先将外部重复副本移到其 Skills 根目录上级的
 `.offerloop-backups/`，再以 `~/.hermes/skills/` 中的新版作为唯一生效来源。
+
+WorkBuddy 5.1.7 的真实用户 Skill 使用 `~/.workbuddy/skills/<skill-name>/SKILL.md`，与四份公共
+Skill 的结构一致，因此不生成计划早期假设的 `skill.yml`。如果界面导入曾把同名 Skill 保存到
+随机 ID 目录，安装器会默认返回 `conflict`；确认是旧版 OfferLoop 后可用 `--upgrade` 备份并清理。
 
 **安装后必须结束当前 Agent 会话，并新开一个会话。** Skill 目录通常在会话开始时加载；在
 同一会话中继续对话，Agent 可能仍然发现不到刚安装的 Skill。
@@ -300,7 +305,7 @@ npm --prefix services/job-progress-sync test
 python3 skills/job-collection/scripts/validate_skill.py
 ```
 
-GitHub CI 还会在 Ubuntu、macOS 和 Windows 执行三 Agent 冷安装，并在 Node 20 下分别安装、测试、类型检查和构建两份妙搭模板。合成端到端用例见 [验收用例](docs/cases/end-to-end-acceptance.md)，本次脱敏验收和未解除门禁见 [0.1.0-alpha.1 发布前验收](docs/cases/release-acceptance-2026-07-21.md)。
+GitHub CI 还会在 Ubuntu、macOS 和 Windows 执行四 Agent 冷安装，并在 Node 20 下分别安装、测试、类型检查和构建两份妙搭模板。合成端到端用例见 [验收用例](docs/cases/end-to-end-acceptance.md)，自动化发布门禁见 [0.1.0-alpha.1 发布前验收](docs/cases/release-acceptance-2026-07-21.md)，最新真实 Agent 结论见 [运行时认证](docs/cases/runtime-certification-2026-07-22.md)。
 
 ## License
 

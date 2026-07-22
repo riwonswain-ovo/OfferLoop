@@ -9,7 +9,7 @@
 | Codex | 自动测试通过 | 全局目录契约已验证 | 自动测试通过 | 按飞书身份验收 | 每次依资源授权 |
 | Claude Code | 自动测试通过 | 全局目录契约已验证 | 自动测试通过 | 按飞书身份验收 | 每次依资源授权 |
 | Hermes | 自动测试通过 | 全局目录契约已验证 | 自动测试通过 | 按飞书身份验收 | 每次依资源授权 |
-| 腾讯 WorkBuddy | 未认证 | 未认证 | 未认证 | 未认证 | 未认证 |
+| 腾讯 WorkBuddy | 自动测试通过 | 本机 5.1.7 通过 | 真实运行通过；本机依赖待升级 | 按飞书身份验收 | 每次依资源授权 |
 
 “文件安装”不等于获得飞书、邮箱或日历权限。在线身份、scope、应用发布、租户安装、资源共享和 token 状态在离线预检中始终是 `unverified`。
 
@@ -19,8 +19,8 @@
 - `already_installed`：目标内容与当前版本完全一致。
 - `conflict`：目标目录内容不同，或 Hermes 的 `skills.external_dirs` 中存在会造成运行时歧义的同名副本；未覆盖。
 - `upgraded`：在 Skills 根目录的上级 `.offerloop-backups/` 保留可恢复备份后已替换，避免备份被递归加载。
-- `prepared_for_import`：仅在未来生成且验证过 WorkBuddy 导入包时使用。当前版本不返回此状态。
-- `unsupported`：目标尚未获得足够的真实产品契约来安全安装。
+- `prepared_for_import`：为只能通过界面导入的平台生成待导入包；当前 WorkBuddy 已有稳定用户目录，因此不返回此状态。
+- `unsupported`：目标没有足够的真实产品契约，无法安全安装；当前已列 Agent 不返回此状态。
 
 JSON 结果与安装清单不记录用户名、私有绝对路径、App ID、token、密码或其他凭证。
 
@@ -31,16 +31,15 @@ Hermes 会同时扫描 `~/.hermes/skills/` 和 `config.yaml` 中登记的 `skill
 检查这些外部根：默认返回 `conflict`；只有用户明确使用 `--upgrade` 时，才将旧外部副本备份到
 对应根目录上级的 `.offerloop-backups/` 并清理重复项。备份不放在任何 Skills 根内，避免再次被扫描。
 
-## WorkBuddy 发布门禁
+## WorkBuddy 特别说明
 
-当前安装器对 `--agent workbuddy` 返回 `unsupported`。这是有意的安全边界：仅知道存在 `skill.yml` 不足以推断导入 schema、包目录、能力声明或审批机制。
+腾讯 WorkBuddy 5.1.7 的真实用户目录和[腾讯最新 Skills 文档](https://cloud.tencent.com/document/product/1831/134516)均使用 AgentSkills 结构：
+`SKILL.md` 为必需文件，`scripts/`、`references/`、`assets/` 为可选资源。本机用户级目录为
+`~/.workbuddy/skills/`，因此安装器直接复制四份公共 Skill，不生成 `skill.yml` 或第五套业务指令。
 
-只有以下门禁全部通过后，才可开启 `prepared_for_import` 或自动安装：
+WorkBuddy 的界面导入可能把 Skill 存在随机 ID 目录中。安装器会按 `SKILL.md` 的 `name` 检查这些
+目录：默认遇到同名副本时返回 `conflict`；只有使用 `--upgrade` 才会先备份旧副本，再安装到稳定
+名称目录。外部 Lark Skills 通过 WorkBuddy 的飞书连接器提供；预检会检查连接器目录，但不会把
+连接器存在等同于线上身份和权限已经可用。
 
-1. 在真实腾讯 WorkBuddy 中创建最小自定义 Skill 并导出；
-2. 用脱敏样本锁定 `skill.yml` schema、包结构和导入方式；
-3. 从四份公共 Skill 自动生成包装层，不复制第五套业务逻辑；
-4. 依次验收 `setup → collection → reminder → workspace → full`；
-5. 在真实应用中确认飞书、邮箱和其他外部写入前会继续要求人工确认。
-
-真实应用导入是人工发布门禁，CI 不能代替。
+真实应用加载、线上只读和任何写入能力仍须分别认证；CI 不能代替这些门禁。

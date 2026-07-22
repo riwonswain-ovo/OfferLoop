@@ -333,6 +333,36 @@ class OfferLoopSetupTest(unittest.TestCase):
             self.assertEqual(external["status"], "ready")
             self.assertIn("未验证线上权限", external["summary"])
 
+    def test_workbuddy_connector_skills_are_discovered_by_frontmatter_name(self):
+        with tempfile.TemporaryDirectory() as directory:
+            connector_root = (
+                Path(directory)
+                / ".workbuddy"
+                / "connectors"
+                / "skills"
+                / "connector-feishu"
+            )
+            for name in ("lark-base", "lark-doc", "lark-wiki"):
+                skill = connector_root / name
+                skill.mkdir(parents=True)
+                (skill / "SKILL.md").write_text(
+                    f"---\nname: {name}\ndescription: test\n---\n",
+                    encoding="utf-8",
+                )
+
+            report = preflight.run_checks(
+                {"HOME": directory, "XDG_CONFIG_HOME": directory},
+                capability="workspace",
+            )
+
+            external = next(
+                check
+                for check in report["checks"]
+                if check["capability"] == "workspace"
+                and check["id"] == "local.external_skills"
+            )
+            self.assertEqual(external["status"], "ready")
+
     def test_enabled_registered_notification_only_requires_lark_im(self):
         with tempfile.TemporaryDirectory() as directory:
             environment = {"XDG_CONFIG_HOME": directory}

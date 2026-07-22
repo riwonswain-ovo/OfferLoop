@@ -45,6 +45,10 @@ class OfferLoopInstallerTest(unittest.TestCase):
                 Path(directory) / "hermes-custom" / "skills",
             )
             self.assertEqual(
+                self.installer.agent_root("workbuddy", environment),
+                Path(directory) / ".workbuddy" / "skills",
+            )
+            self.assertEqual(
                 self.installer.agent_target_label("codex", environment),
                 "$CODEX_HOME/skills",
             )
@@ -57,7 +61,14 @@ class OfferLoopInstallerTest(unittest.TestCase):
             manifest_before = (root / self.installer.MANIFEST_NAME).read_text(
                 encoding="utf-8"
             )
-            second = self.installer.install_agent("claude-code", environ=environment)
+            with mock.patch.object(
+                self.installer.tempfile,
+                "TemporaryDirectory",
+                side_effect=AssertionError("idempotent install must not stage files"),
+            ):
+                second = self.installer.install_agent(
+                    "claude-code", environ=environment
+                )
 
             self.assertEqual(first["status"], "installed")
             self.assertEqual(second["status"], "already_installed")
@@ -189,10 +200,62 @@ class OfferLoopInstallerTest(unittest.TestCase):
         self.assertEqual(self.installer.INSTALLER_VERSION, "1.0")
         self.assertEqual(self.installer.offerloop_version(), "0.1.0-alpha.1")
 
-    def test_workbuddy_does_not_claim_unverified_installation(self):
-        report = self.installer.install_agent("workbuddy", environ={"HOME": "/tmp"})
-        self.assertEqual(report["status"], "unsupported")
-        self.assertEqual(report["skills"], [])
+    def test_workbuddy_install_is_complete_and_idempotent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            environment = {"HOME": directory, "PATH": ""}
+            first = self.installer.install_agent("workbuddy", environ=environment)
+            second = self.installer.install_agent("workbuddy", environ=environment)
+
+            self.assertEqual(first["status"], "installed")
+            self.assertEqual(second["status"], "already_installed")
+            root = Path(directory) / ".workbuddy" / "skills"
+            for name in self.installer.SKILL_NAMES:
+                self.assertTrue((root / name / "SKILL.md").is_file())
+            manifest = json.loads(
+                (root / self.installer.MANIFEST_NAME).read_text(encoding="utf-8")
+            )
+            self.assertEqual(manifest["agent"], "workbuddy")
+            self.assertNotIn(directory, json.dumps(manifest))
+
+    def test_workbuddy_imported_name_collision_requires_upgrade(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            imported = home / ".workbuddy" / "skills" / "skill_123"
+            imported.mkdir(parents=True)
+            (imported / "SKILL.md").write_text(
+                "---\nname: offerloop-setup\n"
+                "description: old imported copy\n---\n",
+                encoding="utf-8",
+            )
+            environment = {"HOME": directory, "PATH": ""}
+
+            conflict = self.installer.install_agent(
+                "workbuddy", environ=environment
+            )
+            self.assertEqual(conflict["status"], "conflict")
+            self.assertIn("随机目录", conflict["next_action"])
+            self.assertTrue(imported.exists())
+
+            upgraded = self.installer.install_agent(
+                "workbuddy", environ=environment, upgrade=True
+            )
+            self.assertEqual(upgraded["status"], "upgraded")
+            self.assertFalse(imported.exists())
+            self.assertTrue(
+                (
+                    home
+                    / ".workbuddy"
+                    / "skills"
+                    / "offerloop-setup"
+                    / "SKILL.md"
+                ).is_file()
+            )
+            backups = list(
+                (home / ".workbuddy" / ".offerloop-backups").glob(
+                    "*/workbuddy-imported/*/skill_123/SKILL.md"
+                )
+            )
+            self.assertEqual(len(backups), 1)
 
     def test_agent_all_is_limited_to_declared_targets(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -211,7 +274,7 @@ class OfferLoopInstallerTest(unittest.TestCase):
                 [result["agent"] for result in payload["results"]],
                 list(self.installer.ALL_AGENTS),
             )
-            self.assertEqual(payload["results"][-1]["status"], "unsupported")
+            self.assertEqual(payload["results"][-1]["status"], "installed")
 
 
 if __name__ == "__main__":

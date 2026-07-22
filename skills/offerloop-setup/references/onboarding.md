@@ -25,7 +25,7 @@ Lark Skill 都需要单独准备。
 - 安装 OfferLoop 本身只需要 Python 3.10+；Node.js（含 `npx`）只用于安装 `lark-cli` 和外部 Lark Skills，不是离线预检项目。
 - 所有业务能力需要 Python 3.10+ 与 `lark-cli >= 1.0.73`。如果 Agent 的默认 `python3` 指向较旧的系统 Python，预检会在当前 PATH 中自动选择可用的 Python 3.10+ 后重新执行；找不到合格解释器时才报告 `blocked`。预检会用 `profile list` 和 `doctor --offline` 确认已登记 profile 的本机状态，但不能证明应用已发布或有在线资源权限。
 - 知识库创建/整理需要 `lark-base`、`lark-doc`、`lark-wiki`；个人日历读写需要 `lark-calendar`；完整部署还需要 `lark-shared`、`lark-apps`。只有消息通知已启用时才需要 `lark-im`；首次按用户姓名登记目标时才需要 `lark-contact`，目标 ID 已登记后的运行期不需要它。这些均为外部 Lark Skill，**不随 OfferLoop 打包**，必须在当前 Agent 环境中另行安装/启用并新开会话加载。
-- 推荐从 [Lark 官方 CLI](https://github.com/larksuite/cli) 安装命令行工具及其配套 Skill：先运行 `npx @larksuite/cli@latest install`，再按当前 Agent 运行 `npx skills add larksuite/cli -g -a codex -y`、`-a claude-code` 或 `-a hermes-agent`；随后仍须由用户或管理员按本指南配置应用、profile 与资源权限。
+- 推荐从 [Lark 官方 CLI](https://github.com/larksuite/cli) 安装命令行工具及其配套 Skill：先运行 `npx @larksuite/cli@latest install`；Codex、Claude Code、Hermes 再按当前 Agent 运行 `npx skills add larksuite/cli -g -a codex -y`、`-a claude-code` 或 `-a hermes-agent`。WorkBuddy 则在“专家·技能·连接器”中启用飞书连接器，不使用未受支持的 `-a workbuddy` 参数。随后仍须由用户或管理员按本指南配置应用、profile 与资源权限。
 - 飞书应用 scope、应用版本发布、租户管理员安装、机器人入群、Base/知识库共享、妙搭应用创建/发布和环境变量权限，都需要用户或管理员在飞书/妙搭中手动完成。不能由 Skill 安装、离线预检或 Agent 自动取得。
 - App Secret、密码、Cookie、token、邮箱授权码只能在用户本机的安全配置流程中填写，绝不发送到聊天。
 
@@ -45,7 +45,7 @@ python3 scripts/preflight.py --capability '<collection|reminder|workspace|full>'
 Skill、所选能力必需的外部 Lark Skill 目录、本地配置字段及 IMAP 配置文件状态；不验证 Node/npx、
 在线身份、飞书权限、IMAP 连通性或妙搭权限。已登记 profile 的本机状态会通过
 `lark-cli profile list` 和 `lark-cli doctor --offline` 验证。外部 Skill 会跨当前安装目录、
-`~/.agents/skills`、Codex、Claude Code 与 Hermes 的全局 Skill 目录，以及对应的自定义根目录中查找，但报告不输出本机路径。
+`~/.agents/skills`、Codex、Claude Code、Hermes 与 WorkBuddy 的全局 Skill 目录、WorkBuddy 飞书连接器目录，以及对应的自定义根目录中查找，但报告不输出本机路径。
 报告中的 `blocked` 与 `needs_action` 需要先处理；`unverified` 表示需要后续只读在线核验，不能靠
 猜测填充。即使本地项目为 `ready`，也不得宣称完整部署或线上能力已经可用。
 

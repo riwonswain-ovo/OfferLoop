@@ -119,7 +119,7 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertIn("--upgrade", readme)
         self.assertIn(".offerloop-backups/", readme)
         self.assertIn("WorkBuddy", readme)
-        self.assertIn("unsupported", readme)
+        self.assertIn("~/.workbuddy/skills/", readme)
         self.assertIn("~/.config/offerloop/", readme)
         self.assertIn("~/.local/state/offerloop/", readme)
 
@@ -214,8 +214,10 @@ class RepositoryContractTest(unittest.TestCase):
         ):
             self.assertIn(expected, installer)
         self.assertIn(
-            'ALL_AGENTS = (*STANDARD_AGENTS, "workbuddy")', installer
+            'STANDARD_AGENTS = ("codex", "claude-code", "hermes-agent", "workbuddy")',
+            installer,
         )
+        self.assertIn("ALL_AGENTS = STANDARD_AGENTS", installer)
 
     def test_business_instructions_are_not_codex_specific(self):
         for skill_file in SKILLS.glob("*/SKILL.md"):

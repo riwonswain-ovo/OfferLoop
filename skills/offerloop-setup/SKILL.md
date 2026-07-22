@@ -48,9 +48,9 @@ python3 scripts/preflight.py --capability '<collection|reminder|workspace|full>'
 
 这不是完整安装或线上权限验证。预检仅检查本机 Python 版本、`lark-cli` 命令是否存在、四个
 OfferLoop Skill 与所选能力必需的外部 Lark Skill 文件是否存在，以及本地定位配置、IMAP 配置字段
-和文件权限。Skill 会在当前安装目录、`~/.agents/skills`、Codex、Claude Code、Hermes
-的默认全局目录，以及 `CODEX_HOME`、`CLAUDE_CONFIG_DIR`、`HERMES_HOME`
-对应的自定义目录中查找；报告不输出本机路径。它不检查 Node/npx（它们只用于
+和文件权限。Skill 会在当前安装目录、`~/.agents/skills`、Codex、Claude Code、Hermes、
+WorkBuddy 的默认全局目录和 WorkBuddy 飞书连接器目录，以及 `CODEX_HOME`、
+`CLAUDE_CONFIG_DIR`、`HERMES_HOME` 对应的自定义目录中查找；报告不输出本机路径。它不检查 Node/npx（它们只用于
 安装依赖），但会用 `lark-cli profile list` 和 `lark-cli doctor --offline` 检查已登记
 profile 的本机状态。它不验证在线身份、飞书权限或 token，也不访问飞书、邮箱、浏览器或妙搭。
 
@@ -63,7 +63,8 @@ profile 的本机状态。它不验证在线身份、飞书权限或 token，也
 `lark-calendar`；`workspace` 需要 `lark-base`、`lark-doc`、`lark-wiki`；`full` 还组合需要
 `lark-shared` 与 `lark-apps`。只有通知已启用时才检查通知依赖：目标已登记时运行期只需要
 `lark-im`，仅在启用的用户目标仍需按姓名解析时才需要 `lark-contact`。这些外部 Skill 不随
-OfferLoop 安装；缺失时按预检给出的命令安装并新开 Agent 会话。
+OfferLoop 安装；缺失时按预检给出的动作安装或启用，并新开 Agent 会话。WorkBuddy 使用
+“专家·技能·连接器”中的飞书连接器，不执行不存在的 `npx skills -a workbuddy` 目标。
 
 `collection` 未登记 `progress_base_url` 时，将该可选定位报告为 `unverified`，并跳过跨 Base
 求职进展对账；这不属于 `needs_action`，也不阻塞企业信息同步。`reminder`、`workspace` 与

@@ -34,12 +34,14 @@ LARK_CLI_RECOVERY = (
     "运行 `npx @larksuite/cli@latest install` 安装 lark-cli；再运行 "
     "Agent 对应的 `npx skills add larksuite/cli -g -a codex -y`、"
     "`-a claude-code` 或 `-a hermes-agent` 安装官方 Lark Skills，"
-    "然后新开 Agent 会话"
+    "然后新开 Agent 会话。WorkBuddy 请在“专家·技能·连接器”中启用飞书连接器，"
+    "再新建任务"
 )
 LARK_SKILLS_RECOVERY = (
     "运行 Agent 对应的 `npx skills add larksuite/cli -g -a codex -y`、"
     "`-a claude-code` 或 `-a hermes-agent` "
-    "安装官方 Lark Skills，然后新开 Agent 会话"
+    "安装官方 Lark Skills，然后新开 Agent 会话；WorkBuddy 请在"
+    "“专家·技能·连接器”中启用飞书连接器，再新建任务"
 )
 MIN_LARK_CLI_VERSION = (1, 0, 73)
 MIN_PYTHON_VERSION = (3, 10)
@@ -117,6 +119,8 @@ def _skill_roots(source, override=None):
             home / ".codex" / "skills",
             home / ".claude" / "skills",
             home / ".hermes" / "skills",
+            home / ".workbuddy" / "skills",
+            home / ".workbuddy" / "connectors" / "skills",
         ]
         codex_home = source.get("CODEX_HOME")
         if codex_home:
@@ -143,8 +147,36 @@ def _skill_roots(source, override=None):
     return tuple(roots)
 
 
+def _skill_frontmatter_name(skill_file):
+    try:
+        text = skill_file.read_text(encoding="utf-8")[:4096]
+    except OSError:
+        return None
+    match = re.match(r"^---\r?\n(.*?)\r?\n---", text, re.DOTALL)
+    if not match:
+        return None
+    name_match = re.search(
+        r"^name:\s*['\"]?([^'\"\r\n]+)['\"]?\s*$",
+        match.group(1),
+        re.MULTILINE,
+    )
+    return name_match.group(1).strip() if name_match else None
+
+
 def _skill_is_installed(name, roots):
-    return any((root / name / "SKILL.md").is_file() for root in roots)
+    for root in roots:
+        direct = root / name / "SKILL.md"
+        if direct.is_file():
+            return True
+        if not root.is_dir():
+            continue
+        # WorkBuddy may store UI imports under generated directory names and
+        # connector Skills under one grouping directory.
+        for pattern in ("*/SKILL.md", "*/*/SKILL.md"):
+            for skill_file in root.glob(pattern):
+                if _skill_frontmatter_name(skill_file) == name:
+                    return True
+    return False
 
 
 def _required_external_skills(capability, config):

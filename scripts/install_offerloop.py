@@ -25,8 +25,8 @@ SKILL_NAMES = (
     "recruiting-reminder",
     "offerloop-workspace",
 )
-STANDARD_AGENTS = ("codex", "claude-code", "hermes-agent")
-ALL_AGENTS = (*STANDARD_AGENTS, "workbuddy")
+STANDARD_AGENTS = ("codex", "claude-code", "hermes-agent", "workbuddy")
+ALL_AGENTS = STANDARD_AGENTS
 RESULT_STATUSES = (
     "installed",
     "already_installed",
@@ -68,7 +68,7 @@ def agent_root(agent: str, environ=None) -> Path | None:
         base = _expand_home_path(source.get("HERMES_HOME", home / ".hermes"), home)
         return base / "skills"
     if agent == "workbuddy":
-        return None
+        return home / ".workbuddy" / "skills"
     raise ValueError(f"unsupported Agent: {agent}")
 
 
@@ -85,7 +85,7 @@ def agent_target_label(agent: str, environ=None) -> str:
     if agent == "hermes-agent":
         return "$HERMES_HOME/skills" if source.get("HERMES_HOME") else "~/.hermes/skills"
     if agent == "workbuddy":
-        return "WorkBuddy import package"
+        return "~/.workbuddy/skills"
     raise ValueError(f"unsupported Agent: {agent}")
 
 
@@ -327,21 +327,20 @@ def _hermes_external_duplicates(
     return duplicates
 
 
+def _workbuddy_import_duplicates(root: Path) -> dict[str, list[tuple[Path, Path]]]:
+    """Find imported WorkBuddy Skills whose folder differs from the Skill name."""
+    duplicates: dict[str, list[tuple[Path, Path]]] = {}
+    for name in SKILL_NAMES:
+        direct = root / name
+        for candidate in _skill_directories(root, name):
+            if candidate != direct:
+                duplicates.setdefault(name, []).append((root, candidate))
+    return duplicates
+
+
 def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> dict:
     source = dict(os.environ if environ is None else environ)
     home = Path(source.get("HOME", Path.home())).expanduser()
-    if agent == "workbuddy":
-        return {
-            "agent": agent,
-            "target": agent_target_label(agent, source),
-            "status": "unsupported",
-            "skills": [],
-            "next_action": (
-                "当前腾讯 WorkBuddy 的可导入 skill.yml 契约尚未完成真实应用验收；"
-                "不要把 SKILL.md 目录直接当作已安装"
-            ),
-        }
-
     root = agent_root(agent, source)
     assert root is not None
     source_digests = {
@@ -352,14 +351,18 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
         if agent == "hermes-agent"
         else {}
     )
+    workbuddy_duplicates = (
+        _workbuddy_import_duplicates(root) if agent == "workbuddy" else {}
+    )
+    runtime_duplicates = {**hermes_duplicates, **workbuddy_duplicates}
     operations = []
     conflicts = []
     for name in SKILL_NAMES:
         destination = root / name
-        if name in hermes_duplicates and not upgrade:
+        if name in runtime_duplicates and not upgrade:
             operations.append((name, "conflict"))
             conflicts.append(name)
-        elif name in hermes_duplicates and upgrade:
+        elif name in runtime_duplicates and upgrade:
             operations.append((name, "upgraded"))
         elif not destination.exists():
             operations.append((name, "installed"))
@@ -376,6 +379,11 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
         if agent == "hermes-agent" and hermes_duplicates:
             next_action = (
                 "Hermes 的 skills.external_dirs 中存在同名 Skill；"
+                "确认属于旧版 OfferLoop 后使用 --upgrade 备份并清理重复副本"
+            )
+        elif agent == "workbuddy" and workbuddy_duplicates:
+            next_action = (
+                "WorkBuddy 已导入的随机目录中存在同名 Skill；"
                 "确认属于旧版 OfferLoop 后使用 --upgrade 备份并清理重复副本"
             )
         return {
@@ -407,6 +415,19 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
         }
         return result
 
+    if all(status == "already_installed" for _, status in operations):
+        if not (root / MANIFEST_NAME).is_file():
+            root.mkdir(parents=True, exist_ok=True)
+            _write_manifest(root, agent, source_digests)
+        return {
+            "agent": agent,
+            "target": agent_target_label(agent, source),
+            "status": "already_installed",
+            "skills": [
+                {"name": name, "status": status} for name, status in operations
+            ],
+        }
+
     root.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     with tempfile.TemporaryDirectory(prefix=".offerloop-stage-", dir=root) as stage_name:
@@ -425,14 +446,19 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
                 raise RuntimeError(f"{name}: staged copy failed integrity validation")
         external_backups: list[tuple[Path, Path]] = []
         try:
-            for name, candidates in hermes_duplicates.items():
+            for name, candidates in runtime_duplicates.items():
                 for index, (external_root, candidate) in enumerate(candidates, 1):
                     relative = candidate.relative_to(external_root)
+                    duplicate_kind = (
+                        "hermes-external"
+                        if agent == "hermes-agent"
+                        else "workbuddy-imported"
+                    )
                     backup = (
                         external_root.parent
                         / ".offerloop-backups"
                         / timestamp
-                        / "hermes-external"
+                        / duplicate_kind
                         / f"source-{index}"
                         / relative
                     )
