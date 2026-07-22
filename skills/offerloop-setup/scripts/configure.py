@@ -47,12 +47,17 @@ def write_private_json(path, data):
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     fd, temporary = tempfile.mkstemp(prefix="offerloop-", dir=path.parent)
     try:
-        os.fchmod(fd, 0o600)
+        # Windows does not expose POSIX descriptor permissions.  The
+        # temporary directory is still private to the current user; applying
+        # POSIX modes there would otherwise make the setup command fail.
+        if os.name != "nt":
+            os.fchmod(fd, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             json.dump(data, handle, ensure_ascii=False, indent=2)
             handle.write("\n")
         os.replace(temporary, path)
-        os.chmod(path, 0o600)
+        if os.name != "nt":
+            os.chmod(path, 0o600)
     except Exception:
         try:
             os.unlink(temporary)
