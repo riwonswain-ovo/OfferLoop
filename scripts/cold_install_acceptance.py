@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise the documented OfferLoop install path in an isolated project."""
+"""Exercise the documented multi-Agent install path in an isolated home."""
 
 from __future__ import annotations
 
@@ -12,25 +12,42 @@ import sys
 import tempfile
 
 
-SKILLS_CLI_VERSION = "1.5.19"
 SKILL_NAMES = (
     "offerloop-setup",
     "job-collection",
     "recruiting-reminder",
     "offerloop-workspace",
 )
+AGENT_ROOTS = {
+    "codex": Path(".codex/skills"),
+    "claude-code": Path(".claude/skills"),
+    "hermes-agent": Path(".hermes/skills"),
+    "openclaw": Path(".openclaw/skills"),
+}
 LARK_CLI_RECOVERY = (
     "运行 `npx @larksuite/cli@latest install` 安装 lark-cli；再运行 "
-    "`npx skills add larksuite/cli -g -y` 安装官方 Lark Skills，然后新开 Agent 会话"
+    "Agent 对应的 `npx skills add larksuite/cli -g -a codex -y`、"
+    "`-a claude-code`、`-a hermes-agent` 或 `-a openclaw` 安装官方 Lark Skills，"
+    "然后新开 Agent 会话"
 )
 WORKSPACE_SKILLS_RECOVERY = (
     "缺少：lark-base、lark-doc、lark-wiki。运行 "
-    "`npx skills add larksuite/cli -g -y` 安装官方 Lark Skills，然后新开 Agent 会话"
+    "Agent 对应的 `npx skills add larksuite/cli -g -a codex -y`、"
+    "`-a claude-code`、`-a hermes-agent` 或 `-a openclaw` "
+    "安装官方 Lark Skills，然后新开 Agent 会话"
 )
 
 
 def run(command, *, cwd, env):
-    subprocess.run(command, cwd=cwd, env=env, check=True)
+    return subprocess.run(
+        command,
+        cwd=cwd,
+        env=env,
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
 
 
 def load_report(command, *, cwd, env):
@@ -45,18 +62,42 @@ def load_report(command, *, cwd, env):
     return json.loads(completed.stdout)
 
 
-def assert_installed(project):
-    skills_root = project / ".agents" / "skills"
+def assert_installed(home, agent):
+    skills_root = home / AGENT_ROOTS[agent]
     for name in SKILL_NAMES:
         skill_file = skills_root / name / "SKILL.md"
         if not skill_file.is_file():
-            raise AssertionError(f"missing installed Skill: {name}")
-
-    setup_assets = skills_root / "offerloop-setup" / "assets"
-    for template in ("workbench-template", "progress-sync-template"):
-        if not (setup_assets / template / "package.json").is_file():
-            raise AssertionError(f"missing installed app template: {template}")
+            raise AssertionError(f"{agent}: missing installed Skill: {name}")
+        if (skills_root / name / "tests").exists():
+            raise AssertionError(f"{agent}: installer copied development tests")
+    if not (skills_root / ".offerloop-install.json").is_file():
+        raise AssertionError(f"{agent}: missing installation manifest")
     return skills_root
+
+
+def install_all_agents(source, project, home, env):
+    installer = source / "scripts" / "install_offerloop.py"
+    command = [sys.executable, str(installer)]
+    for agent in AGENT_ROOTS:
+        command.extend(("--agent", agent))
+    command.append("--json")
+    completed = run(command, cwd=project, env=env)
+    if "Failed to install" in completed.stdout:
+        raise AssertionError("documented installer emitted a contradictory failure")
+    report = json.loads(completed.stdout)
+    statuses = {item["agent"]: item["status"] for item in report["results"]}
+    if statuses != {agent: "installed" for agent in AGENT_ROOTS}:
+        raise AssertionError(f"unexpected install statuses: {statuses}")
+    roots = {agent: assert_installed(home, agent) for agent in AGENT_ROOTS}
+
+    repeated = run(command, cwd=project, env=env)
+    repeated_report = json.loads(repeated.stdout)
+    repeated_statuses = {
+        item["agent"]: item["status"] for item in repeated_report["results"]
+    }
+    if repeated_statuses != {agent: "already_installed" for agent in AGENT_ROOTS}:
+        raise AssertionError(f"installer is not idempotent: {repeated_statuses}")
+    return roots
 
 
 def assert_collection_preflight(project, skills_root, env):
@@ -66,9 +107,35 @@ def assert_collection_preflight(project, skills_root, env):
 
     fake_bin = project / "test-bin"
     fake_bin.mkdir()
-    fake_lark = fake_bin / "lark-cli"
-    fake_lark.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-    fake_lark.chmod(0o755)
+    fake_program = fake_bin / "fake_lark.py"
+    fake_program.write_text(
+        "import json, sys\n"
+        "args = sys.argv[1:]\n"
+        "if args == ['--version']:\n"
+        "    print('lark-cli version 1.0.73')\n"
+        "elif args == ['profile', 'list']:\n"
+        "    print(json.dumps([{'name': 'cold-install-check'}]))\n"
+        "elif args[:2] == ['doctor', '--offline']:\n"
+        "    print(json.dumps({'ok': True}))\n"
+        "else:\n"
+        "    raise SystemExit(2)\n",
+        encoding="utf-8",
+    )
+    if os.name == "nt":
+        fake_lark = fake_bin / "lark-cli.cmd"
+        fake_lark.write_text(
+            f'@"{sys.executable}" "%~dp0fake_lark.py" %*\r\n',
+            encoding="utf-8",
+        )
+    else:
+        fake_lark = fake_bin / "lark-cli"
+        fake_lark.write_text(
+            f"#!{sys.executable}\n"
+            "import runpy\n"
+            "runpy.run_path(__file__.replace('lark-cli', 'fake_lark.py'), run_name='__main__')\n",
+            encoding="utf-8",
+        )
+        fake_lark.chmod(0o755)
 
     ready_env = dict(env)
     ready_env["PATH"] = os.pathsep.join((str(fake_bin), env.get("PATH", "")))
@@ -163,37 +230,20 @@ def main():
         project = Path(temporary)
         home = project / "home"
         config_home = project / "config"
-        npm_cache = project / "npm-cache"
         home.mkdir()
         config_home.mkdir()
-        npm_cache.mkdir()
         env = dict(os.environ)
         env.update(
             {
                 "HOME": str(home),
                 "XDG_CONFIG_HOME": str(config_home),
-                "npm_config_cache": str(npm_cache),
                 "IMAP_PASSWORD": "COLD_INSTALL_SECRET_DO_NOT_PRINT",
             }
         )
-        command = [
-            "npx",
-            "--yes",
-            f"skills@{SKILLS_CLI_VERSION}",
-            "add",
-            str(source),
-            "--agent",
-            "codex",
-            "--copy",
-            "--yes",
-        ]
-        for name in SKILL_NAMES:
-            command.extend(("--skill", name))
-        run(command, cwd=project, env=env)
-        skills_root = assert_installed(project)
-        assert_collection_preflight(project, skills_root, env)
+        roots = install_all_agents(source, project, home, env)
+        assert_collection_preflight(project, roots["codex"], env)
         print(
-            "cold install accepted: four Skills, two app templates, "
+            "cold install accepted: four Agents, four Skills, idempotency, "
             "collection preflight, recovery, and redaction"
         )
 

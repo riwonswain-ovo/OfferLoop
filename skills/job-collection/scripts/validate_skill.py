@@ -52,8 +52,9 @@ def validate_frontmatter(errors: list[str]) -> None:
     frontmatter = skill.split("---", 2)[1]
     if not re.search(r"^name:\s*job-collection\s*$", frontmatter, re.MULTILINE):
         errors.append("SKILL.md: name must be job-collection")
-    if not re.search(r"^description:\s*\|", frontmatter, re.MULTILINE):
-        errors.append("SKILL.md: multiline description is required")
+    description = re.search(r"^description:\s*(\S.+)$", frontmatter, re.MULTILINE)
+    if not description or description.group(1).strip() in {"|", ">"}:
+        errors.append("SKILL.md: description must be a non-empty single-line scalar")
     if len(skill.splitlines()) > 350:
         errors.append("SKILL.md: core instructions exceed 350 lines; move details to references/")
 

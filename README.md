@@ -12,7 +12,7 @@
 
 </div>
 
-> **2026-07 更新**：OfferLoop 从两个独立 Skill 升级为一套四 Skill、三张 Base、一个工作台和一个知识库的求职系统。旧用户请先阅读 [旧用户如何升级](#旧用户如何升级)，不要直接对原有 Base 执行“一键完整部署”。
+> **0.1.0-alpha.1**：OfferLoop 现提供 Codex、Claude Code、Hermes 和 OpenClaw 的统一安装器。腾讯 WorkBuddy 仍处于真实应用契约验证阶段，安装器不会把未认证包误报为可用。旧用户请先阅读 [旧用户如何升级](#旧用户如何升级)。
 
 ## 这次更新了什么
 
@@ -73,6 +73,18 @@ IMAP 邮箱 → recruiting-reminder → 笔面试中心 → 飞书个人日历
 
 ## 新用户：从这里开始
 
+### Agent 兼容状态
+
+| Agent | 全局 Skill 目录 | 文件安装 | Agent 发现 | 离线预检 | 线上/写入 |
+|---|---|---|---|---|---|
+| Codex | `~/.codex/skills/` | 自动测试通过 | 目录契约已验证 | 自动测试通过 | 需按飞书权限逐项验证 |
+| Claude Code | `~/.claude/skills/` | 自动测试通过 | 目录契约已验证 | 自动测试通过 | 需按飞书权限逐项验证 |
+| Hermes | `~/.hermes/skills/` | 自动测试通过 | 目录契约已验证 | 自动测试通过 | 需按飞书权限逐项验证 |
+| OpenClaw | `~/.openclaw/skills/`；自定义 state 时为 `$OPENCLAW_STATE_DIR/skills` | 已测试 | 可检测覆盖/allowlist | 已测试 | 需在宿主与 sandbox 中验证 |
+| 腾讯 WorkBuddy | 由产品导入 | 未认证 | 未认证 | 未认证 | 未认证 |
+
+更细的状态含义、OpenClaw 优先级和 WorkBuddy 发布门禁见 [多 Agent 兼容说明](docs/agent-compatibility.md)。
+
 ### 最小成功契约
 
 对新用户而言，**最小成功**是：在同一个 Agent 环境中安装并发现下面四个 OfferLoop Skill，
@@ -91,30 +103,51 @@ IMAP 邮箱 → recruiting-reminder → 笔面试中心 → 飞书个人日历
 
 请先在本机准备以下条件：
 
-- Node.js（包含 `npx`），用于执行安装命令；可用 `node --version` 与 `npx --version` 确认。
-- Python 3.10 或更高版本；可用 `python3 --version` 确认。
-- 已安装的 `lark-cli`；可用 `lark-cli --help` 确认命令可运行。推荐按 [Lark 官方 CLI 安装说明](https://github.com/larksuite/cli) 执行：
+- Git（用于下载仓库）和 Python 3.10 或更高版本。OfferLoop 安装器本身不需要 Node.js。
+- 业务运行需要 `lark-cli >= 1.0.73`。如尚未安装，按 [Lark 官方 CLI 安装说明](https://github.com/larksuite/cli) 执行：
 
   ```bash
   npx @larksuite/cli@latest install
-  npx skills add larksuite/cli -g -y
+  npx skills add larksuite/cli -g -a openclaw -y
   ```
+
+  将 `openclaw` 换成当前 Agent 的 `codex`、`claude-code` 或 `hermes-agent`。
 
   第一条安装命令行工具，第二条安装其配套的 Lark Agent Skills；后续还需要在本机初始化并选择实际可用的 profile。
 - 可登录的飞书/Lark 账号，以及对要读取或管理的资源拥有相应权限。飞书应用、租户安装、文档共享和管理员权限不是由 OfferLoop 安装命令提供的。
 
-`node`/`npx` 只用于安装；OfferLoop 的离线预检不会检查它们。请按所用 Agent 与
+`node`/`npx` 只用于安装 Lark 依赖；OfferLoop 的离线预检不会检查它们。请按所用 Agent 与
 `lark-cli` 的官方安装说明完成安装，不要在聊天中粘贴 App Secret、密码、Cookie、token 或邮箱授权码。
 
 ### 2. 安装四个 OfferLoop Skill
 
+下载仓库并进入目录：
+
 ```bash
-npx skills add riwonswain-ovo/OfferLoop -g \
-  -s offerloop-setup job-collection recruiting-reminder offerloop-workspace -y
+git clone https://github.com/riwonswain-ovo/OfferLoop.git
+cd OfferLoop
+python3 scripts/install_offerloop.py --agent openclaw
 ```
 
-手动安装时，也必须将仓库 `skills/` 下的上述**四个**目录分别复制到 Agent 的全局 Skills 目录；
-不要把仓库根目录作为一个 Skill，也不要合并四份 `SKILL.md`。
+将 `openclaw` 换成要安装的 `codex`、`claude-code` 或 `hermes-agent`。
+
+Windows PowerShell 使用：
+
+```powershell
+py -3 scripts/install_offerloop.py --agent openclaw
+```
+
+可先用 `--dry-run` 查看目标和冲突，用 `--json` 获取机器可读结果。需要同时安装所有已列目标时可用
+`--agent all`；WorkBuddy 会明确返回 `unsupported`，不会伪装安装成功。重复安装是幂等的；发现不同内容时默认
+返回 `conflict`，只有明确使用 `--upgrade` 才会先备份后替换。
+
+OpenClaw 的高级替代安装方式是对四个 Skill 分别运行：
+
+```bash
+openclaw skills install ./skills/offerloop-setup --global
+```
+
+统一安装器会另外解析 OpenClaw JSON5 配置及 `$include`，检查默认/每 Agent workspace、`~/.agents/skills/` 的同名覆盖、allowlist，并在 CLI 可用时通过 `openclaw skills list --eligible --json` 验证可见结果。
 
 **安装后必须结束当前 Agent 会话，并新开一个会话。** Skill 目录通常在会话开始时加载；在
 同一会话中继续对话，Agent 可能仍然发现不到刚安装的 Skill。
@@ -127,9 +160,9 @@ npx skills add riwonswain-ovo/OfferLoop -g \
 请调用 offerloop-setup。我第一次使用 OfferLoop，先只读检查环境和我想启用的能力；不要创建或修改飞书资源。
 ```
 
-预检会区分 `ready`、`needs_action`、`blocked` 和 `unverified`。它仅检查 Python 版本、
-`lark-cli` 是否在路径中、四个 OfferLoop Skill 与所选能力必需的外部 Lark Skill 是否存在，
-以及本地配置/文件权限；它不验证 `lark-cli` profile、飞书 scope、应用发布、租户安装或资源权限，
+预检会区分 `ready`、`needs_action`、`blocked` 和 `unverified`。它检查 Python 版本、
+`lark-cli >= 1.0.73`、`profile list`、`doctor --offline`、四个 OfferLoop Skill、所选能力必需的外部 Lark Skill，
+以及本地配置/文件权限；它不验证在线身份、飞书 scope、应用发布、租户安装或资源权限，
 也不访问飞书、邮箱、妙搭或浏览器。`ready` 因而只表示对应的本机条件已满足；线上条件保持
 `unverified`，需要后续只读核验，不是错误。
 
@@ -183,29 +216,18 @@ npx skills add riwonswain-ovo/OfferLoop -g \
    cp -a ~/.local/state/offerloop ~/.local/state/offerloop.backup-$(date +%Y%m%d)
    ```
 
-2. 如果最初通过 `npx skills add` 安装，使用正式更新命令，确保四个 Skill 都更新到 GitHub
-   默认分支 `main` 的同一版本：
+2. 在新版仓库根目录使用统一安装器升级。它会先把被替换的 Skill 备份到对应 Agent
+   Skills 目录的上级目录 `.offerloop-backups/`（避免备份被当作分组 Skill 加载），再原子替换四个 Skill：
 
    ```bash
-   npx skills update offerloop-setup job-collection recruiting-reminder offerloop-workspace -g -y
+   git pull --ff-only
+   python3 scripts/install_offerloop.py --agent openclaw --upgrade
    ```
 
-   如果命令提示 `No installed skills found matching`，说明旧安装没有来源追踪。先把旧 Skill
-   目录移动到可恢复备份，再从 GitHub `main` 重新登记安装：
+   将 `openclaw` 换成当前 Agent 的标识。
 
-   ```bash
-   offerloop_backup="$HOME/.codex/skills/offerloop-backup-$(date +%Y%m%d-%H%M%S)"
-   mkdir -p "$offerloop_backup"
-   for skill in offerloop-setup job-collection recruiting-reminder offerloop-workspace; do
-     if [ -d "$HOME/.codex/skills/$skill" ]; then
-       mv "$HOME/.codex/skills/$skill" "$offerloop_backup/"
-     fi
-   done
-   npx skills add riwonswain-ovo/OfferLoop -g -a codex \
-     -s offerloop-setup job-collection recruiting-reminder offerloop-workspace -y --copy
-   ```
-
-   手动安装的用户也可以按相同方式备份后替换四个 Skill 文件夹。无论哪种方式，都必须
+   如果尚不确定目标，先加 `--dry-run`；不加 `--upgrade` 时，任何不同内容都只会返回 `conflict`，
+   不覆盖原文件。无论原来是手动安装还是其他工具安装，都必须
    **保留** `~/.config/offerloop/` 和 `~/.local/state/offerloop/`；这些用户配置和状态不在 Skill
    安装目录中。更新后重新开始一个 Agent 会话，让 Skill 目录重新加载。
 
@@ -274,11 +296,12 @@ npx skills add riwonswain-ovo/OfferLoop -g \
 python3 -m unittest discover -s tests -v
 python3 -m unittest discover -s skills/job-collection/tests -v
 python3 -m unittest discover -s skills/recruiting-reminder/tests -v
+python3 scripts/check_skill_compatibility.py
 npm --prefix services/job-progress-sync test
 python3 skills/job-collection/scripts/validate_skill.py
 ```
 
-GitHub CI 还会在 Node 20 下分别安装、测试、类型检查并构建两份妙搭模板。合成端到端用例见 [验收用例](docs/cases/end-to-end-acceptance.md)，本地脱敏发布记录见 [发布前验收记录](docs/cases/release-acceptance-2026-07-20.md)。
+GitHub CI 还会在 Ubuntu、macOS 和 Windows 执行四 Agent 冷安装，并在 Node 20 下分别安装、测试、类型检查和构建两份妙搭模板。合成端到端用例见 [验收用例](docs/cases/end-to-end-acceptance.md)，本次脱敏验收和未解除门禁见 [0.1.0-alpha.1 发布前验收](docs/cases/release-acceptance-2026-07-21.md)。
 
 ## License
 

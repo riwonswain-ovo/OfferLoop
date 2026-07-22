@@ -76,6 +76,38 @@ class OfferLoopSetupTest(unittest.TestCase):
             self.assertEqual(oct(path.stat().st_mode & 0o777), "0o600")
             self.assertEqual(json.loads(path.read_text())["lark_profile"], "offerloop")
 
+    def test_windows_does_not_apply_posix_mode_bit_policy(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.json"
+            path.write_text("{}\n", encoding="utf-8")
+            path.chmod(0o666)
+            with mock.patch.object(preflight.os, "name", "nt"):
+                self.assertFalse(preflight._permissions_too_open(path))
+
+    def test_preflight_json_is_safe_for_windows_legacy_code_pages(self):
+        with tempfile.TemporaryDirectory() as directory:
+            environment = dict(os.environ)
+            environment.update(
+                {
+                    "XDG_CONFIG_HOME": directory,
+                    "PYTHONIOENCODING": "cp1252",
+                }
+            )
+            completed = subprocess.run(
+                [
+                    os.sys.executable,
+                    str(ROOT / "skills/offerloop-setup/scripts/preflight.py"),
+                    "--capability",
+                    "collection",
+                    "--json",
+                ],
+                env=environment,
+                check=True,
+                text=True,
+                stdout=subprocess.PIPE,
+            )
+            self.assertIn("checks", json.loads(completed.stdout))
+
     def test_preflight_discovers_all_bundled_skills(self):
         with tempfile.TemporaryDirectory() as directory:
             result = preflight.run_checks({"XDG_CONFIG_HOME": directory})
@@ -232,8 +264,8 @@ class OfferLoopSetupTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             locations = {
                 "lark-base": Path(directory) / ".agents" / "skills",
-                "lark-doc": Path(directory) / ".codex" / "skills",
-                "lark-wiki": Path(directory) / "custom-codex" / "skills",
+                "lark-doc": Path(directory) / "custom-claude" / "skills",
+                "lark-wiki": Path(directory) / "custom-hermes" / "skills",
             }
             for name, root in locations.items():
                 skill = root / name
@@ -244,6 +276,8 @@ class OfferLoopSetupTest(unittest.TestCase):
                 {
                     "HOME": directory,
                     "CODEX_HOME": str(Path(directory) / "custom-codex"),
+                    "CLAUDE_CONFIG_DIR": str(Path(directory) / "custom-claude"),
+                    "HERMES_HOME": str(Path(directory) / "custom-hermes"),
                     "XDG_CONFIG_HOME": directory,
                 },
                 capability="workspace",
@@ -257,6 +291,29 @@ class OfferLoopSetupTest(unittest.TestCase):
             )
             self.assertEqual(external["status"], "ready")
             self.assertIn("未验证线上权限", external["summary"])
+
+    def test_external_skills_follow_custom_openclaw_state_dir(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory) / "custom-openclaw-state"
+            skill = state / "skills" / "lark-calendar"
+            skill.mkdir(parents=True)
+            (skill / "SKILL.md").write_text("# lark-calendar\n", encoding="utf-8")
+
+            report = preflight.run_checks(
+                {
+                    "HOME": directory,
+                    "OPENCLAW_STATE_DIR": str(state),
+                    "XDG_CONFIG_HOME": directory,
+                },
+                capability="reminder",
+            )
+            external = next(
+                check
+                for check in report["checks"]
+                if check["capability"] == "reminder"
+                and check["id"] == "local.external_skills"
+            )
+            self.assertEqual(external["status"], "ready")
 
     def test_enabled_registered_notification_only_requires_lark_im(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -327,7 +384,8 @@ class OfferLoopSetupTest(unittest.TestCase):
                 "npx @larksuite/cli@latest install", lark_cli["next_action"]
             )
             self.assertIn(
-                "npx skills add larksuite/cli -g -y", lark_cli["next_action"]
+                "npx skills add larksuite/cli -g -a codex -y",
+                lark_cli["next_action"],
             )
             self.assertIn("新开 Agent 会话", lark_cli["next_action"])
 
@@ -343,6 +401,63 @@ class OfferLoopSetupTest(unittest.TestCase):
             serialized = json.dumps(report)
             self.assertNotIn(secret_marker, serialized)
             self.assertNotIn(str(skill_root), serialized)
+
+    def test_lark_cli_probe_validates_version_profile_and_offline_doctor(self):
+        def fake_run(command, **_kwargs):
+            if command[-1] == "--version":
+                return subprocess.CompletedProcess(command, 0, "lark-cli version 1.0.73\n", "")
+            if command[-2:] == ["profile", "list"]:
+                return subprocess.CompletedProcess(
+                    command,
+                    0,
+                    json.dumps(
+                        [{"name": "offerloop", "user": "PRIVATE USER", "appId": "PRIVATE APP"}]
+                    ),
+                    "",
+                )
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                json.dumps({"ok": True, "workspace": "/PRIVATE/PATH"}),
+                "",
+            )
+
+        with mock.patch.object(preflight.shutil, "which", return_value="/bin/lark-cli"), mock.patch.object(
+            preflight, "_run_local_command", side_effect=fake_run
+        ):
+            lark, profile = preflight._probe_lark_cli({}, "offerloop")
+
+        self.assertEqual(lark[0], "ready")
+        self.assertEqual(profile[0], "ready")
+        serialized = json.dumps((lark, profile))
+        self.assertNotIn("PRIVATE USER", serialized)
+        self.assertNotIn("PRIVATE APP", serialized)
+        self.assertNotIn("/PRIVATE/PATH", serialized)
+
+    def test_lark_cli_probe_rejects_old_version_and_missing_profile(self):
+        old_version = subprocess.CompletedProcess(
+            ["lark-cli", "--version"], 0, "lark-cli version 1.0.72\n", ""
+        )
+        with mock.patch.object(preflight.shutil, "which", return_value="/bin/lark-cli"), mock.patch.object(
+            preflight, "_run_local_command", return_value=old_version
+        ):
+            lark, profile = preflight._probe_lark_cli({}, "missing")
+        self.assertEqual(lark[0], "needs_action")
+        self.assertIsNone(profile)
+
+        def missing_profile_run(command, **_kwargs):
+            if command[-1] == "--version":
+                return subprocess.CompletedProcess(command, 0, "1.0.73\n", "")
+            return subprocess.CompletedProcess(
+                command, 0, json.dumps([{"name": "another-profile"}]), ""
+            )
+
+        with mock.patch.object(preflight.shutil, "which", return_value="/bin/lark-cli"), mock.patch.object(
+            preflight, "_run_local_command", side_effect=missing_profile_run
+        ):
+            lark, profile = preflight._probe_lark_cli({}, "missing")
+        self.assertEqual(lark[0], "ready")
+        self.assertEqual(profile[0], "blocked")
 
     def test_initialized_imap_template_is_not_ready_before_user_fills_it(self):
         with tempfile.TemporaryDirectory() as directory:
