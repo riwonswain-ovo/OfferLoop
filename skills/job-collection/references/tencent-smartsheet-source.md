@@ -12,16 +12,16 @@
 
 ## Chrome 扩展恢复 SOP
 
-腾讯登录态只允许来自用户自己的 Chrome 会话。开始前完整读取当前安装的 Chrome 控制 Skill，
+腾讯登录态只允许来自用户自己的 Chrome 会话。开始前完整读取当前 Agent 可用的浏览器控制能力说明，
 并按它的连接与清理规则执行：
 
-1. 连接 Chrome extension；首次失败后等待约 2 秒，仅重试一次。
-2. 仍失败时运行 Chrome Skill 规定的四项诊断：Chrome 运行状态、浏览器安装、扩展启用状态、
+1. 检测当前 Agent 的浏览器控制能力；首次连接失败后等待约 2 秒，仅重试一次。
+2. 仍失败时运行当前浏览器控制能力提供的诊断：Chrome 运行状态、浏览器安装、扩展启用状态、
    native host manifest。不得读取 cookie 或手工改 native host。
 3. 诊断正常但通道未连接时，在用户已授权的前提下打开 Default Profile 新窗口，再等待约 2 秒
-   重试。仍失败则要求从 Codex/ChatGPT 插件界面重装 Chrome 插件，不用 AppleScript、私有 API
+   重试。仍失败则按当前 Agent 的官方方式修复浏览器控制组件，或让用户导出 XLSX/CSV；不用 AppleScript、私有 API
    或未登录的内置浏览器替代。
-4. 连接成功后立即命名会话并读取浏览器控制文档。优先从 `openTabs()` 认领精确匹配的腾讯标签；
+4. 连接成功后立即命名会话并读取浏览器控制文档。优先用标签页列表能力认领精确匹配的腾讯标签；
    没有现成标签时在 extension 浏览器中新建标签。内置浏览器能打开标题但要求登录，不算成功。
 5. 任务结束前恢复临时 viewport，并按 Chrome Skill 的 `tabs.finalize` 规则释放会话。
 

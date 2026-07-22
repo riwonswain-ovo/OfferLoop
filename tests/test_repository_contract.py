@@ -23,9 +23,18 @@ class RepositoryContractTest(unittest.TestCase):
     def test_skill_frontmatter_name_matches_directory(self):
         for skill_file in SKILLS.glob("*/SKILL.md"):
             text = skill_file.read_text(encoding="utf-8")
+            frontmatter = text.split("---", 2)[1]
             match = re.search(r"^name:\s*([^\s]+)\s*$", text, re.MULTILINE)
             self.assertIsNotNone(match, skill_file)
             self.assertEqual(match.group(1), skill_file.parent.name)
+            description = re.search(
+                r"^description:\s*(\S.+)$", frontmatter, re.MULTILINE
+            )
+            self.assertIsNotNone(description, skill_file)
+            self.assertNotIn(description.group(1).strip(), {"|", ">"})
+            self.assertLessEqual(len(description.group(1).strip()), 1024)
+            self.assertNotIn("<", description.group(1))
+            self.assertNotIn(">", description.group(1))
 
     def test_no_stale_information_collection_dependency(self):
         reminder = (SKILLS / "recruiting-reminder" / "SKILL.md").read_text(
@@ -103,16 +112,14 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertIn("旧双 Base", migration)
         self.assertIn("永久保留", migration)
 
-    def test_readme_has_tracked_and_legacy_skill_upgrade_paths(self):
+    def test_readme_has_safe_cross_agent_install_and_upgrade_paths(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertIn(
-            "npx skills update offerloop-setup job-collection "
-            "recruiting-reminder offerloop-workspace -g -y",
-            readme,
-        )
-        self.assertIn("No installed skills found matching", readme)
-        self.assertIn("offerloop-backup-$(date +%Y%m%d-%H%M%S)", readme)
-        self.assertIn("npx skills add riwonswain-ovo/OfferLoop -g -a codex", readme)
+        self.assertIn("scripts/install_offerloop.py --agent", readme)
+        self.assertIn("--agent openclaw", readme)
+        self.assertIn("--upgrade", readme)
+        self.assertIn(".offerloop-backups/", readme)
+        self.assertIn("WorkBuddy", readme)
+        self.assertIn("unsupported", readme)
         self.assertIn("~/.config/offerloop/", readme)
         self.assertIn("~/.local/state/offerloop/", readme)
 
@@ -133,7 +140,7 @@ class RepositoryContractTest(unittest.TestCase):
             self.assertIn("lark-apps", text)
         for text in (readme, onboarding):
             self.assertIn("npx @larksuite/cli@latest install", text)
-            self.assertIn("npx skills add larksuite/cli -g -y", text)
+            self.assertIn("npx skills add larksuite/cli -g -a", text)
         self.assertIn("目标已登记时运行期只需要", setup)
         self.assertIn("线上条件一律保持 `unverified`", setup)
 
@@ -177,7 +184,7 @@ class RepositoryContractTest(unittest.TestCase):
             self.assertNotIn("jsAPITicket", source_text)
             self.assertNotIn("redirectURLRef", source_text)
 
-    def test_release_gate_pins_real_skills_cli_and_documents_residual_risk(self):
+    def test_release_gate_covers_multi_agent_installer_and_residual_risk(self):
         acceptance = (ROOT / "scripts" / "cold_install_acceptance.py").read_text(
             encoding="utf-8"
         )
@@ -185,12 +192,37 @@ class RepositoryContractTest(unittest.TestCase):
             encoding="utf-8"
         )
         security = (ROOT / "SECURITY.md").read_text(encoding="utf-8")
-        self.assertIn('SKILLS_CLI_VERSION = "1.5.19"', acceptance)
-        self.assertIn("--copy", acceptance)
-        self.assertIn("--skill", acceptance)
+        for agent in ("codex", "claude-code", "hermes-agent", "openclaw"):
+            self.assertIn(f'"{agent}"', acceptance)
+        self.assertIn("install_offerloop.py", acceptance)
+        self.assertIn("already_installed", acceptance)
         self.assertIn("cold_install_acceptance.py", workflow)
+        for operating_system in ("ubuntu-latest", "macos-latest", "windows-latest"):
+            self.assertIn(operating_system, workflow)
         self.assertIn("untrusted_external", security)
         self.assertIn("residual risk", security)
+
+    def test_repository_declares_only_requested_agent_targets(self):
+        installer = (ROOT / "scripts" / "install_offerloop.py").read_text(
+            encoding="utf-8"
+        )
+        for expected in (
+            '"codex"',
+            '"claude-code"',
+            '"hermes-agent"',
+            '"openclaw"',
+            '"workbuddy"',
+        ):
+            self.assertIn(expected, installer)
+        self.assertIn(
+            'ALL_AGENTS = (*STANDARD_AGENTS, "workbuddy")', installer
+        )
+
+    def test_business_instructions_are_not_codex_specific(self):
+        for skill_file in SKILLS.glob("*/SKILL.md"):
+            text = skill_file.read_text(encoding="utf-8")
+            self.assertNotIn("对 Codex 说", text, skill_file)
+            self.assertNotIn("Codex 执行", text, skill_file)
 
 
 if __name__ == "__main__":

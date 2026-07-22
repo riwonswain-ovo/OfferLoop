@@ -189,7 +189,7 @@ def load_config(environ=None, env_file=None):
 
 def get_local_tz():
     """Return the timezone to use for naive date math. Reads TZ env var
-    (or .env TZ), falls back to UTC. Claude Code users in China typically
+    (or .env TZ), falls back to UTC. Users in China typically
     set TZ=Asia/Shanghai."""
     tz_name = load_config().get("TZ")
     if not tz_name:

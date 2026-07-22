@@ -55,7 +55,7 @@ class OfferLoopWorkspaceTest(unittest.TestCase):
             "## 第一次使用",
             "## 日常流程",
             "## 核心功能与数据位置",
-            "## 可以对 Codex 说",
+            "## 可以对 Agent 说",
             "## 常见问题",
         ):
             self.assertIn(expected, content)

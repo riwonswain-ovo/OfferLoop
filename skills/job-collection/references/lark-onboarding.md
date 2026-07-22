@@ -5,7 +5,7 @@
 ## 身份模型
 
 ```text
-Codex / Claude Code / 其他 Agent
+当前 Agent
   → 调用 lark-cli
   → `--profile` 选择本机配置
   → profile 对应一个飞书应用
@@ -34,7 +34,7 @@ lark-cli whoami --profile '<PROFILE>' --as bot
 
 后续每条 lark-cli 命令都显式携带同一个 `--profile '<PROFILE>' --as bot`。核对返回的 identity 为 bot，并在本轮保持同一个 app ID。profile 名属于机器本地运行配置，不写入 `用户偏好` 或 `信息源登记`；定时任务应在自己的配置或提示中固定它。
 
-### 已有 Codex、Claude Code 或其他 Agent profile
+### 已有其他 Agent 配置过的 profile
 
 可以复用，但必须由用户选择，不能自动借用另一个 Agent 的身份。按顺序检查：
 
@@ -99,7 +99,7 @@ Base 授权应引导用户在目标文档右上角使用：
 4. 无人值守环境能安全读取 lark-cli 凭证。macOS 钥匙串不可用时按 `references/feishu-setup.md` 处理，不静默降级。
 5. 停用、删除或取消安装对应飞书应用会使定时任务失效。
 
-复用 Codex/Claude Code 应用适合快速开始；长期每日同步优先建议独立的 `job-collection` 应用/profile，以最小权限运行，也避免停用某个 Agent 应用时连带中断同步。
+复用当前 Agent 已有应用适合快速开始；长期每日同步优先建议独立的 `job-collection` 应用/profile，以最小权限运行，也避免停用某个 Agent 应用时连带中断同步。
 
 ## 故障分层
 

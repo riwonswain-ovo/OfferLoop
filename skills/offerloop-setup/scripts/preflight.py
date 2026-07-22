@@ -8,7 +8,9 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import shutil
+import subprocess
 import sys
 
 
@@ -30,11 +32,16 @@ EXTERNAL_SKILLS_BY_CAPABILITY = {
 }
 LARK_CLI_RECOVERY = (
     "运行 `npx @larksuite/cli@latest install` 安装 lark-cli；再运行 "
-    "`npx skills add larksuite/cli -g -y` 安装官方 Lark Skills，然后新开 Agent 会话"
+    "Agent 对应的 `npx skills add larksuite/cli -g -a codex -y`、"
+    "`-a claude-code`、`-a hermes-agent` 或 `-a openclaw` 安装官方 Lark Skills，"
+    "然后新开 Agent 会话"
 )
 LARK_SKILLS_RECOVERY = (
-    "运行 `npx skills add larksuite/cli -g -y` 安装官方 Lark Skills，然后新开 Agent 会话"
+    "运行 Agent 对应的 `npx skills add larksuite/cli -g -a codex -y`、"
+    "`-a claude-code`、`-a hermes-agent` 或 `-a openclaw` "
+    "安装官方 Lark Skills，然后新开 Agent 会话"
 )
+MIN_LARK_CLI_VERSION = (1, 0, 73)
 
 
 def _load_status_model():
@@ -94,10 +101,30 @@ def _skill_roots(source, override=None):
             SKILLS_ROOT,
             home / ".agents" / "skills",
             home / ".codex" / "skills",
+            home / ".claude" / "skills",
+            home / ".hermes" / "skills",
         ]
+        openclaw_state = source.get("OPENCLAW_STATE_DIR")
+        if openclaw_state:
+            value = str(openclaw_state)
+            if value.startswith("~/") or value.startswith("~\\"):
+                openclaw_root = home / value[2:]
+            elif value == "~":
+                openclaw_root = home
+            else:
+                openclaw_root = Path(value).expanduser()
+        else:
+            openclaw_root = home / ".openclaw"
+        candidates.append(openclaw_root / "skills")
         codex_home = source.get("CODEX_HOME")
         if codex_home:
             candidates.append(Path(codex_home) / "skills")
+        claude_home = source.get("CLAUDE_CONFIG_DIR")
+        if claude_home:
+            candidates.append(Path(claude_home) / "skills")
+        hermes_home = source.get("HERMES_HOME")
+        if hermes_home:
+            candidates.append(Path(hermes_home) / "skills")
 
     roots = []
     seen = set()
@@ -169,6 +196,126 @@ def _online_permissions_check(capability):
     )
 
 
+def _run_local_command(command, *, environ, timeout=5):
+    try:
+        return subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            env=environ,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def _version_tuple(text):
+    match = re.search(r"(?:version\s+)?(\d+)\.(\d+)\.(\d+)", text)
+    if not match:
+        return None
+    return tuple(int(part) for part in match.groups())
+
+
+def _probe_lark_cli(source, configured_profile):
+    search_path = source.get("PATH")
+    executable = shutil.which("lark-cli", path=search_path)
+    if not executable:
+        return (
+            ("blocked", "未找到 lark-cli", LARK_CLI_RECOVERY),
+            None,
+        )
+
+    environment = dict(os.environ)
+    environment.update(source)
+    version_result = _run_local_command(
+        [executable, "--version"], environ=environment
+    )
+    version = (
+        _version_tuple((version_result.stdout + version_result.stderr).strip())
+        if version_result and version_result.returncode == 0
+        else None
+    )
+    if version is None:
+        return (
+            (
+                "blocked",
+                "lark-cli 无法报告有效版本",
+                "重新安装 lark-cli 1.0.73 或更高版本",
+            ),
+            None,
+        )
+    if version < MIN_LARK_CLI_VERSION:
+        return (
+            (
+                "needs_action",
+                "lark-cli 版本低于支持基线",
+                "升级到 lark-cli 1.0.73 或更高版本",
+            ),
+            None,
+        )
+
+    lark_check = ("ready", "lark-cli 版本符合要求", "")
+    if configured_profile in (None, ""):
+        return lark_check, (
+            "needs_action",
+            "未登记飞书 profile",
+            "选择并登记 lark-cli profile",
+        )
+
+    profiles_result = _run_local_command(
+        [executable, "profile", "list"], environ=environment
+    )
+    try:
+        profiles = json.loads(profiles_result.stdout) if profiles_result else None
+    except json.JSONDecodeError:
+        profiles = None
+    if isinstance(profiles, dict):
+        profiles = profiles.get("profiles")
+    if (
+        not profiles_result
+        or profiles_result.returncode != 0
+        or not isinstance(profiles, list)
+    ):
+        return lark_check, (
+            "blocked",
+            "无法读取本机 lark-cli profiles",
+            "修复或升级 lark-cli 后重新检查",
+        )
+    names = {
+        item.get("name") for item in profiles if isinstance(item, dict)
+    }
+    if configured_profile not in names:
+        return lark_check, (
+            "blocked",
+            "已登记的飞书 profile 在本机不存在",
+            "选择现有 profile，或在本机安全初始化新 profile 后重新登记",
+        )
+
+    doctor_result = _run_local_command(
+        [executable, "doctor", "--offline", "--profile", str(configured_profile)],
+        environ=environment,
+    )
+    try:
+        doctor = json.loads(doctor_result.stdout) if doctor_result else None
+    except json.JSONDecodeError:
+        doctor = None
+    doctor_ok = bool(doctor_result and doctor_result.returncode == 0)
+    if isinstance(doctor, dict) and "ok" in doctor:
+        doctor_ok = doctor_ok and doctor.get("ok") is True
+    if not doctor_ok:
+        return lark_check, (
+            "blocked",
+            "飞书 profile 本地离线检查未通过",
+            "运行 lark-cli doctor --offline 修复本地配置；不要在聊天中发送凭证",
+        )
+    return lark_check, (
+        "ready",
+        "飞书 profile 已存在且本地配置可用",
+        "",
+    )
+
+
 def _legacy_checks(source):
     """Preserve the original no-argument API for older callers."""
     root = config_root(source)
@@ -218,6 +365,11 @@ def _read_config(path):
         return json.loads(path.read_text(encoding="utf-8")), "ready"
     except (OSError, json.JSONDecodeError):
         return {}, "invalid"
+
+
+def _permissions_too_open(path):
+    """POSIX mode bits are not a meaningful confidentiality check on Windows."""
+    return os.name != "nt" and bool(path.stat().st_mode & 0o077)
 
 
 def _env_values(path):
@@ -337,7 +489,7 @@ def _capability_report(source, capability, skills_roots=None):
         common_status = "blocked"
         common_summary = "OfferLoop 公共配置不是有效 JSON"
         common_action = "修复 config.json 格式后重新检查"
-    elif config_path.stat().st_mode & 0o077:
+    elif _permissions_too_open(config_path):
         common_status = "needs_action"
         common_summary = "OfferLoop 公共配置权限过宽"
         common_action = "将 config.json 权限收紧为 0600"
@@ -346,7 +498,9 @@ def _capability_report(source, capability, skills_roots=None):
         name: _skill_is_installed(name, roots)
         for name in BUNDLED_SKILLS
     }
-    lark_cli_path = shutil.which("lark-cli")
+    lark_check, profile_check = _probe_lark_cli(
+        source, config.get("lark_profile")
+    )
 
     for selected_capability in sorted(selected):
         checks.extend(
@@ -365,9 +519,7 @@ def _capability_report(source, capability, skills_roots=None):
                 _check(
                     "local.lark_cli",
                     selected_capability,
-                    "ready" if lark_cli_path else "blocked",
-                    "lark-cli 可用" if lark_cli_path else "未找到 lark-cli",
-                    LARK_CLI_RECOVERY if not lark_cli_path else "",
+                    *lark_check,
                 ),
                 _check(
                     "local.skills",
@@ -395,18 +547,17 @@ def _capability_report(source, capability, skills_roots=None):
                 _online_permissions_check(selected_capability),
             ]
         )
-        profile_status, profile_summary, profile_action = _status_for_present(
-            config.get("lark_profile"),
-            "已登记飞书 profile",
-            "选择并登记 lark-cli profile",
-        )
+        if profile_check is None:
+            profile_check = (
+                "blocked",
+                "无法验证飞书 profile",
+                "先修复 lark-cli，再重新检查 profile",
+            )
         checks.append(
             _check(
                 "local.profile_locator",
                 selected_capability,
-                profile_status,
-                profile_summary,
-                profile_action,
+                *profile_check,
             )
         )
 
@@ -467,7 +618,7 @@ def _capability_report(source, capability, skills_roots=None):
             imap_status = "needs_action"
             imap_summary = "IMAP 配置尚未填写完整"
             imap_action = "在本机填写真实 IMAP 配置后重试"
-        elif imap_path.stat().st_mode & 0o077:
+        elif _permissions_too_open(imap_path):
             imap_status = "needs_action"
             imap_summary = "IMAP 配置权限过宽"
             imap_action = "将 IMAP 配置权限收紧为 0600"
