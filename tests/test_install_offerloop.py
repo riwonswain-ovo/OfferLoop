@@ -3,7 +3,6 @@ import contextlib
 import importlib.util
 import io
 import json
-import subprocess
 import tempfile
 import unittest
 from unittest import mock
@@ -44,10 +43,6 @@ class OfferLoopInstallerTest(unittest.TestCase):
             self.assertEqual(
                 self.installer.agent_root("hermes-agent", environment),
                 Path(directory) / "hermes-custom" / "skills",
-            )
-            self.assertEqual(
-                self.installer.agent_root("openclaw", environment),
-                Path(directory) / ".openclaw" / "skills",
             )
             self.assertEqual(
                 self.installer.agent_target_label("codex", environment),
@@ -115,8 +110,7 @@ class OfferLoopInstallerTest(unittest.TestCase):
             hermes_home = home / ".hermes"
             hermes_home.mkdir()
             (hermes_home / "config.yaml").write_text(
-                "skills:\n  external_dirs:\n"
-                f"  - {external_root}\n",
+                "skills:\n  external_dirs:\n" f"  - {external_root}\n",
                 encoding="utf-8",
             )
             environment = {"HOME": directory, "PATH": ""}
@@ -141,8 +135,7 @@ class OfferLoopInstallerTest(unittest.TestCase):
             hermes_home = home / ".hermes"
             hermes_home.mkdir()
             (hermes_home / "config.yaml").write_text(
-                "skills:\n"
-                f"  external_dirs: [{external_root}]\n",
+                "skills:\n" f"  external_dirs: [{external_root}]\n",
                 encoding="utf-8",
             )
             environment = {"HOME": directory, "PATH": ""}
@@ -187,8 +180,6 @@ class OfferLoopInstallerTest(unittest.TestCase):
                 "already_installed",
                 "conflict",
                 "upgraded",
-                "shadowed",
-                "installed_but_hidden",
                 "prepared_for_import",
                 "unsupported",
             },
@@ -197,271 +188,6 @@ class OfferLoopInstallerTest(unittest.TestCase):
     def test_version_reports_installer_and_offerloop_versions(self):
         self.assertEqual(self.installer.INSTALLER_VERSION, "1.0")
         self.assertEqual(self.installer.offerloop_version(), "0.1.0-alpha.1")
-
-    def test_openclaw_reports_higher_priority_shadow(self):
-        with tempfile.TemporaryDirectory() as directory:
-            environment = {"HOME": directory, "PATH": ""}
-            shadow = Path(directory) / ".agents" / "skills" / "offerloop-setup"
-            shadow.mkdir(parents=True)
-            (shadow / "SKILL.md").write_text("old version\n", encoding="utf-8")
-
-            report = self.installer.install_agent("openclaw", environ=environment)
-
-            self.assertEqual(report["status"], "shadowed")
-            self.assertEqual(report["shadowed_skills"], ["offerloop-setup"])
-            self.assertEqual(
-                report["shadow_sources"]["offerloop-setup"],
-                ["~/.agents/skills"],
-            )
-            self.assertEqual(
-                self.installer._openclaw_effective_sources(
-                    Path(directory), workspace=Path(directory) / "empty-workspace"
-                )["offerloop-setup"],
-                "~/.agents/skills",
-            )
-
-    def test_openclaw_reports_default_workspace_shadow_in_production_path(self):
-        with tempfile.TemporaryDirectory() as directory:
-            environment = {"HOME": directory, "PATH": ""}
-            shadow = (
-                Path(directory)
-                / ".openclaw"
-                / "workspace"
-                / "skills"
-                / "offerloop-setup"
-            )
-            shadow.mkdir(parents=True)
-            (shadow / "SKILL.md").write_text("old workspace version\n", encoding="utf-8")
-
-            report = self.installer.install_agent("openclaw", environ=environment)
-
-            self.assertEqual(report["status"], "shadowed")
-            self.assertEqual(report["shadowed_skills"], ["offerloop-setup"])
-            self.assertEqual(
-                report["effective_sources"]["offerloop-setup"],
-                "openclaw-default-workspace/skills",
-            )
-
-    def test_openclaw_honors_state_and_workspace_environment(self):
-        with tempfile.TemporaryDirectory() as directory:
-            home = Path(directory)
-            state = home / "custom-state"
-            workspace = home / "mounted-workspace"
-            environment = {
-                "HOME": directory,
-                "PATH": "",
-                "OPENCLAW_STATE_DIR": str(state),
-                "OPENCLAW_WORKSPACE_DIR": str(workspace),
-            }
-            shadow = workspace / "skills" / "recruiting-reminder"
-            shadow.mkdir(parents=True)
-            (shadow / "SKILL.md").write_text("old workspace version\n", encoding="utf-8")
-
-            report = self.installer.install_agent("openclaw", environ=environment)
-
-            self.assertEqual(report["status"], "shadowed")
-            self.assertIn("recruiting-reminder", report["shadowed_skills"])
-            self.assertTrue(
-                (state / "skills" / "offerloop-setup" / "SKILL.md").is_file()
-            )
-            self.assertEqual(report["target"], "$OPENCLAW_STATE_DIR/skills")
-
-    def test_openclaw_state_dir_does_not_move_default_workspace(self):
-        with tempfile.TemporaryDirectory() as directory:
-            home = Path(directory)
-            environment = {
-                "HOME": directory,
-                "PATH": "",
-                "OPENCLAW_STATE_DIR": str(home / "custom-state"),
-            }
-            self.assertEqual(
-                self.installer._openclaw_workspaces(home, environment)[0],
-                home / ".openclaw" / "workspace",
-            )
-
-    def test_openclaw_derives_secondary_agent_under_configured_default(self):
-        with tempfile.TemporaryDirectory() as directory:
-            home = Path(directory)
-            environment = {"HOME": directory, "PATH": ""}
-            config = home / ".openclaw" / "openclaw.json"
-            config.parent.mkdir(parents=True)
-            config.write_text(
-                "{ agents: { defaults: { workspace: '~/.openclaw/base' }, "
-                "list: [{ id: 'main' }, { id: 'work' }] } }\n",
-                encoding="utf-8",
-            )
-            workspaces = self.installer._openclaw_workspaces(home, environment)
-            self.assertIn(home / ".openclaw" / "base", workspaces)
-            self.assertIn(home / ".openclaw" / "base" / "work", workspaces)
-
-    def test_openclaw_finds_grouped_workspace_skill_by_frontmatter_name(self):
-        with tempfile.TemporaryDirectory() as directory:
-            home = Path(directory)
-            environment = {"HOME": directory, "PATH": ""}
-            grouped = (
-                home
-                / ".openclaw"
-                / "workspace"
-                / "skills"
-                / "group"
-                / "legacy"
-            )
-            grouped.mkdir(parents=True)
-            (grouped / "SKILL.md").write_text(
-                "---\nname: offerloop-setup\ndescription: old\n---\nold\n",
-                encoding="utf-8",
-            )
-
-            report = self.installer.install_agent("openclaw", environ=environment)
-
-            self.assertEqual(report["status"], "shadowed")
-            self.assertEqual(report["shadowed_skills"], ["offerloop-setup"])
-
-    def test_openclaw_reports_workspace_shadow(self):
-        with tempfile.TemporaryDirectory() as directory:
-            environment = {"HOME": directory, "PATH": ""}
-            workspace = Path(directory) / "project"
-            shadow = workspace / "skills" / "job-collection"
-            shadow.mkdir(parents=True)
-            (shadow / "SKILL.md").write_text("old workspace version\n", encoding="utf-8")
-
-            source_digests = {
-                name: self.installer.tree_digest(self.installer.SKILLS_SOURCE / name)
-                for name in self.installer.SKILL_NAMES
-            }
-            self.assertEqual(
-                self.installer._openclaw_shadowed(
-                    Path(directory), source_digests, workspace=workspace
-                ),
-                ["job-collection"],
-            )
-
-    def test_openclaw_reports_allowlist_hiding(self):
-        with tempfile.TemporaryDirectory() as directory:
-            environment = {"HOME": directory, "PATH": ""}
-            config = Path(directory) / ".openclaw" / "openclaw.json"
-            config.parent.mkdir(parents=True)
-            config.write_text(
-                json.dumps({"agents": {"defaults": {"skills": ["weather"]}}}),
-                encoding="utf-8",
-            )
-
-            report = self.installer.install_agent("openclaw", environ=environment)
-
-            self.assertEqual(report["status"], "installed_but_hidden")
-
-    def test_openclaw_parses_json5_workspace_allowlist_and_include(self):
-        with tempfile.TemporaryDirectory() as directory:
-            home = Path(directory)
-            environment = {"HOME": directory, "PATH": ""}
-            config_dir = home / ".openclaw"
-            config_dir.mkdir()
-            (config_dir / "agents.json5").write_text(
-                "{ defaults: { workspace: '~/.openclaw/custom', skills: ['weather'], }, }\n",
-                encoding="utf-8",
-            )
-            (config_dir / "openclaw.json").write_text(
-                "// valid OpenClaw JSON5\n{ agents: { $include: './agents.json5', }, }\n",
-                encoding="utf-8",
-            )
-            shadow = config_dir / "custom" / "skills" / "offerloop-workspace"
-            shadow.mkdir(parents=True)
-            (shadow / "SKILL.md").write_text("old workspace version\n", encoding="utf-8")
-
-            report = self.installer.install_agent("openclaw", environ=environment)
-
-            self.assertEqual(report["status"], "shadowed")
-            self.assertIn("offerloop-workspace", report["shadowed_skills"])
-            self.assertTrue(self.installer._openclaw_hidden(home, environment))
-
-    def test_openclaw_uses_eligible_cli_listing(self):
-        completed = subprocess.CompletedProcess(
-            ["openclaw"],
-            0,
-            json.dumps({"skills": list(self.installer.SKILL_NAMES)}),
-            "",
-        )
-        with mock.patch.object(
-            self.installer.shutil, "which", return_value="/bin/openclaw"
-        ), mock.patch.object(
-            self.installer.subprocess, "run", return_value=completed
-        ) as run:
-            discovered = self.installer._openclaw_discovered({"PATH": "/bin"})
-
-        self.assertTrue(discovered)
-        self.assertEqual(
-            run.call_args.args[0],
-            ["/bin/openclaw", "skills", "list", "--eligible", "--json"],
-        )
-
-    def test_openclaw_eligible_listing_uses_exact_names(self):
-        completed = subprocess.CompletedProcess(
-            ["openclaw"],
-            0,
-            json.dumps(
-                {
-                    "skills": [
-                        {
-                            "name": "offerloop-setup",
-                            "description": "mentions job-collection recruiting-reminder offerloop-workspace",
-                        }
-                    ]
-                }
-            ),
-            "",
-        )
-        with mock.patch.object(
-            self.installer.shutil, "which", return_value="/bin/openclaw"
-        ), mock.patch.object(
-            self.installer.subprocess, "run", return_value=completed
-        ):
-            self.assertFalse(
-                self.installer._openclaw_discovered({"PATH": "/bin"})
-            )
-
-    def test_openclaw_invalid_block_comment_fails_closed(self):
-        with tempfile.TemporaryDirectory() as directory:
-            home = Path(directory)
-            config = home / ".openclaw" / "openclaw.json"
-            config.parent.mkdir(parents=True)
-            config.write_text("{} /* unterminated", encoding="utf-8")
-            self.assertTrue(
-                self.installer._openclaw_hidden(
-                    home, {"HOME": directory, "PATH": ""}
-                )
-            )
-
-    def test_openclaw_reports_per_agent_allowlist_hiding(self):
-        with tempfile.TemporaryDirectory() as directory:
-            environment = {"HOME": directory, "PATH": ""}
-            config = Path(directory) / ".openclaw" / "openclaw.json"
-            config.parent.mkdir(parents=True)
-            config.write_text(
-                json.dumps({"agents": {"list": [{"id": "main", "skills": ["weather"]}]}}),
-                encoding="utf-8",
-            )
-
-            report = self.installer.install_agent("openclaw", environ=environment)
-
-            self.assertEqual(report["status"], "installed_but_hidden")
-
-    def test_openclaw_reports_disabled_entry_and_invalid_config_as_hidden(self):
-        with tempfile.TemporaryDirectory() as directory:
-            environment = {"HOME": directory, "PATH": ""}
-            config = Path(directory) / ".openclaw" / "openclaw.json"
-            config.parent.mkdir(parents=True)
-            config.write_text(
-                "{ skills: { entries: { 'offerloop-setup': { enabled: false, }, }, }, }\n",
-                encoding="utf-8",
-            )
-            self.assertTrue(
-                self.installer._openclaw_hidden(Path(directory), environment)
-            )
-
-            config.write_text("{ this is not valid JSON5", encoding="utf-8")
-            self.assertTrue(
-                self.installer._openclaw_hidden(Path(directory), environment)
-            )
 
     def test_workbuddy_does_not_claim_unverified_installation(self):
         report = self.installer.install_agent("workbuddy", environ={"HOME": "/tmp"})

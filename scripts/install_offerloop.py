@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import ast
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -12,7 +11,6 @@ import os
 from pathlib import Path
 import re
 import shutil
-import subprocess
 import sys
 import tempfile
 
@@ -27,15 +25,13 @@ SKILL_NAMES = (
     "recruiting-reminder",
     "offerloop-workspace",
 )
-STANDARD_AGENTS = ("codex", "claude-code", "hermes-agent", "openclaw")
+STANDARD_AGENTS = ("codex", "claude-code", "hermes-agent")
 ALL_AGENTS = (*STANDARD_AGENTS, "workbuddy")
 RESULT_STATUSES = (
     "installed",
     "already_installed",
     "conflict",
     "upgraded",
-    "shadowed",
-    "installed_but_hidden",
     "prepared_for_import",
     "unsupported",
 )
@@ -57,13 +53,6 @@ def _expand_home_path(value, home: Path) -> Path:
     return Path(text).expanduser()
 
 
-def _openclaw_state_dir(home: Path, environ=None) -> Path:
-    source = dict(os.environ if environ is None else environ)
-    return _expand_home_path(
-        source.get("OPENCLAW_STATE_DIR", home / ".openclaw"), home
-    )
-
-
 def agent_root(agent: str, environ=None) -> Path | None:
     source = dict(os.environ if environ is None else environ)
     home = Path(source.get("HOME", Path.home())).expanduser()
@@ -78,8 +67,6 @@ def agent_root(agent: str, environ=None) -> Path | None:
     if agent == "hermes-agent":
         base = _expand_home_path(source.get("HERMES_HOME", home / ".hermes"), home)
         return base / "skills"
-    if agent == "openclaw":
-        return _openclaw_state_dir(home, source) / "skills"
     if agent == "workbuddy":
         return None
     raise ValueError(f"unsupported Agent: {agent}")
@@ -97,12 +84,6 @@ def agent_target_label(agent: str, environ=None) -> str:
         )
     if agent == "hermes-agent":
         return "$HERMES_HOME/skills" if source.get("HERMES_HOME") else "~/.hermes/skills"
-    if agent == "openclaw":
-        return (
-            "$OPENCLAW_STATE_DIR/skills"
-            if source.get("OPENCLAW_STATE_DIR")
-            else "~/.openclaw/skills"
-        )
     if agent == "workbuddy":
         return "WorkBuddy import package"
     raise ValueError(f"unsupported Agent: {agent}")
@@ -190,7 +171,7 @@ def _loose_frontmatter_name(skill_file: Path) -> str | None:
 
 
 def _skill_directories(root: Path, name: str) -> tuple[Path, ...]:
-    """Find direct or OpenClaw-grouped Skills up to six directory levels."""
+    """Find direct or grouped Skills up to six directory levels."""
     found = []
     direct = root / name
     if (direct / "SKILL.md").is_file():
@@ -236,416 +217,6 @@ def _write_manifest(root: Path, agent: str, digests: dict[str, str]) -> None:
     )
     os.chmod(temporary, 0o600)
     temporary.replace(destination)
-
-
-def _json5_data(text: str) -> dict:
-    """Parse the conservative JSON5 subset used by OpenClaw config files."""
-    uncommented = []
-    index = 0
-    quote = None
-    while index < len(text):
-        char = text[index]
-        if quote:
-            uncommented.append(char)
-            if char == "\\" and index + 1 < len(text):
-                index += 1
-                uncommented.append(text[index])
-            elif char == quote:
-                quote = None
-            index += 1
-            continue
-        if char in {"'", '"'}:
-            quote = char
-            uncommented.append(char)
-            index += 1
-            continue
-        if text[index : index + 2] == "//":
-            index += 2
-            while index < len(text) and text[index] not in "\r\n":
-                index += 1
-            continue
-        if text[index : index + 2] == "/*":
-            index += 2
-            while index < len(text) and text[index : index + 2] != "*/":
-                if text[index] in "\r\n":
-                    uncommented.append(text[index])
-                index += 1
-            if index >= len(text):
-                raise ValueError("unterminated JSON5 block comment")
-            index += 2
-            continue
-        uncommented.append(char)
-        index += 1
-
-    normalized = []
-    text = "".join(uncommented)
-    index = 0
-    while index < len(text):
-        if text[index] != "'":
-            normalized.append(text[index])
-            index += 1
-            continue
-        end = index + 1
-        while end < len(text):
-            if text[end] == "\\":
-                end += 2
-                continue
-            if text[end] == "'":
-                break
-            end += 1
-        if end >= len(text):
-            raise ValueError("unterminated JSON5 string")
-        value = ast.literal_eval(text[index : end + 1])
-        normalized.append(json.dumps(value, ensure_ascii=False))
-        index = end + 1
-
-    text = "".join(normalized)
-    text = re.sub(
-        r"([\{,]\s*)([A-Za-z_$][A-Za-z0-9_$-]*)(\s*:)",
-        r'\1"\2"\3',
-        text,
-    )
-    text = re.sub(r",(\s*[}\]])", r"\1", text)
-    data = json.loads(text)
-    if not isinstance(data, dict):
-        raise ValueError("OpenClaw config must be an object")
-    return data
-
-
-def _deep_merge(base: dict, override: dict) -> dict:
-    merged = dict(base)
-    for key, value in override.items():
-        if isinstance(merged.get(key), dict) and isinstance(value, dict):
-            merged[key] = _deep_merge(merged[key], value)
-        else:
-            merged[key] = value
-    return merged
-
-
-def _inside_allowed_root(path: Path, roots: tuple[Path, ...]) -> bool:
-    resolved = path.resolve(strict=False)
-    for root in roots:
-        try:
-            resolved.relative_to(root.resolve(strict=False))
-            return True
-        except ValueError:
-            continue
-    return False
-
-
-def _resolve_json5_includes(
-    value,
-    *,
-    current_file: Path,
-    allowed_roots: tuple[Path, ...],
-    seen: frozenset[Path],
-    depth: int,
-):
-    if depth > 10:
-        raise ValueError("OpenClaw config include depth exceeded")
-    if isinstance(value, list):
-        return [
-            _resolve_json5_includes(
-                item,
-                current_file=current_file,
-                allowed_roots=allowed_roots,
-                seen=seen,
-                depth=depth,
-            )
-            for item in value
-        ]
-    if not isinstance(value, dict):
-        return value
-
-    include_value = value.get("$include")
-    merged = {}
-    if include_value is not None:
-        include_names = include_value if isinstance(include_value, list) else [include_value]
-        for include_name in include_names:
-            if not isinstance(include_name, str) or not include_name or len(include_name) >= 4096:
-                raise ValueError("invalid OpenClaw config include")
-            include_path = (current_file.parent / include_name).resolve(strict=False)
-            if not _inside_allowed_root(include_path, allowed_roots):
-                raise ValueError("OpenClaw config include escapes allowed roots")
-            if include_path in seen or not include_path.is_file():
-                raise ValueError("invalid OpenClaw config include graph")
-            if include_path.stat().st_size > 2 * 1024 * 1024:
-                raise ValueError("OpenClaw config include is too large")
-            included = _json5_data(include_path.read_text(encoding="utf-8"))
-            included = _resolve_json5_includes(
-                included,
-                current_file=include_path,
-                allowed_roots=allowed_roots,
-                seen=seen | {include_path},
-                depth=depth + 1,
-            )
-            if not isinstance(included, dict):
-                raise ValueError("OpenClaw config include must contain an object")
-            merged = _deep_merge(merged, included)
-
-    siblings = {
-        key: _resolve_json5_includes(
-            item,
-            current_file=current_file,
-            allowed_roots=allowed_roots,
-            seen=seen,
-            depth=depth,
-        )
-        for key, item in value.items()
-        if key != "$include"
-    }
-    return _deep_merge(merged, siblings)
-
-
-def _openclaw_config(home: Path, environ=None) -> dict | None:
-    source = dict(os.environ if environ is None else environ)
-    state_dir = _openclaw_state_dir(home, source)
-    config = _expand_home_path(
-        source.get("OPENCLAW_CONFIG_PATH", state_dir / "openclaw.json"), home
-    )
-    if not config.is_file():
-        return {}
-    try:
-        extra_roots = tuple(
-            _expand_home_path(item, home)
-            for item in source.get("OPENCLAW_INCLUDE_ROOTS", "").split(os.pathsep)
-            if item
-        )
-        allowed_roots = (config.parent, *extra_roots)
-        data = _json5_data(config.read_text(encoding="utf-8"))
-        return _resolve_json5_includes(
-            data,
-            current_file=config,
-            allowed_roots=allowed_roots,
-            seen=frozenset({config.resolve(strict=False)}),
-            depth=0,
-        )
-    except (OSError, ValueError, json.JSONDecodeError, SyntaxError):
-        return None
-
-
-def _openclaw_workspaces(home: Path, environ=None) -> tuple[Path, ...]:
-    source = dict(os.environ if environ is None else environ)
-    state_dir = _openclaw_state_dir(home, source)
-    data = _openclaw_config(home, source)
-    data = data or {}
-    agents = data.get("agents", {}) if isinstance(data.get("agents"), dict) else {}
-    defaults = agents.get("defaults", {}) if isinstance(agents.get("defaults"), dict) else {}
-    configured_default = defaults.get("workspace")
-    has_configured_default = isinstance(configured_default, str) and bool(
-        configured_default.strip()
-    )
-    configured = configured_default if has_configured_default else source.get(
-        "OPENCLAW_WORKSPACE_DIR"
-    )
-    if not configured:
-        profile = source.get("OPENCLAW_PROFILE", "")
-        suffix = f"-{profile}" if profile and profile != "default" else ""
-        default_workspace = home / ".openclaw" / f"workspace{suffix}"
-    else:
-        expanded = re.sub(
-            r"\$\{([A-Z_][A-Z0-9_]*)\}",
-            lambda match: source.get(match.group(1), match.group(0)),
-            configured,
-        )
-        default_workspace = _expand_home_path(expanded, home)
-
-    workspaces = [default_workspace]
-    listed = agents.get("list")
-    if isinstance(listed, list):
-        listed_dicts = [entry for entry in listed if isinstance(entry, dict)]
-        explicit_default_ids = {
-            entry.get("id") for entry in listed_dicts if entry.get("default") is True
-        }
-        default_ids = explicit_default_ids or {"main"}
-        for entry in listed_dicts:
-            value = entry.get("workspace")
-            if isinstance(value, str) and value.strip():
-                expanded = re.sub(
-                    r"\$\{([A-Z_][A-Z0-9_]*)\}",
-                    lambda match: source.get(match.group(1), match.group(0)),
-                    value,
-                )
-                workspace = _expand_home_path(expanded, home)
-            elif entry.get("id") in default_ids:
-                workspace = default_workspace
-            elif isinstance(entry.get("id"), str) and entry["id"]:
-                workspace = (
-                    default_workspace / entry["id"]
-                    if has_configured_default
-                    else state_dir / f"workspace-{entry['id']}"
-                )
-            else:
-                continue
-            workspaces.append(workspace)
-
-    unique = []
-    seen = set()
-    for workspace in workspaces:
-        identity = workspace.resolve(strict=False)
-        if identity not in seen:
-            seen.add(identity)
-            unique.append(workspace)
-    return tuple(unique)
-
-
-def _openclaw_roots(
-    home: Path, *, environ=None, workspace: Path | None = None
-) -> tuple[tuple[Path, str], ...]:
-    workspaces = (workspace,) if workspace is not None else _openclaw_workspaces(home, environ)
-    roots = []
-    for position, active_workspace in enumerate(workspaces):
-        prefix = "openclaw-default-workspace" if position == 0 else "openclaw-agent-workspace"
-        roots.extend(
-            (
-                (active_workspace / "skills", f"{prefix}/skills"),
-                (active_workspace / ".agents" / "skills", f"{prefix}/.agents/skills"),
-            )
-        )
-    roots.extend(
-        (
-            (home / ".agents" / "skills", "~/.agents/skills"),
-            (
-                _openclaw_state_dir(home, environ) / "skills",
-                "$OPENCLAW_STATE_DIR/skills"
-                if dict(os.environ if environ is None else environ).get("OPENCLAW_STATE_DIR")
-                else "~/.openclaw/skills",
-            ),
-        )
-    )
-    return tuple(roots)
-
-
-def _openclaw_effective_sources(
-    home: Path, workspace: Path | None = None, environ=None
-) -> dict[str, str]:
-    if workspace is None:
-        workspace = _openclaw_workspaces(home, environ)[0]
-    roots = _openclaw_roots(home, environ=environ, workspace=workspace)
-    effective = {}
-    for name in SKILL_NAMES:
-        for root, label in roots:
-            if _skill_directories(root, name):
-                effective[name] = label
-                break
-    return effective
-
-
-def _openclaw_shadow_details(
-    home: Path,
-    source_digests: dict[str, str],
-    workspace: Path | None = None,
-    environ=None,
-) -> dict[str, list[str]]:
-    shadowed: dict[str, list[str]] = {}
-    higher_priority_roots = tuple(
-        (root, label)
-        for root, label in _openclaw_roots(
-            home, environ=environ, workspace=workspace
-        )
-        if label not in {"~/.openclaw/skills", "$OPENCLAW_STATE_DIR/skills"}
-    )
-    for name in SKILL_NAMES:
-        for root, label in higher_priority_roots:
-            for candidate in _skill_directories(root, name):
-                if tree_digest(candidate) != source_digests[name]:
-                    labels = shadowed.setdefault(name, [])
-                    if label not in labels:
-                        labels.append(label)
-    return shadowed
-
-
-def _openclaw_shadowed(
-    home: Path,
-    source_digests: dict[str, str],
-    workspace: Path | None = None,
-    environ=None,
-) -> list[str]:
-    return list(
-        _openclaw_shadow_details(
-            home,
-            source_digests,
-            workspace=workspace,
-            environ=environ,
-        )
-    )
-
-
-def _openclaw_hidden(home: Path, environ=None) -> bool:
-    data = _openclaw_config(home, environ)
-    if data is None:
-        return True
-    agents = data.get("agents", {}) if isinstance(data.get("agents"), dict) else {}
-    allowlists = []
-    defaults = agents.get("defaults", {}).get("skills")
-    if isinstance(defaults, list):
-        allowlists.append(defaults)
-    listed = agents.get("list")
-    if isinstance(listed, list):
-        for entry in listed:
-            if isinstance(entry, dict) and isinstance(entry.get("skills"), list):
-                allowlists.append(entry["skills"])
-    allowlist_hidden = any(
-        not set(SKILL_NAMES).issubset({str(item) for item in allowlist})
-        for allowlist in allowlists
-    )
-    skills = data.get("skills", {}) if isinstance(data.get("skills"), dict) else {}
-    entries = skills.get("entries", {}) if isinstance(skills.get("entries"), dict) else {}
-    explicitly_disabled = any(
-        isinstance(entries.get(name), dict)
-        and entries[name].get("enabled") is False
-        for name in SKILL_NAMES
-    )
-    return allowlist_hidden or explicitly_disabled
-
-
-def _openclaw_discovered(environ=None) -> bool | None:
-    source = dict(os.environ if environ is None else environ)
-    executable = shutil.which("openclaw", path=source.get("PATH"))
-    if not executable:
-        return None
-    try:
-        completed = subprocess.run(
-            [executable, "skills", "list", "--eligible", "--json"],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=8,
-            env=source,
-        )
-        if completed.returncode != 0:
-            return None
-        try:
-            payload = json.loads(completed.stdout)
-        except json.JSONDecodeError:
-            return None
-        if isinstance(payload, list):
-            entries = payload
-        elif isinstance(payload, dict):
-            entries = next(
-                (
-                    payload[key]
-                    for key in ("skills", "eligible", "ready")
-                    if isinstance(payload.get(key), (list, dict))
-                ),
-                None,
-            )
-        else:
-            entries = None
-        if isinstance(entries, dict):
-            names = {str(name) for name in entries}
-        elif isinstance(entries, list):
-            names = {
-                item if isinstance(item, str) else item.get("name")
-                for item in entries
-                if isinstance(item, (str, dict))
-            }
-            names.discard(None)
-        else:
-            return None
-        return set(SKILL_NAMES).issubset(names)
-    except (OSError, subprocess.SubprocessError, TypeError):
-        return None
 
 
 def _yaml_scalar(value: str) -> str:
@@ -834,20 +405,6 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
                 for name, item_status in operations
             ],
         }
-        if agent == "openclaw":
-            result["effective_sources"] = _openclaw_effective_sources(
-                home, environ=source
-            )
-            shadow_details = _openclaw_shadow_details(
-                home, source_digests, environ=source
-            )
-            shadowed = list(shadow_details)
-            if shadowed:
-                result["status"] = "shadowed"
-                result["shadowed_skills"] = shadowed
-                result["shadow_sources"] = shadow_details
-            elif _openclaw_hidden(home, source):
-                result["status"] = "installed_but_hidden"
         return result
 
     root.mkdir(parents=True, exist_ok=True)
@@ -888,8 +445,8 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
                 destination = root / name
                 backup = None
                 if destination.exists() and status != "already_installed":
-                    # Keep backups outside the Skills discovery root. OpenClaw supports
-                    # grouped Skills, so an in-root backup could itself become active.
+                    # Keep backups outside the Skills discovery root so they cannot
+                    # become active through recursive Skill discovery.
                     backup = root.parent / ".offerloop-backups" / timestamp / name
                     backup.parent.mkdir(parents=True, exist_ok=True)
                     destination.replace(backup)
@@ -922,34 +479,6 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
         "status": overall,
         "skills": [{"name": name, "status": status} for name, status in operations],
     }
-    if agent == "openclaw":
-        result["effective_sources"] = _openclaw_effective_sources(
-            home, environ=source
-        )
-        shadow_details = _openclaw_shadow_details(
-            home, source_digests, environ=source
-        )
-        shadowed = list(shadow_details)
-        if shadowed:
-            result["status"] = "shadowed"
-            result["shadowed_skills"] = shadowed
-            result["shadow_sources"] = shadow_details
-            result["next_action"] = (
-                "OpenClaw 的工作区或高优先级个人 Agent Skills 中存在不同版本；"
-                "请检查覆盖后再验证生效来源"
-            )
-        elif _openclaw_hidden(home, source):
-            result["status"] = "installed_but_hidden"
-            result["next_action"] = (
-                "检查 OpenClaw agents.defaults.skills 或 agents.list[].skills allowlist"
-            )
-        else:
-            discovered = _openclaw_discovered(source)
-            if discovered is False:
-                result["status"] = "installed_but_hidden"
-                result["next_action"] = "重新加载 OpenClaw 并检查 Agent Skill allowlist"
-            elif discovered is True:
-                result["discovered"] = True
     return result
 
 

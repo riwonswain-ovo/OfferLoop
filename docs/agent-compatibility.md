@@ -9,7 +9,6 @@
 | Codex | 自动测试通过 | 全局目录契约已验证 | 自动测试通过 | 按飞书身份验收 | 每次依资源授权 |
 | Claude Code | 自动测试通过 | 全局目录契约已验证 | 自动测试通过 | 按飞书身份验收 | 每次依资源授权 |
 | Hermes | 自动测试通过 | 全局目录契约已验证 | 自动测试通过 | 按飞书身份验收 | 每次依资源授权 |
-| OpenClaw | 自动测试通过 | 可检测全局覆盖与 allowlist | 自动测试通过 | 需宿主/sandbox 分别验收 | 每次依资源授权 |
 | 腾讯 WorkBuddy | 未认证 | 未认证 | 未认证 | 未认证 | 未认证 |
 
 “文件安装”不等于获得飞书、邮箱或日历权限。在线身份、scope、应用发布、租户安装、资源共享和 token 状态在离线预检中始终是 `unverified`。
@@ -20,8 +19,6 @@
 - `already_installed`：目标内容与当前版本完全一致。
 - `conflict`：目标目录内容不同，或 Hermes 的 `skills.external_dirs` 中存在会造成运行时歧义的同名副本；未覆盖。
 - `upgraded`：在 Skills 根目录的上级 `.offerloop-backups/` 保留可恢复备份后已替换，避免备份被递归加载。
-- `shadowed`：安装完成，但 OpenClaw 更高优先级目录中存在不同版本。
-- `installed_but_hidden`：文件已安装，但 allowlist 或 OpenClaw 发现结果没有暴露全部 Skill。
 - `prepared_for_import`：仅在未来生成且验证过 WorkBuddy 导入包时使用。当前版本不返回此状态。
 - `unsupported`：目标尚未获得足够的真实产品契约来安全安装。
 
@@ -33,12 +30,6 @@ Hermes 会同时扫描 `~/.hermes/skills/` 和 `config.yaml` 中登记的 `skill
 同时存在于两个根时，原生列表可能仍显示该名称，但显式预加载会因候选歧义而失败。安装器会在写入前
 检查这些外部根：默认返回 `conflict`；只有用户明确使用 `--upgrade` 时，才将旧外部副本备份到
 对应根目录上级的 `.offerloop-backups/` 并清理重复项。备份不放在任何 Skills 根内，避免再次被扫描。
-
-## OpenClaw 特别说明
-
-默认全局目标是 `~/.openclaw/skills/`；设置 `OPENCLAW_STATE_DIR` 时使用该 state 目录下的 `skills/`。OpenClaw 还可能从默认 workspace、`agents.defaults.workspace`、`agents.list[].workspace`、`OPENCLAW_WORKSPACE_DIR` 和 `~/.agents/skills/` 加载高优先级同名 Skill，并支持最多六层的分组目录。如果这些位置存在不同摘要，安装器返回 `shadowed` 而不声称新版已生效。
-
-安装器以 JSON5 读取 `openclaw.json`，并在允许的配置根内解析 `$include`。如配置了 `agents.defaults.skills`、`agents.list[].skills` allowlist 或 `skills.entries.<name>.enabled=false`，需确保四个 OfferLoop Skill 都可见。安装后重新启动 OpenClaw 或开启下一轮会话，用 `openclaw skills list --eligible --json` 确认实际可见性，并确认 sandbox 中也能执行 `lark-cli`。
 
 ## WorkBuddy 发布门禁
 

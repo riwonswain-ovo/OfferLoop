@@ -33,12 +33,12 @@ EXTERNAL_SKILLS_BY_CAPABILITY = {
 LARK_CLI_RECOVERY = (
     "运行 `npx @larksuite/cli@latest install` 安装 lark-cli；再运行 "
     "Agent 对应的 `npx skills add larksuite/cli -g -a codex -y`、"
-    "`-a claude-code`、`-a hermes-agent` 或 `-a openclaw` 安装官方 Lark Skills，"
+    "`-a claude-code` 或 `-a hermes-agent` 安装官方 Lark Skills，"
     "然后新开 Agent 会话"
 )
 LARK_SKILLS_RECOVERY = (
     "运行 Agent 对应的 `npx skills add larksuite/cli -g -a codex -y`、"
-    "`-a claude-code`、`-a hermes-agent` 或 `-a openclaw` "
+    "`-a claude-code` 或 `-a hermes-agent` "
     "安装官方 Lark Skills，然后新开 Agent 会话"
 )
 MIN_LARK_CLI_VERSION = (1, 0, 73)
@@ -118,18 +118,6 @@ def _skill_roots(source, override=None):
             home / ".claude" / "skills",
             home / ".hermes" / "skills",
         ]
-        openclaw_state = source.get("OPENCLAW_STATE_DIR")
-        if openclaw_state:
-            value = str(openclaw_state)
-            if value.startswith("~/") or value.startswith("~\\"):
-                openclaw_root = home / value[2:]
-            elif value == "~":
-                openclaw_root = home
-            else:
-                openclaw_root = Path(value).expanduser()
-        else:
-            openclaw_root = home / ".openclaw"
-        candidates.append(openclaw_root / "skills")
         codex_home = source.get("CODEX_HOME")
         if codex_home:
             candidates.append(Path(codex_home) / "skills")

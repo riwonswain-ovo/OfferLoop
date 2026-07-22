@@ -22,18 +22,17 @@ AGENT_ROOTS = {
     "codex": Path(".codex/skills"),
     "claude-code": Path(".claude/skills"),
     "hermes-agent": Path(".hermes/skills"),
-    "openclaw": Path(".openclaw/skills"),
 }
 LARK_CLI_RECOVERY = (
     "运行 `npx @larksuite/cli@latest install` 安装 lark-cli；再运行 "
     "Agent 对应的 `npx skills add larksuite/cli -g -a codex -y`、"
-    "`-a claude-code`、`-a hermes-agent` 或 `-a openclaw` 安装官方 Lark Skills，"
+    "`-a claude-code` 或 `-a hermes-agent` 安装官方 Lark Skills，"
     "然后新开 Agent 会话"
 )
 WORKSPACE_SKILLS_RECOVERY = (
     "缺少：lark-base、lark-doc、lark-wiki。运行 "
     "Agent 对应的 `npx skills add larksuite/cli -g -a codex -y`、"
-    "`-a claude-code`、`-a hermes-agent` 或 `-a openclaw` "
+    "`-a claude-code` 或 `-a hermes-agent` "
     "安装官方 Lark Skills，然后新开 Agent 会话"
 )
 
@@ -243,7 +242,7 @@ def main():
         roots = install_all_agents(source, project, home, env)
         assert_collection_preflight(project, roots["codex"], env)
         print(
-            "cold install accepted: four Agents, four Skills, idempotency, "
+            "cold install accepted: three Agents, four Skills, idempotency, "
             "collection preflight, recovery, and redaction"
         )
 

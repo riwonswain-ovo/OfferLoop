@@ -115,7 +115,7 @@ class RepositoryContractTest(unittest.TestCase):
     def test_readme_has_safe_cross_agent_install_and_upgrade_paths(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         self.assertIn("scripts/install_offerloop.py --agent", readme)
-        self.assertIn("--agent openclaw", readme)
+        self.assertIn("--agent claude-code", readme)
         self.assertIn("--upgrade", readme)
         self.assertIn(".offerloop-backups/", readme)
         self.assertIn("WorkBuddy", readme)
@@ -192,7 +192,7 @@ class RepositoryContractTest(unittest.TestCase):
             encoding="utf-8"
         )
         security = (ROOT / "SECURITY.md").read_text(encoding="utf-8")
-        for agent in ("codex", "claude-code", "hermes-agent", "openclaw"):
+        for agent in ("codex", "claude-code", "hermes-agent"):
             self.assertIn(f'"{agent}"', acceptance)
         self.assertIn("install_offerloop.py", acceptance)
         self.assertIn("already_installed", acceptance)
@@ -210,7 +210,6 @@ class RepositoryContractTest(unittest.TestCase):
             '"codex"',
             '"claude-code"',
             '"hermes-agent"',
-            '"openclaw"',
             '"workbuddy"',
         ):
             self.assertIn(expected, installer)

@@ -333,29 +333,6 @@ class OfferLoopSetupTest(unittest.TestCase):
             self.assertEqual(external["status"], "ready")
             self.assertIn("未验证线上权限", external["summary"])
 
-    def test_external_skills_follow_custom_openclaw_state_dir(self):
-        with tempfile.TemporaryDirectory() as directory:
-            state = Path(directory) / "custom-openclaw-state"
-            skill = state / "skills" / "lark-calendar"
-            skill.mkdir(parents=True)
-            (skill / "SKILL.md").write_text("# lark-calendar\n", encoding="utf-8")
-
-            report = preflight.run_checks(
-                {
-                    "HOME": directory,
-                    "OPENCLAW_STATE_DIR": str(state),
-                    "XDG_CONFIG_HOME": directory,
-                },
-                capability="reminder",
-            )
-            external = next(
-                check
-                for check in report["checks"]
-                if check["capability"] == "reminder"
-                and check["id"] == "local.external_skills"
-            )
-            self.assertEqual(external["status"], "ready")
-
     def test_enabled_registered_notification_only_requires_lark_im(self):
         with tempfile.TemporaryDirectory() as directory:
             environment = {"XDG_CONFIG_HOME": directory}
