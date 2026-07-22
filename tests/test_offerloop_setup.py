@@ -108,6 +108,47 @@ class OfferLoopSetupTest(unittest.TestCase):
             )
             self.assertIn("checks", json.loads(completed.stdout))
 
+    def test_preflight_recovers_when_agent_python3_is_too_old(self):
+        old_python = "/usr/bin/python3"
+        supported_python = "/opt/example/python3.11"
+
+        def which(name, path=None):
+            if name == "python3.11":
+                return supported_python
+            if name == "python3":
+                return old_python
+            return None
+
+        def run(command, *, environ, timeout=5):
+            self.assertEqual(command[0], supported_python)
+            return subprocess.CompletedProcess(command, 0, "3.11.9\n", "")
+
+        with mock.patch.object(preflight.sys, "version_info", (3, 9, 6)), mock.patch.object(
+            preflight.sys, "executable", old_python
+        ), mock.patch.object(preflight.shutil, "which", side_effect=which), mock.patch.object(
+            preflight, "_run_local_command", side_effect=run
+        ), mock.patch.object(preflight.os, "execve") as execve:
+            self.assertTrue(
+                preflight._reexec_under_supported_python(
+                    {"PATH": "/usr/bin:/opt/example"}
+                )
+            )
+
+        executable, argv, environment = execve.call_args.args
+        self.assertEqual(executable, supported_python)
+        self.assertEqual(argv[0], supported_python)
+        self.assertEqual(argv[1], str(preflight.Path(preflight.__file__).resolve()))
+        self.assertEqual(environment[preflight.PYTHON_REEXEC_GUARD], "1")
+
+    def test_preflight_reports_old_python_when_no_supported_runtime_exists(self):
+        with mock.patch.object(preflight.sys, "version_info", (3, 9, 6)), mock.patch.object(
+            preflight.shutil, "which", return_value=None
+        ), mock.patch.object(preflight.os, "execve") as execve:
+            self.assertFalse(
+                preflight._reexec_under_supported_python({"PATH": "/usr/bin"})
+            )
+        execve.assert_not_called()
+
     def test_preflight_discovers_all_bundled_skills(self):
         with tempfile.TemporaryDirectory() as directory:
             result = preflight.run_checks({"XDG_CONFIG_HOME": directory})

@@ -42,6 +42,20 @@ LARK_SKILLS_RECOVERY = (
     "安装官方 Lark Skills，然后新开 Agent 会话"
 )
 MIN_LARK_CLI_VERSION = (1, 0, 73)
+MIN_PYTHON_VERSION = (3, 10)
+PYTHON_REEXEC_GUARD = "OFFERLOOP_PYTHON_REEXEC"
+PYTHON_CANDIDATES = tuple(
+    (name, ()) for name in (
+        "python3.15",
+        "python3.14",
+        "python3.13",
+        "python3.12",
+        "python3.11",
+        "python3.10",
+        "python3",
+        "python",
+    )
+) + (("py", ("-3",)),)
 
 
 def _load_status_model():
@@ -208,6 +222,56 @@ def _run_local_command(command, *, environ, timeout=5):
         )
     except (OSError, subprocess.SubprocessError):
         return None
+
+
+def _supported_python_command(environ):
+    """Find a Python 3.10+ executable visible to the current Agent."""
+    current = Path(sys.executable).resolve(strict=False)
+    for executable_name, prefix in PYTHON_CANDIDATES:
+        executable = shutil.which(executable_name, path=environ.get("PATH"))
+        if not executable:
+            continue
+        candidate = Path(executable).resolve(strict=False)
+        if candidate == current and sys.version_info < MIN_PYTHON_VERSION:
+            continue
+        completed = _run_local_command(
+            [
+                executable,
+                *prefix,
+                "-c",
+                "import sys; print('.'.join(map(str, sys.version_info[:3])))",
+            ],
+            environ=environ,
+        )
+        if completed is None or completed.returncode != 0:
+            continue
+        version = _version_tuple(completed.stdout)
+        if version is not None and version >= MIN_PYTHON_VERSION + (0,):
+            return executable, prefix
+    return None
+
+
+def _reexec_under_supported_python(environ=None):
+    """Recover when an Agent's `python3` points at an older system Python."""
+    if sys.version_info >= MIN_PYTHON_VERSION:
+        return False
+
+    source = dict(os.environ if environ is None else environ)
+    if source.get(PYTHON_REEXEC_GUARD) == "1":
+        return False
+
+    command = _supported_python_command(source)
+    if command is None:
+        return False
+
+    executable, prefix = command
+    source[PYTHON_REEXEC_GUARD] = "1"
+    os.execve(
+        executable,
+        [executable, *prefix, str(Path(__file__).resolve()), *sys.argv[1:]],
+        source,
+    )
+    return True
 
 
 def _version_tuple(text):
@@ -695,6 +759,7 @@ def run_checks(environ=None, capability=None, skills_roots=None):
 
 
 def main():
+    _reexec_under_supported_python()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--json", action="store_true")
     parser.add_argument(
