@@ -301,6 +301,20 @@ def _version_tuple(text):
     return tuple(int(part) for part in match.groups())
 
 
+def _lark_cli_upgrade_action(executable):
+    normalized = str(executable).replace("\\", "/")
+    workbuddy_marker = "/.workbuddy/binaries/node/cli-connector-packages/bin/"
+    if workbuddy_marker in normalized:
+        return (
+            "先在 WorkBuddy 的“专家·技能·连接器”中更新飞书连接器并新建任务；"
+            "若 WorkBuddy 管理的 lark-cli 仍低于 1.0.73，在本机终端运行 "
+            "`npm install -g --prefix \"$HOME/.workbuddy/binaries/node/"
+            "cli-connector-packages\" @larksuite/cli@latest`，然后重启 WorkBuddy。"
+            "这只更新 WorkBuddy 管理的官方 CLI，不要在聊天中发送凭证"
+        )
+    return "升级到 lark-cli 1.0.73 或更高版本"
+
+
 def _probe_lark_cli(source, configured_profile):
     search_path = source.get("PATH")
     executable = shutil.which("lark-cli", path=search_path)
@@ -334,7 +348,7 @@ def _probe_lark_cli(source, configured_profile):
             (
                 "needs_action",
                 "lark-cli 版本低于支持基线",
-                "升级到 lark-cli 1.0.73 或更高版本",
+                _lark_cli_upgrade_action(executable),
             ),
             None,
         )

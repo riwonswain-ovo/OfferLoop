@@ -80,7 +80,7 @@ IMAP 邮箱 → recruiting-reminder → 笔面试中心 → 飞书个人日历
 | Codex | `~/.codex/skills/` | 自动测试通过 | 目录契约已验证 | 自动测试通过 | 需按飞书权限逐项验证 |
 | Claude Code | `~/.claude/skills/` | 自动测试通过 | 本机 CC Switch 环境通过 | 真实 `collection` 预检通过 | 需按飞书权限逐项验证 |
 | Hermes | `~/.hermes/skills/` | 自动测试通过 | 目录契约已验证 | 自动测试通过 | 需按飞书权限逐项验证 |
-| 腾讯 WorkBuddy | `~/.workbuddy/skills/` | 自动测试通过 | 本机 5.1.7 通过 | 真实运行通过；本机依赖待升级 | 需按飞书权限逐项验证 |
+| 腾讯 WorkBuddy | `~/.workbuddy/skills/` | 自动测试通过 | 本机 5.1.7 通过 | 真实 `collection` 预检通过 | 需按飞书权限逐项验证 |
 
 更细的状态含义和 WorkBuddy 安装边界见 [多 Agent 兼容说明](docs/agent-compatibility.md)。
 

@@ -492,6 +492,24 @@ class OfferLoopSetupTest(unittest.TestCase):
             lark, profile = preflight._probe_lark_cli({}, "missing")
         self.assertEqual(lark[0], "needs_action")
         self.assertIsNone(profile)
+        self.assertEqual(lark[2], "升级到 lark-cli 1.0.73 或更高版本")
+
+        workbuddy_executable = (
+            "/tmp/.workbuddy/binaries/node/"
+            "cli-connector-packages/bin/lark-cli"
+        )
+        with mock.patch.object(
+            preflight.shutil, "which", return_value=workbuddy_executable
+        ), mock.patch.object(
+            preflight, "_run_local_command", return_value=old_version
+        ):
+            lark, profile = preflight._probe_lark_cli({}, "missing")
+        self.assertEqual(lark[0], "needs_action")
+        self.assertIsNone(profile)
+        self.assertIn("WorkBuddy", lark[2])
+        self.assertIn("cli-connector-packages", lark[2])
+        self.assertIn("@larksuite/cli@latest", lark[2])
+        self.assertNotIn("/tmp", lark[2])
 
         def missing_profile_run(command, **_kwargs):
             if command[-1] == "--version":

@@ -10,6 +10,7 @@
 - 求职进展同步服务测试：20 项通过。
 - 四 Agent 隔离 HOME 冷安装：Codex、Claude Code、Hermes、腾讯 WorkBuddy 均安装四个 Skill，重复执行返回 `already_installed`。
 - Claude Code：在 CC Switch 当前启用的第三方模型环境中，真实加载发布版 `offerloop-setup` 并从个人安装目录执行 `collection` JSON 预检；本地项全部 `ready`，未发生配置或线上写入。该结论不泛化到其他第三方模型。
+- 腾讯 WorkBuddy：后续于 2026-07-23 在真实 5.1.7 新任务中复验；将 WorkBuddy 管理的官方 CLI 更新至 `1.0.76` 后，运行时发现 3 个 profile，`collection` 本地检查无 `blocked`/`needs_action`，仅线上权限与通知保持 `unverified`。
 - 冲突不覆盖、`--upgrade` 先备份、安装清单脱敏、`--agent all` 只处理已列目标。
 - Windows 预检不使用 POSIX `0600` 位作为保密性判断，避免在三系统冷安装中误阻断。
 - 四份公共 frontmatter 仅包含单行 `name` 和 `description`，并通过仓库兼容检查。
@@ -21,5 +22,4 @@ CI 已配置 Ubuntu、macOS 和 Windows 的四 Agent 隔离 HOME 冷安装。三
 
 ## 未解除的外部门禁
 
-- 腾讯 WorkBuddy：真实 5.1.7 运行时已验证 AgentSkills `SKILL.md` 目录加载与四项离线预检；当前 WorkBuddy 可见的 `lark-cli` 低于 1.0.73，升级该依赖并选择 profile 前，涉及飞书的本地 profile 检查仍会保持 `blocked`。
 - 飞书、邮箱、日历、知识库和妙搭的在线身份/权限必须依用户和资源单独验收，离线通过不代表已授权。
