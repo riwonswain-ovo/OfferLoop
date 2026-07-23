@@ -56,10 +56,12 @@ JSON body with only the minimum recruitment metadata:
 }
 ```
 
-The target lookup key is `企业清单 record_id`. A first event creates one record
-with a blank `投递岗位` and `岗位 JD`, while `公告链接` and `投递链接` mirror the
-enterprise record; later retries preserve user-edited fields, the first
-`投递日期`, and any later interview stage. Creation uses a stable Feishu
+`企业清单 record_id` is a repeatable parent key: one enterprise record may have
+multiple progress rows for different jobs. `投递记录 ID` uniquely identifies each
+application. A first event creates one default record with a blank `投递岗位`
+and `岗位 JD`; later retries update every job row under that parent while preserving
+user-edited fields, the first `投递日期`, and any later interview stage. Missing
+application IDs are backfilled from the progress record ID. Creation uses a stable Feishu
 `client_token`, so retrying the same source record remains idempotent.
 
 ## Feishu FaaS adapter

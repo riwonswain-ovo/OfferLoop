@@ -44,6 +44,8 @@ class JobCollectionConfigTest(unittest.TestCase):
         self.assertIn("`感兴趣`", content)
         self.assertIn("scripts/progress_sync.py", content)
         self.assertIn("企业清单 record_id", content)
+        self.assertIn("`投递记录 ID`", content)
+        self.assertIn("合法的一对多关系", content)
         self.assertIn("信息更新时间 desc, 公司 asc", content)
         self.assertIn("没有配置 `progress_base_url` 时跳过跨 Base 对账", content)
         self.assertIn("不能因此阻塞", content)

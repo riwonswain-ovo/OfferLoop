@@ -88,7 +88,9 @@ app_token、table_id、is_active、credential_status、last_sync_time、last_syn
 
 ## 7. 独立求职进展
 
-`progress_base_url` 是可选联动资源，不属于企业 Base 的子表。存在时只读验证字段和权限；
+`progress_base_url` 是可选联动资源，不属于企业 Base 的子表。存在时验证字段和权限，并确保
+存在文本字段 `投递记录 ID`；接管旧表时只补该字段，并为每条缺失记录回填
+`progress:<求职进展 record_id>`，不改写岗位、JD、日期、阶段或父级关联键；
 不存在时企业同步仍可独立运行，并在摘要中标为“求职进展对账未启用”。
 
 不要在 `job-collection` 初始化过程中静默创建知识库或首页；这些资源由

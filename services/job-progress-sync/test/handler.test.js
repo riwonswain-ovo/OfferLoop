@@ -112,8 +112,8 @@ test("rejects incomplete submitted event fields before accessing Feishu", async 
 test("creates a progress record for the first submitted event", async () => {
   const created = [];
   const repository = {
-    async findByEnterpriseRecordId() {
-      return null;
+    async findAllByEnterpriseRecordId() {
+      return [];
     },
     async create(fields) {
       created.push(fields);
@@ -150,6 +150,7 @@ test("creates a progress record for the first submitted event", async () => {
       "公告链接": "https://example.com/notice",
       "投递链接": "https://example.com/apply",
       "企业清单 record_id": "rec_source",
+      "投递记录 ID": "enterprise:rec_source:default",
     },
   ]);
 });
@@ -158,8 +159,8 @@ test("creates a progress record for the first submitted event", async () => {
 test("repeat submission preserves user fields and later interview stage", async () => {
   const updates = [];
   const repository = {
-    async findByEnterpriseRecordId() {
-      return {
+    async findAllByEnterpriseRecordId() {
+      return [{
         record_id: "rec_progress",
         fields: {
           "当前阶段": "二面",
@@ -172,7 +173,7 @@ test("repeat submission preserves user fields and later interview stage", async 
           "投递链接": "https://old.example/apply",
           "企业清单 record_id": "rec_source",
         },
-      };
+      }];
     },
     async update(recordId, fields) {
       updates.push({ recordId, fields });
@@ -196,7 +197,12 @@ test("repeat submission preserves user fields and later interview stage", async 
 
   assert.deepEqual(response, {
     status: 200,
-    body: { ok: true, action: "updated", record_id: "rec_progress" },
+    body: {
+      ok: true,
+      action: "updated",
+      record_id: "rec_progress",
+      matched_count: 1,
+    },
   });
   assert.equal(updates[0].fields["当前阶段"], "二面");
   assert.equal(updates[0].fields["投递岗位"], "AI 产品经理");
@@ -205,6 +211,7 @@ test("repeat submission preserves user fields and later interview stage", async 
   assert.equal(updates[0].fields["公司"], "新公司名");
   assert.equal(updates[0].fields["公告链接"], "https://new.example/notice");
   assert.equal(updates[0].fields["投递链接"], "https://new.example/apply");
+  assert.equal(updates[0].fields["投递记录 ID"], "progress:rec_progress");
   assert.equal("原招聘信息" in updates[0].fields, false);
 });
 
@@ -222,8 +229,11 @@ test("identical retry does not write the progress record again", async () => {
     "企业清单 record_id": "rec_source",
   };
   const repository = {
-    async findByEnterpriseRecordId() {
-      return { record_id: "rec_progress", fields: existingFields };
+    async findAllByEnterpriseRecordId() {
+      return [{
+        record_id: "rec_progress",
+        fields: { ...existingFields, "投递记录 ID": "progress:rec_progress" },
+      }];
     },
     async update() {
       updateCount += 1;
@@ -247,7 +257,75 @@ test("identical retry does not write the progress record again", async () => {
 
   assert.deepEqual(response, {
     status: 200,
-    body: { ok: true, action: "unchanged", record_id: "rec_progress" },
+    body: {
+      ok: true,
+      action: "unchanged",
+      record_id: "rec_progress",
+      matched_count: 1,
+    },
   });
   assert.equal(updateCount, 0);
+});
+
+
+test("updates every distinct job under the same enterprise record", async () => {
+  const updates = [];
+  const repository = {
+    async findAllByEnterpriseRecordId() {
+      return [
+        {
+          record_id: "rec_job_one",
+          fields: {
+            "当前阶段": "一面",
+            "公司": "旧公司名",
+            "投递岗位": "AI 产品经理",
+            "投递日期": "2026-07-10",
+            "岗位 JD": "岗位一",
+            "企业清单 record_id": "rec_source",
+          },
+        },
+        {
+          record_id: "rec_job_two",
+          fields: {
+            "当前阶段": "已投递",
+            "公司": "旧公司名",
+            "投递岗位": "策略产品经理",
+            "投递日期": "2026-07-11",
+            "岗位 JD": "岗位二",
+            "企业清单 record_id": "rec_source",
+            "投递记录 ID": "manual:job-two",
+          },
+        },
+      ];
+    },
+    async update(recordId, fields) {
+      updates.push({ recordId, fields });
+    },
+  };
+
+  const response = await handleSyncRequest(
+    {
+      headers: { "x-offerloop-secret": "expected" },
+      body: {
+        event: "application.submitted",
+        source_record_id: "rec_source",
+        company: "新公司名",
+        announcement_url: "https://new.example/notice",
+        application_url: "https://new.example/apply",
+        transitioned_at: "2026-07-18T19:00:00+08:00",
+      },
+    },
+    { webhookSecret: "expected", repository },
+  );
+
+  assert.equal(response.body.action, "updated");
+  assert.equal(response.body.matched_count, 2);
+  assert.deepEqual(updates.map(({ recordId }) => recordId), [
+    "rec_job_one",
+    "rec_job_two",
+  ]);
+  assert.equal(updates[0].fields["投递岗位"], "AI 产品经理");
+  assert.equal(updates[1].fields["投递岗位"], "策略产品经理");
+  assert.equal(updates[0].fields["投递记录 ID"], "progress:rec_job_one");
+  assert.equal(updates[1].fields["投递记录 ID"], "manual:job-two");
 });

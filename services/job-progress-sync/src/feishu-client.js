@@ -66,32 +66,36 @@ export class FeishuProgressRepository {
     }, this.retryOptions);
   }
 
-  async findByEnterpriseRecordId(sourceRecordId) {
-    const url =
-      `${OPEN_API_ROOT}/bitable/v1/apps/${this.baseToken}`
-      + `/tables/${this.tableId}/records/search?page_size=2`;
-    const data = await this.request(url, {
-      method: "POST",
-      body: JSON.stringify({
-        filter: {
-          conjunction: "and",
-          conditions: [
-            {
-              field_name: "企业清单 record_id",
-              operator: "is",
-              value: [sourceRecordId],
-            },
-          ],
-        },
-      }),
-    });
-    const items = data.items ?? [];
-    if (items.length > 1) {
-      throw new Error(
-        `duplicate progress records for enterprise record id: ${sourceRecordId}`,
-      );
-    }
-    return items[0] ?? null;
+  async findAllByEnterpriseRecordId(sourceRecordId) {
+    const items = [];
+    let pageToken = "";
+    do {
+      const query = new URLSearchParams({ page_size: "500" });
+      if (pageToken) {
+        query.set("page_token", pageToken);
+      }
+      const url =
+        `${OPEN_API_ROOT}/bitable/v1/apps/${this.baseToken}`
+        + `/tables/${this.tableId}/records/search?${query}`;
+      const data = await this.request(url, {
+        method: "POST",
+        body: JSON.stringify({
+          filter: {
+            conjunction: "and",
+            conditions: [
+              {
+                field_name: "企业清单 record_id",
+                operator: "is",
+                value: [sourceRecordId],
+              },
+            ],
+          },
+        }),
+      });
+      items.push(...(data.items ?? []));
+      pageToken = data.has_more ? String(data.page_token ?? "") : "";
+    } while (pageToken);
+    return items;
   }
 
   async create(fields) {
