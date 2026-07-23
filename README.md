@@ -12,7 +12,7 @@
 
 </div>
 
-> 当前版本：[0.1.0-alpha.3 预发布版](https://github.com/riwonswain-ovo/OfferLoop/releases/tag/v0.1.0-alpha.3)。旧用户请直接阅读[如何升级](#4-旧用户如何升级)。
+> 当前版本：[0.1.0-alpha.4 预发布版](https://github.com/riwonswain-ovo/OfferLoop/releases/tag/v0.1.0-alpha.4)。旧用户请直接阅读[如何升级](#4-旧用户如何升级)。
 
 OfferLoop 包含 4 个可以独立使用、也可以组合使用的标准 Agent Skill。安装全部 Skill 不代表必须启用全部功能；你可以只同步招聘信息、只管理笔面试提醒、只使用求职空间，或逐步搭建完整工作流。
 
@@ -372,7 +372,7 @@ npm --prefix services/job-progress-sync test
 python3 skills/job-collection/scripts/validate_skill.py
 ```
 
-GitHub CI 会执行多系统冷安装、仓库契约测试和两份应用模板的安装、测试、类型检查与构建。合成端到端用例见[验收用例](docs/cases/end-to-end-acceptance.md)，发布门禁见[发布前验收](docs/cases/release-acceptance-2026-07-21.md)，当前版本说明见[0.1.0-alpha.3](docs/releases/0.1.0-alpha.3.md)，最新真实运行结论见[运行时认证](docs/cases/runtime-certification-2026-07-22.md)。
+GitHub CI 会执行多系统冷安装、仓库契约测试和两份应用模板的安装、测试、类型检查与构建。合成端到端用例见[验收用例](docs/cases/end-to-end-acceptance.md)，发布门禁见[发布前验收](docs/cases/release-acceptance-2026-07-21.md)，当前版本说明见[0.1.0-alpha.4](docs/releases/0.1.0-alpha.4.md)，最新真实运行结论见[运行时认证](docs/cases/runtime-certification-2026-07-22.md)。
 
 ## License
 

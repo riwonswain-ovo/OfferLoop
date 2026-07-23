@@ -255,7 +255,7 @@ class OfferLoopInstallerTest(unittest.TestCase):
 
     def test_version_reports_installer_and_offerloop_versions(self):
         self.assertEqual(self.installer.INSTALLER_VERSION, "1.0")
-        self.assertEqual(self.installer.offerloop_version(), "0.1.0-alpha.3")
+        self.assertEqual(self.installer.offerloop_version(), "0.1.0-alpha.4")
 
     def test_workbuddy_install_is_complete_and_idempotent(self):
         with tempfile.TemporaryDirectory() as directory:
