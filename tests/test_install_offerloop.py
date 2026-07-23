@@ -3,6 +3,7 @@ import contextlib
 import importlib.util
 import io
 import json
+import shutil
 import tempfile
 import unittest
 from unittest import mock
@@ -182,6 +183,62 @@ class OfferLoopInstallerTest(unittest.TestCase):
             )
             self.assertTrue(report["dry_run"])
             self.assertFalse((Path(directory) / ".codex").exists())
+
+    def test_human_dry_run_output_cannot_be_mistaken_for_installation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = io.StringIO()
+            with mock.patch.dict(
+                self.installer.os.environ,
+                {"HOME": directory, "PATH": ""},
+                clear=True,
+            ), contextlib.redirect_stdout(output):
+                exit_code = self.installer.main(["--agent", "codex", "--dry-run"])
+
+            rendered = output.getvalue()
+            self.assertEqual(exit_code, 0)
+            self.assertIn("DRY RUN", rendered)
+            self.assertIn("未写入任何 Skill 文件", rendered)
+            self.assertIn("would install", rendered)
+            self.assertNotIn("codex: installed", rendered)
+            self.assertFalse((Path(directory) / ".codex").exists())
+
+    def test_human_install_output_explains_session_restart_and_preflight(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = io.StringIO()
+            with mock.patch.dict(
+                self.installer.os.environ,
+                {"HOME": directory, "PATH": ""},
+                clear=True,
+            ), contextlib.redirect_stdout(output):
+                exit_code = self.installer.main(["--agent", "codex"])
+
+            rendered = output.getvalue()
+            self.assertEqual(exit_code, 0)
+            self.assertIn("4 个 Skill 已处理完成", rendered)
+            self.assertIn("结束当前 Agent 会话并新开会话", rendered)
+            self.assertIn("offerloop-setup 运行只读预检", rendered)
+
+    def test_generated_directories_do_not_affect_digest_or_copy(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "source"
+            root.mkdir()
+            (root / "SKILL.md").write_text("kept\n", encoding="utf-8")
+            digest = self.installer.tree_digest(root)
+
+            for name in ("node_modules", "dist", "build"):
+                generated = root / "assets" / name
+                generated.mkdir(parents=True)
+                (generated / "generated.txt").write_text(
+                    f"ignored {name}\n", encoding="utf-8"
+                )
+
+            self.assertEqual(self.installer.tree_digest(root), digest)
+
+            destination = Path(directory) / "destination"
+            shutil.copytree(root, destination, ignore=self.installer._ignore_copy)
+            self.assertTrue((destination / "SKILL.md").is_file())
+            for name in ("node_modules", "dist", "build"):
+                self.assertFalse((destination / "assets" / name).exists())
 
     def test_result_status_contract_is_complete(self):
         self.assertEqual(

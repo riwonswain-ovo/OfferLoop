@@ -12,7 +12,39 @@
 
 </div>
 
-> **0.1.0-alpha.2（发布候选）**：OfferLoop 现提供 Codex、Claude Code、Hermes 和腾讯 WorkBuddy 的统一安装器。WorkBuddy 的真实加载与离线 `collection` 预检已复验，并在低版本飞书 CLI 时提供不破坏用户 profile 的恢复指引。运行时与线上能力仍按 Agent 分别认证，不因文件安装成功而统一宣称可用。旧用户请先阅读 [旧用户如何升级](#旧用户如何升级)。
+> **[0.1.0-alpha.2 预发布版](https://github.com/riwonswain-ovo/OfferLoop/releases/tag/v0.1.0-alpha.2)**：OfferLoop 现提供 Codex、Claude Code、Hermes 和腾讯 WorkBuddy 的统一安装器。WorkBuddy 的真实加载与离线 `collection` 预检已复验，并在低版本飞书 CLI 时提供不破坏用户 profile 的恢复指引。运行时与线上能力仍按 Agent 分别认证，不因文件安装成功而统一宣称可用。旧用户请先阅读 [旧用户如何升级](#旧用户如何升级)。
+
+## 新用户：3 分钟开始
+
+OfferLoop 是一套会同时安装 **4 个协作 Skill** 的求职工作流，不是单一 Skill。首次只需完成“安装并做本机检查”；飞书、邮箱、日历和工作台可以按需要在后续逐项启用。
+
+### 1. 安装四个 Skill
+
+先准备 Git 和 Python 3.10+，再在终端执行。将 `codex` 换成你正在使用的 Agent：`claude-code`、`hermes-agent` 或 `workbuddy`。
+
+```bash
+git clone https://github.com/riwonswain-ovo/OfferLoop.git
+cd OfferLoop
+python3 scripts/install_offerloop.py --agent codex
+```
+
+这一步只复制 OfferLoop 的四个 Skill；不创建飞书资源、不读取邮箱，也不会要求你提供密码、token 或 App Secret。
+
+### 2. 结束当前 Agent 会话，再新开一个会话
+
+Agent 通常只在会话开始时发现 Skill。若在刚安装的同一会话中继续对话，可能暂时找不到 `offerloop-setup`。
+
+### 3. 运行只读预检
+
+在新会话中发送：
+
+```text
+请调用 offerloop-setup。我第一次使用 OfferLoop，先只读检查环境和我想启用的能力；不要创建或修改飞书资源。
+```
+
+预检会先让你选择 `collection`、`reminder`、`workspace` 或 `full`。首次看到 `needs_action`（仍需登记本地定位）或 `unverified`（线上权限尚未核验）是正常的，不代表四个 Skill 没有安装成功。若只想同步招聘信息，先选 `collection`；它不要求 IMAP、个人日历、知识库或工作台。
+
+> 想启用飞书业务能力时，才需要另外安装或启用 `lark-cli` 及所选能力所需的 Lark Skill，并配置 profile 和资源权限。完整说明见 [完整安装与前置条件](#完整安装与前置条件)。
 
 ## 这次更新了什么
 
@@ -72,7 +104,7 @@ IMAP 邮箱 → recruiting-reminder → 笔面试中心 → 飞书个人日历
 | `recruiting-reminder` | 从 IMAP 邮箱识别笔试、测评和面试，先确认再写入笔面试中心/日历 | “扫描最近 7 天招聘邮件，先给我识别结果” |
 | `offerloop-workspace` | 管理私有知识库首页、固定导航和资源入口 | “检查我的 OfferLoop 求职空间，只读不要修复” |
 
-## 新用户：从这里开始
+## 完整安装与前置条件
 
 ### Agent 兼容状态
 
@@ -85,7 +117,7 @@ IMAP 邮箱 → recruiting-reminder → 笔面试中心 → 飞书个人日历
 
 更细的状态含义和 WorkBuddy 安装边界见 [多 Agent 兼容说明](docs/agent-compatibility.md)。
 
-### 最小成功契约
+### 什么算安装完成
 
 对新用户而言，**最小成功**是：在同一个 Agent 环境中安装并发现下面四个 OfferLoop Skill，
 重新开启一个 Agent 会话，然后让 `offerloop-setup` 对你选定的一项能力做只读本机检查。
@@ -138,7 +170,7 @@ Windows PowerShell 使用：
 py -3 scripts/install_offerloop.py --agent claude-code
 ```
 
-可先用 `--dry-run` 查看目标和冲突，用 `--json` 获取机器可读结果。需要同时安装所有已列目标时可用
+可先用 `--dry-run` 查看目标和冲突，用 `--json` 获取机器可读结果。`--dry-run` 只预览，不会写入任何 Skill 文件。需要同时安装所有已列目标时可用
 `--agent all`。重复安装是幂等的；发现不同内容时默认
 返回 `conflict`，只有明确使用 `--upgrade` 才会先备份后替换。
 

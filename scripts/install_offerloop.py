@@ -35,7 +35,15 @@ RESULT_STATUSES = (
     "prepared_for_import",
     "unsupported",
 )
-IGNORED_PARTS = {"__pycache__", "tests", ".pytest_cache", ".mypy_cache"}
+IGNORED_PARTS = {
+    "__pycache__",
+    "tests",
+    ".pytest_cache",
+    ".mypy_cache",
+    "node_modules",
+    "dist",
+    "build",
+}
 IGNORED_NAMES = {".DS_Store"}
 MANIFEST_NAME = ".offerloop-install.json"
 
@@ -110,6 +118,36 @@ def _frontmatter(path: Path) -> dict[str, str]:
     return values
 
 
+def _is_ignored(path: Path) -> bool:
+    return (
+        path.name in IGNORED_NAMES
+        or path.name in IGNORED_PARTS
+        or path.suffix == ".pyc"
+    )
+
+
+def _source_symlinks(root: Path) -> list[Path]:
+    """Find source symlinks without descending into generated directories."""
+    found = []
+    for directory, dirnames, filenames in os.walk(root, topdown=True, followlinks=False):
+        parent = Path(directory)
+        kept_directories = []
+        for name in sorted(dirnames):
+            path = parent / name
+            if _is_ignored(path):
+                continue
+            if path.is_symlink():
+                found.append(path)
+            else:
+                kept_directories.append(name)
+        dirnames[:] = kept_directories
+        for name in sorted(filenames):
+            path = parent / name
+            if not _is_ignored(path) and path.is_symlink():
+                found.append(path)
+    return found
+
+
 def validate_sources() -> None:
     discovered = {
         path.parent.name for path in SKILLS_SOURCE.glob("*/SKILL.md") if path.is_file()
@@ -132,20 +170,23 @@ def validate_sources() -> None:
             raise ValueError(f"{name}: frontmatter description is required")
         if len(description) > 1024 or "<" in description or ">" in description:
             raise ValueError(f"{name}: invalid AgentSkills description")
-        symlinks = [path for path in skill_file.parent.rglob("*") if path.is_symlink()]
+        symlinks = _source_symlinks(skill_file.parent)
         if symlinks:
             raise ValueError(f"{name}: symbolic links are not allowed in install sources")
 
 
 def _included_files(root: Path):
-    for path in sorted(root.rglob("*")):
-        relative = path.relative_to(root)
-        if any(part in IGNORED_PARTS for part in relative.parts):
-            continue
-        if path.name in IGNORED_NAMES or path.suffix == ".pyc":
-            continue
-        if path.is_file():
-            yield path, relative
+    for directory, dirnames, filenames in os.walk(root, topdown=True, followlinks=False):
+        parent = Path(directory)
+        dirnames[:] = [
+            name
+            for name in sorted(dirnames)
+            if not _is_ignored(parent / name) and not (parent / name).is_symlink()
+        ]
+        for name in sorted(filenames):
+            path = parent / name
+            if not _is_ignored(path) and path.is_file():
+                yield path, path.relative_to(root)
 
 
 def tree_digest(root: Path) -> str:
@@ -187,13 +228,8 @@ def _skill_directories(root: Path, name: str) -> tuple[Path, ...]:
 
 
 def _ignore_copy(directory: str, names: list[str]) -> set[str]:
-    ignored = set()
     parent = Path(directory)
-    for name in names:
-        path = parent / name
-        if name in IGNORED_NAMES or name in IGNORED_PARTS or path.suffix == ".pyc":
-            ignored.add(name)
-    return ignored
+    return {name for name in names if _is_ignored(parent / name)}
 
 
 def _manifest_payload(agent: str, digests: dict[str, str]) -> dict:
@@ -579,13 +615,32 @@ def main(argv=None) -> int:
     if args.as_json:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
+        if args.dry_run:
+            print("DRY RUN：仅预览，未写入任何 Skill 文件。")
         for report in reports:
+            status = report["status"]
+            if args.dry_run:
+                status = {
+                    "installed": "would install",
+                    "upgraded": "would upgrade",
+                    "already_installed": "already installed; no changes needed",
+                    "conflict": "conflict; installation would stop",
+                }.get(status, status)
             print(
-                f"{report['agent']}: {report['status']} "
+                f"{report['agent']}: {status} "
                 f"(target: {report['target']})"
             )
             if report.get("next_action"):
                 print(f"  {report['next_action']}")
+        completed = {"installed", "already_installed", "upgraded"}
+        if not args.dry_run and any(
+            report["status"] in completed for report in reports
+        ):
+            print("OfferLoop 的 4 个 Skill 已处理完成。")
+            print(
+                "下一步：结束当前 Agent 会话并新开会话，然后调用 "
+                "offerloop-setup 运行只读预检。"
+            )
     return 1 if any(report["status"] == "conflict" for report in reports) else 0
 
 
