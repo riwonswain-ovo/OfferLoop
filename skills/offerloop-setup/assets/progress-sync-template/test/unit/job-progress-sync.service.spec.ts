@@ -119,6 +119,7 @@ describe('JobProgressSyncService', (): void => {
         公告链接: 'https://example.com/notice',
         投递链接: 'https://example.com/apply',
         '企业清单 record_id': 'rec_source',
+        '投递记录 ID': 'enterprise:rec_source:default',
       },
     });
   });
@@ -194,6 +195,91 @@ describe('JobProgressSyncService', (): void => {
         '岗位 JD': '负责 AI 产品规划',
         公告链接: 'https://new.example/notice',
         投递链接: 'https://new.example/apply',
+        '投递记录 ID': 'progress:rec_progress',
+      },
+    });
+  });
+
+  it('preserves and updates multiple jobs for one enterprise', async (): Promise<void> => {
+    const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
+      const url: string = String(config.url ?? '');
+      if (url.endsWith('/auth/v3/tenant_access_token/internal')) {
+        return { code: 0, tenant_access_token: 'tenant-token', expire: 7200 };
+      }
+      if (url.includes('/source-base/tables/source-table/records/rec_source')) {
+        return {
+          code: 0,
+          data: {
+            record: {
+              record_id: 'rec_source',
+              fields: {
+                公司: '新公司名',
+                投递进度: '已投递',
+                公告链接: 'https://new.example/notice',
+                投递链接: 'https://new.example/apply',
+              },
+            },
+          },
+        };
+      }
+      if (url.includes('/records/search')) {
+        return {
+          code: 0,
+          data: {
+            items: [
+              {
+                record_id: 'rec_job_one',
+                fields: {
+                  当前阶段: '一面',
+                  公司: '旧公司名',
+                  投递岗位: 'AI 产品经理',
+                  投递日期: Date.parse('2026-07-10T00:00:00+08:00'),
+                  '岗位 JD': '岗位一',
+                  '企业清单 record_id': 'rec_source',
+                },
+              },
+              {
+                record_id: 'rec_job_two',
+                fields: {
+                  当前阶段: '已投递',
+                  公司: '旧公司名',
+                  投递岗位: '策略产品经理',
+                  投递日期: Date.parse('2026-07-11T00:00:00+08:00'),
+                  '岗位 JD': '岗位二',
+                  '企业清单 record_id': 'rec_source',
+                  '投递记录 ID': 'manual:job-two',
+                },
+              },
+            ],
+          },
+        };
+      }
+      return {
+        code: 0,
+        data: { record: { record_id: 'rec_progress', fields: {} } },
+      };
+    });
+
+    const result = await mock.service.sync({ sourceRecordId: 'rec_source' });
+
+    expect(result.action).toBe('updated');
+    const updates: InternalAxiosRequestConfig[] = mock.calls.filter(
+      (config: InternalAxiosRequestConfig): boolean =>
+        String(config.method).toUpperCase() === 'PUT',
+    );
+    expect(updates).toHaveLength(2);
+    expect(parseRequestData(updates[0])).toMatchObject({
+      fields: {
+        投递岗位: 'AI 产品经理',
+        '岗位 JD': '岗位一',
+        '投递记录 ID': 'progress:rec_job_one',
+      },
+    });
+    expect(parseRequestData(updates[1])).toMatchObject({
+      fields: {
+        投递岗位: '策略产品经理',
+        '岗位 JD': '岗位二',
+        '投递记录 ID': 'manual:job-two',
       },
     });
   });

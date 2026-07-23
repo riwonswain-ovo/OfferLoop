@@ -53,10 +53,10 @@ export async function handleSyncRequest(request, deps) {
       },
     };
   }
-  const existing = await deps.repository.findByEnterpriseRecordId(
+  const existingRecords = await deps.repository.findAllByEnterpriseRecordId(
     payload.source_record_id,
   );
-  if (existing === null) {
+  if (existingRecords.length === 0) {
     const fields = {
       "当前阶段": "已投递",
       "公司": payload.company,
@@ -66,6 +66,7 @@ export async function handleSyncRequest(request, deps) {
       "公告链接": payload.announcement_url ?? "",
       "投递链接": payload.application_url ?? "",
       "企业清单 record_id": payload.source_record_id,
+      "投递记录 ID": `enterprise:${payload.source_record_id}:default`,
     };
     const recordId = await deps.repository.create(fields);
     return {
@@ -74,29 +75,36 @@ export async function handleSyncRequest(request, deps) {
     };
   }
 
-  const fields = {
-    ...existing.fields,
-    "当前阶段": existing.fields["当前阶段"] || "已投递",
-    "公司": payload.company,
-    "投递岗位": existing.fields["投递岗位"] ?? "",
-    "投递日期":
-      existing.fields["投递日期"] || String(payload.transitioned_at).slice(0, 10),
-    "岗位 JD": existing.fields["岗位 JD"] ?? "",
-    "公告链接": payload.announcement_url ?? "",
-    "投递链接": payload.application_url ?? "",
-    "企业清单 record_id": payload.source_record_id,
-  };
-  delete fields["原招聘信息"];
-  if (isDeepStrictEqual(fields, existing.fields)) {
-    return {
-      status: 200,
-      body: { ok: true, action: "unchanged", record_id: existing.record_id },
+  const updatedRecordIds = [];
+  for (const existing of existingRecords) {
+    const fields = {
+      ...existing.fields,
+      "当前阶段": existing.fields["当前阶段"] || "已投递",
+      "公司": payload.company,
+      "投递岗位": existing.fields["投递岗位"] ?? "",
+      "投递日期":
+        existing.fields["投递日期"] || String(payload.transitioned_at).slice(0, 10),
+      "岗位 JD": existing.fields["岗位 JD"] ?? "",
+      "公告链接": payload.announcement_url ?? "",
+      "投递链接": payload.application_url ?? "",
+      "企业清单 record_id": payload.source_record_id,
+      "投递记录 ID":
+        existing.fields["投递记录 ID"] || `progress:${existing.record_id}`,
     };
+    delete fields["原招聘信息"];
+    if (!isDeepStrictEqual(fields, existing.fields)) {
+      await deps.repository.update(existing.record_id, fields);
+      updatedRecordIds.push(existing.record_id);
+    }
   }
-  await deps.repository.update(existing.record_id, fields);
   return {
     status: 200,
-    body: { ok: true, action: "updated", record_id: existing.record_id },
+    body: {
+      ok: true,
+      action: updatedRecordIds.length > 0 ? "updated" : "unchanged",
+      record_id: existingRecords[0].record_id,
+      matched_count: existingRecords.length,
+    },
   };
 
 }

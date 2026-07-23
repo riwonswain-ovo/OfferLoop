@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { FeishuProgressRepository } from "../src/feishu-client.js";
 
 
-test("finds a progress record by the enterprise record id field", async () => {
+test("finds all progress records by the enterprise record id field", async () => {
   const requests = [];
   const fetchImpl = async (url, options) => {
     requests.push({ url, options });
@@ -35,12 +35,12 @@ test("finds a progress record by the enterprise record id field", async () => {
     fetchImpl,
   });
 
-  const result = await repository.findByEnterpriseRecordId("rec_source");
+  const result = await repository.findAllByEnterpriseRecordId("rec_source");
 
-  assert.equal(result.record_id, "rec_progress");
+  assert.equal(result[0].record_id, "rec_progress");
   assert.equal(
     requests[0].url,
-    "https://open.feishu.cn/open-apis/bitable/v1/apps/app_example/tables/tblExample/records/search?page_size=2",
+    "https://open.feishu.cn/open-apis/bitable/v1/apps/app_example/tables/tblExample/records/search?page_size=500",
   );
   assert.equal(requests[0].options.method, "POST");
   assert.equal(requests[0].options.headers.Authorization, "Bearer tenant-token");
@@ -57,7 +57,7 @@ test("finds a progress record by the enterprise record id field", async () => {
 });
 
 
-test("returns null when no matching progress record exists", async () => {
+test("returns an empty list when no matching progress record exists", async () => {
   const repository = new FeishuProgressRepository({
     baseToken: "app_example",
     tableId: "tblExample",
@@ -70,11 +70,11 @@ test("returns null when no matching progress record exists", async () => {
     }),
   });
 
-  assert.equal(await repository.findByEnterpriseRecordId("rec_missing"), null);
+  assert.deepEqual(await repository.findAllByEnterpriseRecordId("rec_missing"), []);
 });
 
 
-test("rejects duplicate progress records for the same enterprise record id", async () => {
+test("returns multiple jobs for the same enterprise record id", async () => {
   const repository = new FeishuProgressRepository({
     baseToken: "app_example",
     tableId: "tblExample",
@@ -95,9 +95,12 @@ test("rejects duplicate progress records for the same enterprise record id", asy
     }),
   });
 
-  await assert.rejects(
-    repository.findByEnterpriseRecordId("rec_duplicate"),
-    /duplicate progress records/i,
+  assert.deepEqual(
+    await repository.findAllByEnterpriseRecordId("rec_duplicate"),
+    [
+      { record_id: "rec_one", fields: {} },
+      { record_id: "rec_two", fields: {} },
+    ],
   );
 });
 
@@ -210,6 +213,6 @@ test("retries transient Feishu failures before returning a record", async () => 
     },
   });
 
-  assert.equal(await repository.findByEnterpriseRecordId("rec_source"), null);
+  assert.deepEqual(await repository.findAllByEnterpriseRecordId("rec_source"), []);
   assert.equal(attempts, 3);
 });

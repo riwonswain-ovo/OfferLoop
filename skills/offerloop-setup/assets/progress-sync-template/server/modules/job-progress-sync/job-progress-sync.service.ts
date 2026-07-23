@@ -51,6 +51,8 @@ interface RecordDetailData {
 
 interface RecordSearchData {
   items?: FeishuRecord[];
+  has_more?: boolean;
+  page_token?: string;
 }
 
 interface RecordCreateData {
@@ -198,14 +200,14 @@ export class JobProgressSyncService {
       throw new BadRequestException('source record company is empty');
     }
 
-    const existing: FeishuRecord | null = await this.findProgressRecord(
+    const existingRecords: FeishuRecord[] = await this.findProgressRecords(
       request.sourceRecordId,
     );
     const announcementUrl: string = readUrl(sourceRecord.fields['公告链接']);
     const applicationUrl: string = readUrl(sourceRecord.fields['投递链接']);
     const submittedDate: string = formatShanghaiDate(request.transitionedAt);
 
-    if (existing === null) {
+    if (existingRecords.length === 0) {
       const fields: Record<string, unknown> = {
         '当前阶段': '已投递',
         '公司': company,
@@ -215,35 +217,44 @@ export class JobProgressSyncService {
         '公告链接': announcementUrl,
         '投递链接': applicationUrl,
         '企业清单 record_id': request.sourceRecordId,
+        '投递记录 ID': `enterprise:${request.sourceRecordId}:default`,
       };
       const recordId: string = await this.createProgressRecord(fields);
       return { ok: true, action: 'created', recordId };
     }
 
-    const existingComparable: Record<string, unknown> = {
-      '当前阶段': readText(existing.fields['当前阶段']) || '已投递',
-      '公司': readText(existing.fields['公司']),
-      '投递岗位': readText(existing.fields['投递岗位']),
-      '投递日期': existing.fields['投递日期'] || submittedDate,
-      '岗位 JD': readText(existing.fields['岗位 JD']),
-      '公告链接': readUrl(existing.fields['公告链接']),
-      '投递链接': readUrl(existing.fields['投递链接']),
-      '企业清单 record_id': readText(existing.fields['企业清单 record_id']),
-    };
-    const fields: Record<string, unknown> = {
-      ...existingComparable,
-      '公司': company,
-      '公告链接': announcementUrl,
-      '投递链接': applicationUrl,
-      '企业清单 record_id': request.sourceRecordId,
-    };
-
-    if (isDeepStrictEqual(fields, existingComparable)) {
-      return { ok: true, action: 'unchanged', recordId: existing.record_id };
+    let updated: boolean = false;
+    for (const existing of existingRecords) {
+      const existingComparable: Record<string, unknown> = {
+        '当前阶段': readText(existing.fields['当前阶段']) || '已投递',
+        '公司': readText(existing.fields['公司']),
+        '投递岗位': readText(existing.fields['投递岗位']),
+        '投递日期': existing.fields['投递日期'] || submittedDate,
+        '岗位 JD': readText(existing.fields['岗位 JD']),
+        '公告链接': readUrl(existing.fields['公告链接']),
+        '投递链接': readUrl(existing.fields['投递链接']),
+        '企业清单 record_id': readText(existing.fields['企业清单 record_id']),
+        '投递记录 ID': readText(existing.fields['投递记录 ID']),
+      };
+      const fields: Record<string, unknown> = {
+        ...existingComparable,
+        '公司': company,
+        '公告链接': announcementUrl,
+        '投递链接': applicationUrl,
+        '企业清单 record_id': request.sourceRecordId,
+        '投递记录 ID': existingComparable['投递记录 ID']
+          || `progress:${existing.record_id}`,
+      };
+      if (!isDeepStrictEqual(fields, existingComparable)) {
+        await this.updateProgressRecord(existing.record_id, fields);
+        updated = true;
+      }
     }
-
-    await this.updateProgressRecord(existing.record_id, fields);
-    return { ok: true, action: 'updated', recordId: existing.record_id };
+    return {
+      ok: true,
+      action: updated ? 'updated' : 'unchanged',
+      recordId: existingRecords[0].record_id,
+    };
   }
 
   private async getSourceRecord(recordId: string): Promise<FeishuRecord> {
@@ -257,33 +268,37 @@ export class JobProgressSyncService {
     return data.record;
   }
 
-  private async findProgressRecord(sourceRecordId: string): Promise<FeishuRecord | null> {
-    const url: string = `${OPEN_API_ROOT}/bitable/v1/apps/`
-      + `${this.config.progressBaseToken}/tables/${this.config.progressTableId}`
-      + '/records/search?page_size=2';
-    const data: RecordSearchData = await this.feishuRequest<RecordSearchData>({
-      method: 'POST',
-      url,
-      data: {
-        filter: {
-          conjunction: 'and',
-          conditions: [
-            {
-              field_name: '企业清单 record_id',
-              operator: 'is',
-              value: [sourceRecordId],
-            },
-          ],
+  private async findProgressRecords(sourceRecordId: string): Promise<FeishuRecord[]> {
+    const items: FeishuRecord[] = [];
+    let pageToken: string = '';
+    do {
+      const query: URLSearchParams = new URLSearchParams({ page_size: '500' });
+      if (pageToken) {
+        query.set('page_token', pageToken);
+      }
+      const url: string = `${OPEN_API_ROOT}/bitable/v1/apps/`
+        + `${this.config.progressBaseToken}/tables/${this.config.progressTableId}`
+        + `/records/search?${query.toString()}`;
+      const data: RecordSearchData = await this.feishuRequest<RecordSearchData>({
+        method: 'POST',
+        url,
+        data: {
+          filter: {
+            conjunction: 'and',
+            conditions: [
+              {
+                field_name: '企业清单 record_id',
+                operator: 'is',
+                value: [sourceRecordId],
+              },
+            ],
+          },
         },
-      },
-    });
-    const items: FeishuRecord[] = data.items ?? [];
-    if (items.length > 1) {
-      throw new ServiceUnavailableException(
-        `duplicate progress records for source record ${sourceRecordId}`,
-      );
-    }
-    return items[0] ?? null;
+      });
+      items.push(...(data.items ?? []));
+      pageToken = data.has_more ? String(data.page_token ?? '') : '';
+    } while (pageToken);
+    return items;
   }
 
   private async createProgressRecord(fields: Record<string, unknown>): Promise<string> {
