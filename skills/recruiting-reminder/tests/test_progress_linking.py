@@ -6,6 +6,7 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 from event_model import (
+    decide_completion_status_sync,
     link_progress_records,
     next_progress_stage,
     reconciled_completion_status,
@@ -101,15 +102,52 @@ class ProgressLinkingTest(unittest.TestCase):
             "一面",
         )
 
-    def test_child_completion_status_reconciles_the_main_record(self):
-        self.assertEqual(
-            reconciled_completion_status("待完成", "已完成"),
+    def test_main_status_change_propagates_to_child(self):
+        decision = decide_completion_status_sync(
             "已完成",
+            "待完成",
+            last_synced_status="待完成",
         )
-        self.assertEqual(
-            reconciled_completion_status("已完成", "已错过"),
+
+        self.assertEqual(decision["action"], "sync")
+        self.assertEqual(decision["source"], "main")
+        self.assertEqual(decision["status"], "已完成")
+
+    def test_child_status_change_propagates_to_main(self):
+        decision = decide_completion_status_sync(
+            "待完成",
             "已错过",
+            last_synced_status="待完成",
         )
+
+        self.assertEqual(decision["action"], "sync")
+        self.assertEqual(decision["source"], "child")
+        self.assertEqual(decision["status"], "已错过")
+
+    def test_equal_statuses_refresh_the_sync_baseline(self):
+        decision = decide_completion_status_sync("已完成", "已完成")
+
+        self.assertEqual(decision["action"], "already_synced")
+        self.assertEqual(decision["status"], "已完成")
+
+    def test_mismatch_without_a_baseline_is_not_silently_overwritten(self):
+        decision = decide_completion_status_sync("已完成", "待完成")
+
+        self.assertEqual(decision["action"], "conflict")
+        self.assertIsNone(decision["status"])
+        self.assertIsNone(reconciled_completion_status("已完成", "待完成"))
+
+    def test_two_different_edits_since_last_sync_are_a_conflict(self):
+        decision = decide_completion_status_sync(
+            "已完成",
+            "已错过",
+            last_synced_status="待完成",
+        )
+
+        self.assertEqual(decision["action"], "conflict")
+        self.assertIsNone(decision["status"])
+
+    def test_valid_status_repairs_an_empty_counterpart(self):
         self.assertEqual(
             reconciled_completion_status("已完成", ""),
             "已完成",

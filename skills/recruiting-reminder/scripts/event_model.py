@@ -213,13 +213,58 @@ def next_progress_stage(current_stage, event_stage):
     return current_stage
 
 
-def reconciled_completion_status(main_status, child_status):
-    """Use a routed child record as the completion-status source of truth."""
-    if child_status in COMPLETION_STATUSES:
-        return child_status
-    if main_status in COMPLETION_STATUSES:
-        return main_status
-    return "待完成"
+def decide_completion_status_sync(
+    main_status,
+    child_status,
+    *,
+    last_synced_status=None,
+):
+    """Choose a bidirectional status update without silently losing an edit.
+
+    ``last_synced_status`` is the last value verified on both records.  When the
+    records diverge, the side that moved away from that baseline is the source
+    of the new value.  A missing baseline or two different edits is a conflict,
+    because choosing either side would discard a user's change.
+    """
+    main_valid = main_status in COMPLETION_STATUSES
+    child_valid = child_status in COMPLETION_STATUSES
+    baseline_valid = last_synced_status in COMPLETION_STATUSES
+
+    if main_valid and child_valid and main_status == child_status:
+        return {
+            "status": main_status,
+            "source": "both",
+            "action": "already_synced",
+        }
+    if main_valid and not child_valid:
+        return {"status": main_status, "source": "main", "action": "sync"}
+    if child_valid and not main_valid:
+        return {"status": child_status, "source": "child", "action": "sync"}
+
+    if main_valid and child_valid and baseline_valid:
+        main_changed = main_status != last_synced_status
+        child_changed = child_status != last_synced_status
+        if main_changed and not child_changed:
+            return {"status": main_status, "source": "main", "action": "sync"}
+        if child_changed and not main_changed:
+            return {"status": child_status, "source": "child", "action": "sync"}
+
+    return {"status": None, "source": None, "action": "conflict"}
+
+
+def reconciled_completion_status(
+    main_status,
+    child_status,
+    *,
+    last_synced_status=None,
+):
+    """Return the safe target status, or ``None`` when edits conflict."""
+    decision = decide_completion_status_sync(
+        main_status,
+        child_status,
+        last_synced_status=last_synced_status,
+    )
+    return decision["status"]
 
 
 def build_main_record_fields(event, progress_links):
