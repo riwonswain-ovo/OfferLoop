@@ -123,16 +123,55 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertIn("旧双 Base", migration)
         self.assertIn("永久保留", migration)
 
-    def test_readme_has_safe_cross_agent_install_and_upgrade_paths(self):
+    def test_readme_has_safe_agent_neutral_install_and_upgrade_paths(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertIn("scripts/install_offerloop.py --agent", readme)
-        self.assertIn("--agent claude-code", readme)
-        self.assertIn("--upgrade", readme)
-        self.assertIn(".offerloop-backups/", readme)
-        self.assertIn("WorkBuddy", readme)
-        self.assertIn("~/.workbuddy/skills/", readme)
+        self.assertIn("npx skills add riwonswain-ovo/OfferLoop -g", readme)
+        self.assertIn("npx skills update offerloop-setup", readme)
+        self.assertIn("标准 `SKILL.md`", readme)
+        self.assertIn("可恢复备份", readme)
+        self.assertNotIn("--agent", readme)
+        for product_name in ("Codex", "Claude Code", "Hermes", "WorkBuddy"):
+            self.assertNotIn(product_name, readme)
         self.assertIn("~/.config/offerloop/", readme)
         self.assertIn("~/.local/state/offerloop/", readme)
+
+    def test_readme_follows_the_new_user_journey(self):
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        sections = (
+            "## 1. 安装前准备",
+            "## 2. 如何安装",
+            "## 3. 认识四个 Skill",
+            "## 4. 旧用户如何升级",
+            "## 5. 其他说明",
+        )
+        positions = [readme.index(section) for section in sections]
+        self.assertEqual(positions, sorted(positions))
+
+        skill_headings = (
+            "### `offerloop-setup`",
+            "### `job-collection`",
+            "### `recruiting-reminder`",
+            "### `offerloop-workspace`",
+        )
+        required_parts = (
+            "#### 作用",
+            "#### 第一次运行前需要准备",
+            "#### 第一次运行流程",
+            "#### 第一次运行后的输出",
+            "#### 后续每次运行带来的增量",
+            "#### 案例",
+        )
+        start_of_upgrade = readme.index("## 4. 旧用户如何升级")
+        for index, heading in enumerate(skill_headings):
+            start = readme.index(heading)
+            end = (
+                readme.index(skill_headings[index + 1])
+                if index + 1 < len(skill_headings)
+                else start_of_upgrade
+            )
+            skill_section = readme[start:end]
+            for part in required_parts:
+                self.assertIn(part, skill_section, heading)
 
     def test_setup_docs_match_capability_preflight_and_recovery(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
@@ -151,7 +190,8 @@ class RepositoryContractTest(unittest.TestCase):
             self.assertIn("lark-apps", text)
         for text in (readme, onboarding):
             self.assertIn("npx @larksuite/cli@latest install", text)
-            self.assertIn("npx skills add larksuite/cli -g -a", text)
+        self.assertIn("npx skills add larksuite/cli -g -y", readme)
+        self.assertIn("npx skills add larksuite/cli -g -a", onboarding)
         self.assertIn("目标已登记时运行期只需要", setup)
         self.assertIn("线上条件一律保持 `unverified`", setup)
 
