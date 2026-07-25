@@ -1,4 +1,4 @@
 interface:
   display_name: "PM Sense"
-  short_description: "逐步训练产品判断，结合金字塔、MECE 与小红书外部证据"
-  default_prompt: "Use $pm-sense to coach me through this product question, research external evidence after my own summary, and save the result."
+  short_description: "逐步训练产品判断，保存单题文档并确认是否加入面试题库"
+  default_prompt: "Use $pm-sense to coach me through this product question, save the result, and ask whether the question should enter my pending bank."
