@@ -1,4 +1,4 @@
 interface:
-  display_name: "产品思维训练"
-  short_description: "用金字塔原理和 MECE 训练产品判断，形成可表达、可验证的答案"
-  default_prompt: "Use $pm-sense to coach my product reasoning bottom-up, check it with MECE, turn it into a top-down answer, and save the result."
+  display_name: "PM Sense"
+  short_description: "逐步训练产品判断，结合金字塔、MECE 与小红书外部证据"
+  default_prompt: "Use $pm-sense to coach me through this product question, research external evidence after my own summary, and save the result."
