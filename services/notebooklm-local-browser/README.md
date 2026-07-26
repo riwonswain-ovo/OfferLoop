@@ -18,3 +18,7 @@ docker-compose logs --tail 100
 
 服务端口仅绑定到 `127.0.0.1`，不会暴露到局域网或公网。飞书看到的只是本机
 远程画面；其中 Chromium 访问 Google 和 NotebookLM 时仍使用官方 HTTPS。
+
+`com.offerloop.notebooklm-browser.plist` 会在登录这台 Mac 后运行安装到
+`~/Library/Application Support/OfferLoop/notebooklm-browser` 的运行副本，
+恢复 Colima 和私人 Chromium。该启动项是单次、幂等的，不会常驻轮询。
