@@ -4,7 +4,7 @@
 
 ## 0. 开始前
 
-1. 先执行 `python3 scripts/preflight.py --capability <collection|reminder|workspace|full> --json`。
+1. 先执行 `python3 scripts/preflight.py --capability <collection|reminder|workspace|coaching|full> --json`。
 2. 仅对预检中已经配置、且用户本次明确要求验证的能力执行在线核验。
 3. 在线操作前确认当前 `lark-cli` 身份；涉及用户文档、知识库或日历时使用 `--as user`，涉及应用可见性或工作流时使用 `--as bot`。
 4. 所有命令输出只保留状态、资源类型、数量和错误类别；不要粘贴 URL 中的 token、邮箱地址、Cookie、授权码或 IMAP 密码。
@@ -75,7 +75,20 @@ lark-cli wiki +node-list --space-id '<SPACE_ID>' --as user
 不得预读全部 Base/子视图记录，每个请求最多返回 30 条；若常规网络下首屏超过 10 秒，保持
 `needs_action` 并先排查全量扫描、重复 React 初始化请求和串行 Base 请求，不把慢页面交付为 ready。
 
-## 4. `integration`：求职进展即时联动
+## 4. `coaching`：求职训练产物
+
+| 核验项 | 身份 | 只读操作 | 通过条件 |
+| --- | --- | --- | --- |
+| schema v4 | 本地 | `artifact_contract.py resolve-folder` | `artifact_storage` 可解析，不输出 token |
+| 训练目录 | user | `wiki +node-get` / `wiki +node-list` | 所选 Skill 的必需目录唯一且可读 |
+| Markdown 文档 | user | `docx` 只读 | 已有产物包含“产物信息”和 `run_id` |
+| 长期主档 | user | `docx` 只读 | 已登记主档可读；未创建时允许为空 |
+| 笔面试回填字段 | user / bot | Base `+field-list` | 面试准备/复盘字段与主子表 ID 字段存在 |
+
+只读验收不得创建空主档、训练文档或测试 Base 记录。多个同名目录保持 `needs_action`，等待用户
+选择，不能自动取第一条。
+
+## 5. `integration`：求职进展即时联动
 
 | 核验项 | 身份 | 只读操作 | 通过条件 |
 | --- | --- | --- | --- |
@@ -94,7 +107,7 @@ lark-cli base +workflow-list --base-token '<BASE_TOKEN>' --table-id '<TABLE_ID>'
 
 执行运行历史查询前先阅读 `lark-base` Skill 的 `references/lark-base-workflow-run-history.md`，以该参考中的当前参数为准。验收阶段禁止启用、停用、创建或执行工作流。
 
-## 5. 状态解释与交接
+## 6. 状态解释与交接
 
 - `ready`：已完成所选能力的离线检查，且本次已执行的只读在线检查通过。
 - `needs_action`：配置、字段、权限或入口缺失，需用户确认后才可修复。

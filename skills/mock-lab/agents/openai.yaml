@@ -1,0 +1,4 @@
+interface:
+  display_name: "模拟面试实验室"
+  short_description: "按方向、简历深挖及可选JD覆盖四类轮次模拟面试"
+  default_prompt: "Use $mock-lab to confirm my direction, read my selected resume and its deep-dive documents, then run a multi-stage mock interview."

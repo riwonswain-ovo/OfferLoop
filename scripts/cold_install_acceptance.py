@@ -17,6 +17,13 @@ SKILL_NAMES = (
     "job-collection",
     "recruiting-reminder",
     "offerloop-workspace",
+    "resume-deepthink",
+    "interview-prep",
+    "mock-lab",
+    "talk-review",
+    "pm-sense",
+    "interview-question-bank",
+    "knowledge-digest",
 )
 AGENT_ROOTS = {
     "codex": Path(".codex/skills"),
@@ -90,6 +97,18 @@ def install_all_agents(source, project, home, env):
     statuses = {item["agent"]: item["status"] for item in report["results"]}
     if statuses != {agent: "installed" for agent in AGENT_ROOTS}:
         raise AssertionError(f"unexpected install statuses: {statuses}")
+    welcome = report.get("welcome")
+    if not isinstance(welcome, dict):
+        raise AssertionError("first install did not return the welcome payload")
+    welcome_skills = [
+        skill["name"]
+        for group in welcome.get("groups", [])
+        for skill in group.get("skills", [])
+    ]
+    if len(welcome_skills) != len(SKILL_NAMES) or set(welcome_skills) != set(
+        SKILL_NAMES
+    ):
+        raise AssertionError(f"unexpected welcome catalog: {welcome_skills}")
     roots = {agent: assert_installed(home, agent) for agent in AGENT_ROOTS}
 
     repeated = run(command, cwd=project, env=env)
@@ -99,6 +118,8 @@ def install_all_agents(source, project, home, env):
     }
     if repeated_statuses != {agent: "already_installed" for agent in AGENT_ROOTS}:
         raise AssertionError(f"installer is not idempotent: {repeated_statuses}")
+    if "welcome" in repeated_report:
+        raise AssertionError("idempotent reinstall repeated the welcome payload")
     return roots
 
 
@@ -245,7 +266,7 @@ def main():
         roots = install_all_agents(source, project, home, env)
         assert_collection_preflight(project, roots["codex"], env)
         print(
-            "cold install accepted: four Agents, four Skills, idempotency, "
+            "cold install accepted: four Agents, eleven Skills, idempotency, "
             "collection preflight, recovery, and redaction"
         )
 

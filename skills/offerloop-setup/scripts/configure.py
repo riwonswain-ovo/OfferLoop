@@ -8,6 +8,8 @@ import json
 import os
 from pathlib import Path
 import shutil
+import subprocess
+import sys
 import tempfile
 from urllib.parse import urlparse
 
@@ -22,6 +24,10 @@ PUBLIC_LOCATOR_KEYS = {
     "wiki_space_id",
     "workspace_home_node_token",
     "workbench_url",
+    "knowledge_base_url",
+    "knowledge_digest_table_id",
+    "knowledge_source_table_id",
+    "knowledge_wiki_folder_node_token",
     "schema_version",
 }
 PROGRESS_SYNC_KEYS = {"app_id", "endpoint", "workflow_id", "status"}
@@ -197,6 +203,41 @@ def init_imap(environ=None):
     return destination, True
 
 
+def enable_coaching(path, *, confirmed=False):
+    """Upgrade public locator config through the shared artifact contract."""
+    if not confirmed:
+        raise ValueError("coaching schema migration requires explicit confirmation")
+    contract = (
+        SKILLS_ROOT
+        / "offerloop-workspace"
+        / "scripts"
+        / "artifact_contract.py"
+    )
+    if not contract.is_file():
+        raise FileNotFoundError("offerloop-workspace artifact contract is missing")
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(contract),
+            "migrate-config",
+            "--config",
+            str(path),
+            "--confirmed",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0:
+        try:
+            payload = json.loads(completed.stdout)
+            reason = payload.get("error", "unknown migration failure")
+        except json.JSONDecodeError:
+            reason = "artifact contract did not return valid JSON"
+        raise ValueError(f"coaching schema migration failed: {reason}")
+    return load_config(path)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--profile", help="lark-cli profile name (not a secret)")
@@ -206,6 +247,13 @@ def main():
     parser.add_argument("--wiki-space-id", help="OfferLoop Wiki space ID")
     parser.add_argument("--workspace-home-node-token", help="OfferLoop homepage Wiki node")
     parser.add_argument("--workbench-url", help="published OfferLoop workbench HTTPS URL")
+    parser.add_argument("--knowledge-base-url", help="OfferLoop knowledge digest Base URL")
+    parser.add_argument("--knowledge-digest-table-id", help="knowledge summary table ID")
+    parser.add_argument("--knowledge-source-table-id", help="knowledge source table ID")
+    parser.add_argument(
+        "--knowledge-wiki-folder-node-token",
+        help="Wiki folder for full knowledge summaries",
+    )
     parser.add_argument("--schema-version", type=int, help="OfferLoop schema version")
     parser.add_argument("--progress-sync-app-id", help="published sync app ID")
     parser.add_argument("--progress-sync-endpoint", help="published sync HTTPS endpoint")
@@ -236,6 +284,13 @@ def main():
         help="explicitly approved message sender identity",
     )
     parser.add_argument("--init-imap", action="store_true")
+    parser.add_argument("--enable-coaching", action="store_true")
+    parser.add_argument("--confirm-schema-v4", action="store_true")
+    parser.add_argument(
+        "--confirm-schema-v3",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
     args = parser.parse_args()
 
     path = config_file()
@@ -247,6 +302,10 @@ def main():
         "wiki_space_id": args.wiki_space_id,
         "workspace_home_node_token": args.workspace_home_node_token,
         "workbench_url": args.workbench_url,
+        "knowledge_base_url": args.knowledge_base_url,
+        "knowledge_digest_table_id": args.knowledge_digest_table_id,
+        "knowledge_source_table_id": args.knowledge_source_table_id,
+        "knowledge_wiki_folder_node_token": args.knowledge_wiki_folder_node_token,
         "schema_version": args.schema_version,
     }
     if any(value is not None for value in updates.values()):
@@ -275,11 +334,18 @@ def main():
         destination, created = init_imap()
         action = "Created" if created else "Already exists"
         print(f"{action}: {destination}")
+    if args.enable_coaching:
+        enable_coaching(
+            path,
+            confirmed=args.confirm_schema_v4 or args.confirm_schema_v3,
+        )
+        print(f"Enabled coaching in {path}")
     if not (
         any(value is not None for value in updates.values())
         or any(value is not None for value in progress_sync_updates.values())
         or any(value is not None for value in notification_updates.values())
         or args.init_imap
+        or args.enable_coaching
     ):
         parser.print_help()
 

@@ -1,13 +1,16 @@
 # OfferLoop 新用户接入
 
-本接入指南采用渐进配置：只配置用户当前要用的能力。先确认四个 OfferLoop Skill
-（`offerloop-setup`、`job-collection`、`recruiting-reminder`、`offerloop-workspace`）已安装在
+本接入指南采用渐进配置：只配置用户当前要用的能力。先确认十一个 OfferLoop Skill 已安装在
 同一个 Agent 环境，并在安装后新开会话让它们加载；再在 `offerloop-setup` 中选择
-`collection`、`reminder`、`workspace` 或 `full`，并运行对应的离线预检。
+`collection`、`reminder`、`workspace`、`coaching` 或 `full`，并运行对应的离线预检。
+
+首次安装、第一次使用或用户要求理解十一个 Skill 时，先完整读取 `welcome.md`，展示十一项能力、
+自然语言示例、常用闭环和隐私边界，再让用户选择当前能力。不要要求用户先记技术名称，也不要
+在介绍阶段询问目标岗位或访问线上资源。
 
 这一步是新用户的最小成功：Skill 能被发现并能开始只读本机引导。它不是飞书、邮箱、妙搭或
-工作台已经配置完成的声明。本仓库只提供上述四个 OfferLoop Skill；运行时、飞书身份和外部
-Lark Skill 都需要单独准备。
+工作台已经配置完成的声明。本仓库提供四个基础 Skill 和六个求职训练 Skill；运行时、飞书
+身份和外部 Lark Skill 都需要单独准备。
 
 ## 1. 能力与最小配置
 
@@ -16,6 +19,7 @@ Lark Skill 都需要单独准备。
 | `collection`：同步招聘信息 | Python 3.10+、lark-cli、可用 bot profile、企业清单 Base、至少一个合法信息源；来源可查看、目标可编辑 | 求职进展 Base（未登记时跳过对账）、IMAP、个人日历、知识库 |
 | `reminder`：整理笔试和面试 | Python 3.10+、lark-cli、IMAP、本地提醒配置、笔面试中心与求职进展定位；建日历时完成 user 日历授权 | 招聘信息源、工作台 |
 | `workspace`：使用固定入口 | Python 3.10+、lark-cli、知识库空间/首页、企业清单/求职进展/笔面试中心定位、工作台 HTTPS 地址 | IMAP、日历、信息源 |
+| `coaching`：训练与面试材料 | Python 3.10+、lark-cli、schema v4、私有知识库、lark-base/lark-doc/lark-wiki；目录可按首次使用懒创建 | IMAP、日历、工作台部署 |
 | `full`：完整闭环 | 上述全部，以及飞书应用、Base workflow、HTTPS 同步端点；部署工作台时还需妙搭创建/发布/环境配置权限与租户安装支持 | 无 |
 
 安装整个仓库不代表要完成所有授权。未选能力应显示为 `not_selected`，而非失败。
@@ -38,10 +42,10 @@ Lark Skill 都需要单独准备。
 先根据当前 `SKILL.md` 所在位置解析 `offerloop-setup` 根目录，再从该目录运行：
 
 ```bash
-python3 scripts/preflight.py --capability '<collection|reminder|workspace|full>' --json
+python3 scripts/preflight.py --capability '<collection|reminder|workspace|coaching|full>' --json
 ```
 
-它不访问飞书、浏览器、工作台或邮箱。它只检查 Python 版本、`lark-cli` 命令、四个 OfferLoop
+它不访问飞书、浏览器、工作台或邮箱。它只检查 Python 版本、`lark-cli` 命令、十一个 OfferLoop
 Skill、所选能力必需的外部 Lark Skill 目录、本地配置字段及 IMAP 配置文件状态；不验证 Node/npx、
 在线身份、飞书权限、IMAP 连通性或妙搭权限。已登记 profile 的本机状态会通过
 `lark-cli profile list` 和 `lark-cli doctor --offline` 验证。外部 Skill 会跨当前安装目录、
@@ -77,7 +81,7 @@ python3 scripts/configure.py --reminder-base-url '<笔面试中心_BASE_URL>'
 python3 scripts/configure.py --wiki-space-id '<SPACE_ID>'
 python3 scripts/configure.py --workspace-home-node-token '<HOME_NODE_TOKEN>'
 python3 scripts/configure.py --workbench-url '<HTTPS_WORKBENCH_URL>'
-python3 scripts/configure.py --schema-version 2
+python3 scripts/configure.py --enable-coaching --confirm-schema-v4
 python3 scripts/configure.py \
   --progress-sync-app-id '<APP_ID>' \
   --progress-sync-endpoint '<HTTPS_ENDPOINT>' \
@@ -99,6 +103,10 @@ python3 scripts/configure.py \
 定位器必须是非敏感元数据；缺少任何一项时保留为 `unverified`，不得根据标题或 record 猜测
 目标，也不得另建一套同步应用。
 `enabled` 只能在线核验成功后写入；endpoint 必须是无用户名、密码和片段的绝对 HTTPS URL。
+
+启用 `coaching` 时，`--enable-coaching --confirm-schema-v4` 保留现有配置并追加
+`artifact_storage`。它不创建或移动飞书节点；对应 Skill 首次运行时先只读检查目录，再展示
+缺失节点并取得确认后懒创建。每次完整运行或明确提前结束后自动保存 Markdown 飞书文档。
 
 飞书消息通知可选。启用前必须确认固定接收方、最终摘要内容和发送身份；`user` 目标使用
 `ou_` 开头的 open ID，`chat` 目标使用 `oc_` 开头的 chat ID。该确认可作为后续运行的持续

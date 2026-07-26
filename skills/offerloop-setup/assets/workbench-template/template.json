@@ -27,6 +27,11 @@
     "REMINDER_BASE_TOKEN",
     "REMINDER_TABLE_ID"
   ],
+  "optional_environment": [
+    "KNOWLEDGE_BASE_TOKEN",
+    "KNOWLEDGE_DIGEST_TABLE_ID",
+    "KNOWLEDGE_SOURCE_TABLE_ID"
+  ],
   "protected_destination_paths": [
     ".git",
     ".spark",

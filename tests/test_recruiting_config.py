@@ -30,6 +30,7 @@ class RecruitingConfigTest(unittest.TestCase):
             "progress_base_url",
             "面试准备文档",
             "面试复盘文档",
+            "投递简历版本",
             "offerloop-workspace",
             "未来 7 天",
         ):

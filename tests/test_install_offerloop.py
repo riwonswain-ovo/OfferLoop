@@ -72,7 +72,9 @@ class OfferLoopInstallerTest(unittest.TestCase):
                 )
 
             self.assertEqual(first["status"], "installed")
+            self.assertTrue(first["show_welcome"])
             self.assertEqual(second["status"], "already_installed")
+            self.assertFalse(second["show_welcome"])
             self.assertEqual(
                 (root / self.installer.MANIFEST_NAME).read_text(encoding="utf-8"),
                 manifest_before,
@@ -214,9 +216,48 @@ class OfferLoopInstallerTest(unittest.TestCase):
 
             rendered = output.getvalue()
             self.assertEqual(exit_code, 0)
-            self.assertIn("4 个 Skill 已处理完成", rendered)
+            self.assertIn("11 个 Skill 已处理完成", rendered)
+            self.assertIn("欢迎使用 OfferLoop", rendered)
+            self.assertIn("求职基础能力", rendered)
+            self.assertIn("求职训练能力", rendered)
+            self.assertIn("知识输入能力", rendered)
+            for name in self.installer.SKILL_NAMES:
+                self.assertIn(name, rendered)
+            self.assertIn("安装只添加 Skill", rendered)
             self.assertIn("结束当前 Agent 会话并新开会话", rendered)
-            self.assertIn("offerloop-setup 运行只读预检", rendered)
+            self.assertIn("请先介绍 11 个 Skill", rendered)
+
+    def test_json_install_returns_structured_welcome_only_on_first_install(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with mock.patch.dict(
+                self.installer.os.environ,
+                {"HOME": directory, "PATH": ""},
+                clear=True,
+            ):
+                first_output = io.StringIO()
+                with contextlib.redirect_stdout(first_output):
+                    first_exit = self.installer.main(
+                        ["--agent", "codex", "--json"]
+                    )
+                second_output = io.StringIO()
+                with contextlib.redirect_stdout(second_output):
+                    second_exit = self.installer.main(
+                        ["--agent", "codex", "--json"]
+                    )
+
+            first = json.loads(first_output.getvalue())
+            second = json.loads(second_output.getvalue())
+            self.assertEqual(first_exit, 0)
+            self.assertEqual(second_exit, 0)
+            self.assertEqual(first["welcome"]["headline"], "欢迎使用 OfferLoop")
+            self.assertEqual(
+                sum(
+                    len(group["skills"])
+                    for group in first["welcome"]["groups"]
+                ),
+                11,
+            )
+            self.assertNotIn("welcome", second)
 
     def test_generated_directories_do_not_affect_digest_or_copy(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -254,8 +295,8 @@ class OfferLoopInstallerTest(unittest.TestCase):
         )
 
     def test_version_reports_installer_and_offerloop_versions(self):
-        self.assertEqual(self.installer.INSTALLER_VERSION, "1.0")
-        self.assertEqual(self.installer.offerloop_version(), "0.1.0-alpha.4")
+        self.assertEqual(self.installer.INSTALLER_VERSION, "1.1")
+        self.assertEqual(self.installer.offerloop_version(), "0.1.0-alpha.5")
 
     def test_workbuddy_install_is_complete_and_idempotent(self):
         with tempfile.TemporaryDirectory() as directory:

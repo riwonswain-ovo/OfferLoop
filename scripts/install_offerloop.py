@@ -18,12 +18,19 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 SKILLS_SOURCE = ROOT / "skills"
 VERSION_FILE = ROOT / "VERSION"
-INSTALLER_VERSION = "1.0"
+INSTALLER_VERSION = "1.1"
 SKILL_NAMES = (
     "offerloop-setup",
     "job-collection",
     "recruiting-reminder",
     "offerloop-workspace",
+    "resume-deepthink",
+    "interview-prep",
+    "mock-lab",
+    "talk-review",
+    "pm-sense",
+    "interview-question-bank",
+    "knowledge-digest",
 )
 STANDARD_AGENTS = ("codex", "claude-code", "hermes-agent", "workbuddy")
 ALL_AGENTS = STANDARD_AGENTS
@@ -46,6 +53,108 @@ IGNORED_PARTS = {
 }
 IGNORED_NAMES = {".DS_Store"}
 MANIFEST_NAME = ".offerloop-install.json"
+WELCOME = {
+    "headline": "欢迎使用 OfferLoop",
+    "summary": (
+        "OfferLoop 包含 11 个可以独立或组合使用的 Skill。"
+        "用户不需要记住名称，只需描述当前想解决的问题。"
+    ),
+    "groups": [
+        {
+            "name": "求职基础能力",
+            "skills": [
+                {
+                    "name": "offerloop-setup",
+                    "title": "安装与配置",
+                    "purpose": "首次配置、环境检查、飞书授权和完整部署",
+                    "example": "检查一下 OfferLoop 是否配置完整。",
+                },
+                {
+                    "name": "offerloop-workspace",
+                    "title": "求职空间",
+                    "purpose": "管理飞书知识库、招聘工作台和材料目录",
+                    "example": "检查我的 OfferLoop 求职空间是否完整。",
+                },
+                {
+                    "name": "job-collection",
+                    "title": "招聘信息同步",
+                    "purpose": "从用户指定的信息源收集岗位并整理到企业清单",
+                    "example": "同步我的招聘信息源。",
+                },
+                {
+                    "name": "recruiting-reminder",
+                    "title": "笔试面试提醒",
+                    "purpose": "从招聘邮件识别安排，并在确认后同步笔面试中心和日历",
+                    "example": "检查最近 7 天的笔试面试邮件，先不要写入。",
+                },
+            ],
+        },
+        {
+            "name": "求职训练能力",
+            "skills": [
+                {
+                    "name": "resume-deepthink",
+                    "title": "简历深挖",
+                    "purpose": "连续追问真实经历，生成简历表达和面试素材",
+                    "example": "追问深挖我简历中的一段实习经历。",
+                },
+                {
+                    "name": "pm-sense",
+                    "title": "产品思维训练",
+                    "purpose": "训练产品与场景题，完善口语回答并沉淀素材",
+                    "example": "让我先回答一道产品场景题，再帮我完善。",
+                },
+                {
+                    "name": "interview-prep",
+                    "title": "面试准备",
+                    "purpose": "结合 JD、投递简历和素材生成针对性准备文档",
+                    "example": "根据下一场面试和实际投递简历帮我准备。",
+                },
+                {
+                    "name": "mock-lab",
+                    "title": "模拟面试",
+                    "purpose": "按真实节奏一题一答，结束后统一点评",
+                    "example": "用刚才的准备文档模拟面试。",
+                },
+                {
+                    "name": "talk-review",
+                    "title": "真实面试复盘",
+                    "purpose": "根据 ASR 或转写还原问答并生成改进方案",
+                    "example": "根据这份 ASR 复盘刚结束的面试。",
+                },
+                {
+                    "name": "interview-question-bank",
+                    "title": "面试题库",
+                    "purpose": "管理待学会和已学会题目，统一接收训练候选题",
+                    "example": "把我确认的题加入待学习题库。",
+                },
+            ],
+        },
+        {
+            "name": "知识输入能力",
+            "skills": [
+                {
+                    "name": "knowledge-digest",
+                    "title": "知识速览",
+                    "purpose": "订阅用户指定的信息源，增量读取并生成金字塔摘要",
+                    "example": "订阅这个信息源，每天总结新增内容。",
+                },
+            ],
+        },
+    ],
+    "workflows": [
+        "招聘信息同步 → 真实投递 → 邮件识别 → 笔试面试安排",
+        "简历深挖 / 产品思维 → 面试准备 → 模拟面试 → 真实面试复盘",
+        "登记信息源 → 增量发现 → 金字塔摘要 → 工作台知识速览",
+    ],
+    "next_prompt": (
+        "我刚安装 OfferLoop。请先介绍 11 个 Skill，"
+        "再做只读检查并带我完成第一次使用。"
+    ),
+    "privacy_notice": (
+        "安装只添加 Skill；尚未读取飞书、邮箱或简历，也没有创建或修改线上数据。"
+    ),
+}
 
 
 def offerloop_version() -> str:
@@ -153,7 +262,9 @@ def validate_sources() -> None:
         path.parent.name for path in SKILLS_SOURCE.glob("*/SKILL.md") if path.is_file()
     }
     if discovered != set(SKILL_NAMES):
-        raise ValueError("repository must contain exactly the four supported OfferLoop Skills")
+        raise ValueError(
+            "repository must contain exactly the eleven supported OfferLoop Skills"
+        )
     for name in SKILL_NAMES:
         skill_file = SKILLS_SOURCE / name / "SKILL.md"
         metadata = _frontmatter(skill_file)
@@ -391,6 +502,11 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
         _workbuddy_import_duplicates(root) if agent == "workbuddy" else {}
     )
     runtime_duplicates = {**hermes_duplicates, **workbuddy_duplicates}
+    had_offerloop_install = (
+        (root / MANIFEST_NAME).is_file()
+        or any((root / name).exists() for name in SKILL_NAMES)
+        or bool(runtime_duplicates)
+    )
     operations = []
     conflicts = []
     for name in SKILL_NAMES:
@@ -426,6 +542,7 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
             "agent": agent,
             "target": agent_target_label(agent, source),
             "status": "conflict",
+            "show_welcome": False,
             "skills": [
                 {"name": name, "status": status} for name, status in operations
             ],
@@ -444,6 +561,7 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
             "target": agent_target_label(agent, source),
             "status": status,
             "dry_run": True,
+            "show_welcome": not had_offerloop_install,
             "skills": [
                 {"name": name, "status": item_status}
                 for name, item_status in operations
@@ -459,6 +577,7 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
             "agent": agent,
             "target": agent_target_label(agent, source),
             "status": "already_installed",
+            "show_welcome": False,
             "skills": [
                 {"name": name, "status": status} for name, status in operations
             ],
@@ -539,6 +658,20 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
         "agent": agent,
         "target": agent_target_label(agent, source),
         "status": overall,
+        "show_welcome": (
+            not had_offerloop_install
+            or any(
+                name in {
+                    "resume-deepthink",
+                    "interview-prep",
+                    "mock-lab",
+                    "talk-review",
+                    "pm-sense",
+                }
+                and status == "installed"
+                for name, status in operations
+            )
+        ),
         "skills": [{"name": name, "status": status} for name, status in operations],
     }
     return result
@@ -552,6 +685,29 @@ def _expand_agents(values: list[str]) -> list[str]:
             if choice not in expanded:
                 expanded.append(choice)
     return expanded
+
+
+def _print_welcome() -> None:
+    print()
+    print(f"🎉 {WELCOME['headline']}")
+    print(WELCOME["summary"])
+    for group in WELCOME["groups"]:
+        print()
+        print(f"{group['name']}：")
+        for skill in group["skills"]:
+            print(
+                f"- {skill['name']}｜{skill['title']}："
+                f"{skill['purpose']}"
+            )
+            print(f"  可以说：“{skill['example']}”")
+    print()
+    print("常用闭环：")
+    for workflow in WELCOME["workflows"]:
+        print(f"- {workflow}")
+    print()
+    print(WELCOME["privacy_notice"])
+    print("请结束当前 Agent 会话并新开会话，然后直接发送：")
+    print(f"“{WELCOME['next_prompt']}”")
 
 
 def main(argv=None) -> int:
@@ -612,6 +768,12 @@ def main(argv=None) -> int:
         "offerloop_version": offerloop_version(),
         "results": reports,
     }
+    show_welcome = not args.dry_run and any(
+        report.get("show_welcome") and report["status"] != "conflict"
+        for report in reports
+    )
+    if show_welcome:
+        payload["welcome"] = WELCOME
     if args.as_json:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
@@ -636,11 +798,14 @@ def main(argv=None) -> int:
         if not args.dry_run and any(
             report["status"] in completed for report in reports
         ):
-            print("OfferLoop 的 4 个 Skill 已处理完成。")
-            print(
-                "下一步：结束当前 Agent 会话并新开会话，然后调用 "
-                "offerloop-setup 运行只读预检。"
-            )
+            print("OfferLoop 的 11 个 Skill 已处理完成。")
+            if show_welcome:
+                _print_welcome()
+            else:
+                print(
+                    "下一步：结束当前 Agent 会话并新开会话，然后调用 "
+                    "offerloop-setup 运行只读预检。"
+                )
     return 1 if any(report["status"] == "conflict" for report in reports) else 0
 
 

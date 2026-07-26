@@ -1,6 +1,6 @@
 # OfferLoop 多 Agent 兼容说明
 
-当前预发布版本：`0.1.0-alpha.4`。四份公共 `SKILL.md` 是唯一业务真源，安装器只负责复制、冲突保护、备份和平台发现检查。
+当前预发布版本：`0.1.0-alpha.5`。十一份公共 `SKILL.md` 是唯一业务真源，安装器只负责复制、冲突保护、备份和平台发现检查。
 
 ## 认证矩阵
 
@@ -19,7 +19,7 @@ Claude Code 的真实运行时认证使用 CC Switch 当前启用的第三方模
 
 ## 安装器状态
 
-- `installed`：四个 Skill 已复制。
+- `installed`：十一个 Skill 已复制。
 - `already_installed`：目标内容与当前版本完全一致。
 - `conflict`：目标目录内容不同，或 Hermes 的 `skills.external_dirs` 中存在会造成运行时歧义的同名副本；未覆盖。
 - `upgraded`：在 Skills 根目录的上级 `.offerloop-backups/` 保留可恢复备份后已替换，避免备份被递归加载。
@@ -39,7 +39,7 @@ Hermes 会同时扫描 `~/.hermes/skills/` 和 `config.yaml` 中登记的 `skill
 
 腾讯 WorkBuddy 5.1.7 的真实用户目录和[腾讯最新 Skills 文档](https://cloud.tencent.com/document/product/1831/134516)均使用 AgentSkills 结构：
 `SKILL.md` 为必需文件，`scripts/`、`references/`、`assets/` 为可选资源。本机用户级目录为
-`~/.workbuddy/skills/`，因此安装器直接复制四份公共 Skill，不生成 `skill.yml` 或第五套业务指令。
+`~/.workbuddy/skills/`，因此安装器直接复制十一份公共 Skill，不生成 `skill.yml` 或另一套业务指令。
 
 WorkBuddy 的界面导入可能把 Skill 存在随机 ID 目录中。安装器会按 `SKILL.md` 的 `name` 检查这些
 目录：默认遇到同名副本时返回 `conflict`；只有使用 `--upgrade` 才会先备份旧副本，再安装到稳定

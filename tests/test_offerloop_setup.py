@@ -160,7 +160,87 @@ class OfferLoopSetupTest(unittest.TestCase):
                     "offerloop-workspace",
                     "job-collection",
                     "recruiting-reminder",
+                    "resume-deepthink",
+                    "interview-prep",
+                    "mock-lab",
+                    "talk-review",
+                    "pm-sense",
+                    "interview-question-bank",
+                    "knowledge-digest",
                 },
+            )
+
+    def test_enable_coaching_migrates_v2_without_losing_existing_config(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = configure.config_file({"XDG_CONFIG_HOME": directory})
+            configure.write_private_json(
+                path,
+                {
+                    "schema_version": 2,
+                    "lark_profile": "offerloop",
+                    "progress_base_url": "https://example.feishu.cn/base/progress",
+                },
+            )
+            with self.assertRaisesRegex(ValueError, "confirmation"):
+                configure.enable_coaching(path)
+            migrated = configure.enable_coaching(path, confirmed=True)
+            self.assertEqual(migrated["schema_version"], 4)
+            self.assertEqual(migrated["lark_profile"], "offerloop")
+            self.assertIn("artifact_storage", migrated)
+            self.assertEqual(
+                migrated["artifact_storage"]["status"], "needs_setup"
+            )
+
+    def test_coaching_preflight_requires_v4_storage_and_reports_readiness(self):
+        with tempfile.TemporaryDirectory() as directory:
+            skill_root = self.make_skill_root(
+                directory, "lark-base", "lark-doc", "lark-wiki"
+            )
+            environment = {"XDG_CONFIG_HOME": directory}
+            path = configure.config_file(environment)
+            configure.write_private_json(
+                path,
+                {"schema_version": 2, "lark_profile": "offerloop"},
+            )
+            with mock.patch.object(
+                preflight,
+                "_probe_lark_cli",
+                return_value=(
+                    ("ready", "lark-cli 版本符合要求", ""),
+                    ("ready", "飞书 profile 已登记", ""),
+                ),
+            ):
+                report = preflight.run_checks(
+                    environment,
+                    capability="coaching",
+                    skills_roots=[skill_root],
+                )
+            checks = {item["id"]: item for item in report["checks"]}
+            self.assertEqual(
+                checks["local.coaching_storage"]["status"], "needs_action"
+            )
+            configure.enable_coaching(path, confirmed=True)
+            config = configure.load_config(path)
+            for key in config["artifact_storage"]["readiness"]:
+                config["artifact_storage"]["readiness"][key] = True
+            config["artifact_storage"]["status"] = "ready"
+            configure.write_private_json(path, config)
+            with mock.patch.object(
+                preflight,
+                "_probe_lark_cli",
+                return_value=(
+                    ("ready", "lark-cli 版本符合要求", ""),
+                    ("ready", "飞书 profile 已登记", ""),
+                ),
+            ):
+                report = preflight.run_checks(
+                    environment,
+                    capability="coaching",
+                    skills_roots=[skill_root],
+                )
+            checks = {item["id"]: item for item in report["checks"]}
+            self.assertEqual(
+                checks["local.coaching_storage"]["status"], "ready"
             )
 
     def test_collection_preflight_does_not_require_imap(self):
@@ -271,6 +351,7 @@ class OfferLoopSetupTest(unittest.TestCase):
             "collection": set(),
             "reminder": {"lark-calendar"},
             "workspace": {"lark-base", "lark-doc", "lark-wiki"},
+            "coaching": {"lark-base", "lark-doc", "lark-wiki"},
             "full": {
                 "lark-apps",
                 "lark-base",
@@ -665,6 +746,38 @@ class OfferLoopSetupTest(unittest.TestCase):
             self.assertEqual(result["schema_version"], 2)
             self.assertEqual(oct(path.stat().st_mode & 0o777), "0o600")
 
+    def test_knowledge_locators_extend_existing_config(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = configure.config_file({"XDG_CONFIG_HOME": directory})
+            configure.write_private_json(
+                path,
+                {
+                    "lark_profile": "offerloop",
+                    "workbench_url": "https://example.com/workbench",
+                },
+            )
+
+            result = configure.update_locator_config(
+                path,
+                {
+                    "knowledge_base_url": "https://example.feishu.cn/base/knowledge",
+                    "knowledge_digest_table_id": "tblDigests",
+                    "knowledge_source_table_id": "tblSources",
+                    "knowledge_wiki_folder_node_token": "wikcnKnowledge",
+                },
+            )
+
+            self.assertEqual(
+                result["knowledge_base_url"],
+                "https://example.feishu.cn/base/knowledge",
+            )
+            self.assertEqual(result["knowledge_digest_table_id"], "tblDigests")
+            self.assertEqual(result["knowledge_source_table_id"], "tblSources")
+            self.assertEqual(
+                result["knowledge_wiki_folder_node_token"],
+                "wikcnKnowledge",
+            )
+
     def test_workbench_url_is_saved_and_preserves_progress_sync_metadata(self):
         with tempfile.TemporaryDirectory() as directory:
             path = configure.config_file({"XDG_CONFIG_HOME": directory})
@@ -879,6 +992,10 @@ class OfferLoopSetupTest(unittest.TestCase):
                     "wiki_space_id": True,
                     "workspace_home_node_token": True,
                     "workbench_url": False,
+                    "knowledge_base_url": False,
+                    "knowledge_digest_table_id": False,
+                    "knowledge_source_table_id": False,
+                    "knowledge_wiki_folder_node_token": False,
                     "schema_version": True,
                 },
             )
@@ -909,6 +1026,7 @@ class OfferLoopSetupTest(unittest.TestCase):
                 "wiki_home",
                 "workbench",
                 "progress_sync",
+                "knowledge_base",
             },
         )
         statuses = {item["id"]: item["status"] for item in plan["resources"]}
@@ -929,6 +1047,15 @@ class OfferLoopSetupTest(unittest.TestCase):
             manifest = json.loads((root / "template.json").read_text(encoding="utf-8"))
             self.assertEqual(manifest["template_id"], template_id)
             self.assertTrue(manifest["required_environment"])
+            if directory == "workbench-template":
+                self.assertEqual(
+                    set(manifest["optional_environment"]),
+                    {
+                        "KNOWLEDGE_BASE_TOKEN",
+                        "KNOWLEDGE_DIGEST_TABLE_ID",
+                        "KNOWLEDGE_SOURCE_TABLE_ID",
+                    },
+                )
             self.assertFalse(any((root / name).exists() for name in forbidden))
             self.assertEqual(
                 [path for path in root.rglob("*") if path.is_symlink()], []

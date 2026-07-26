@@ -14,6 +14,13 @@ class RepositoryContractTest(unittest.TestCase):
             "offerloop-workspace",
             "job-collection",
             "recruiting-reminder",
+            "resume-deepthink",
+            "interview-prep",
+            "mock-lab",
+            "talk-review",
+            "pm-sense",
+            "interview-question-bank",
+            "knowledge-digest",
         }
         discovered = {
             path.parent.name for path in SKILLS.glob("*/SKILL.md") if path.is_file()
@@ -43,7 +50,16 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertNotIn("information-collection", reminder)
 
     def test_business_skills_point_to_offerloop_setup(self):
-        for name in ("job-collection", "recruiting-reminder"):
+        for name in (
+            "job-collection",
+            "recruiting-reminder",
+            "resume-deepthink",
+            "interview-prep",
+            "mock-lab",
+            "talk-review",
+            "pm-sense",
+            "knowledge-digest",
+        ):
             text = (SKILLS / name / "SKILL.md").read_text(encoding="utf-8")
             self.assertIn("offerloop-setup", text, name)
 
@@ -90,6 +106,36 @@ class RepositoryContractTest(unittest.TestCase):
         ):
             self.assertIn(expected, onboarding)
 
+    def test_setup_first_run_welcome_introduces_all_eleven_skills(self):
+        setup = (SKILLS / "offerloop-setup" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        metadata = (
+            SKILLS / "offerloop-setup" / "agents" / "openai.yaml"
+        ).read_text(encoding="utf-8")
+        welcome = (
+            SKILLS / "offerloop-setup" / "references" / "welcome.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("references/welcome.md", setup)
+        self.assertIn("all eleven OfferLoop skills", metadata)
+        self.assertNotIn("all ten OfferLoop skills", metadata)
+        self.assertIn("不询问目标岗位", welcome)
+        self.assertIn("安装只添加了 Skill", welcome)
+        for name in (
+            "offerloop-setup",
+            "offerloop-workspace",
+            "job-collection",
+            "recruiting-reminder",
+            "resume-deepthink",
+            "pm-sense",
+            "interview-prep",
+            "mock-lab",
+            "talk-review",
+            "interview-question-bank",
+            "knowledge-digest",
+        ):
+            self.assertIn(f"`{name}`", welcome)
+
     def test_workspace_collaboration_boundaries_are_documented(self):
         setup = (SKILLS / "offerloop-setup" / "SKILL.md").read_text(encoding="utf-8")
         collection = (SKILLS / "job-collection" / "SKILL.md").read_text(
@@ -109,7 +155,7 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertIn("不抓招聘信息", workspace)
         self.assertIn("不读邮箱", workspace)
 
-    def test_readme_and_migration_describe_the_four_skill_workspace(self):
+    def test_readme_and_migration_describe_the_eleven_skill_workspace(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         migration = (ROOT / "MIGRATION.md").read_text(encoding="utf-8")
         self.assertNotIn("Skills-3", readme)
@@ -140,7 +186,7 @@ class RepositoryContractTest(unittest.TestCase):
         sections = (
             "## 1. 安装前准备",
             "## 2. 如何安装",
-            "## 3. 认识四个 Skill",
+            "## 3. 认识十一个 Skill",
             "## 4. 旧用户如何升级",
             "## 5. 其他说明",
         )
@@ -152,6 +198,13 @@ class RepositoryContractTest(unittest.TestCase):
             "### `job-collection`",
             "### `recruiting-reminder`",
             "### `offerloop-workspace`",
+            "### `resume-deepthink`",
+            "### `pm-sense`",
+            "### `interview-prep`",
+            "### `mock-lab`",
+            "### `talk-review`",
+            "### `interview-question-bank`",
+            "### `knowledge-digest`",
         )
         required_parts = (
             "#### 作用",
@@ -199,6 +252,68 @@ class RepositoryContractTest(unittest.TestCase):
         for skill_file in SKILLS.glob("*/SKILL.md"):
             self.assertNotIn("TODO", skill_file.read_text(encoding="utf-8"), skill_file)
 
+    def test_knowledge_digest_defines_incremental_and_workbench_contracts(self):
+        skill = (SKILLS / "knowledge-digest" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        storage = (
+            SKILLS / "knowledge-digest" / "references" / "storage-contract.md"
+        ).read_text(encoding="utf-8")
+        for expected in (
+            "知识库全量盘点",
+            "知识地图",
+            "阅读计划",
+            "兴趣规则",
+            "独立游标",
+            "内容指纹",
+            "金字塔",
+            "自动任务",
+            "不把“已登记”表述成“正在后台运行”",
+        ):
+            self.assertIn(expected, skill)
+        for expected in (
+            "KNOWLEDGE_BASE_TOKEN",
+            "KNOWLEDGE_DIGEST_TABLE_ID",
+            "KNOWLEDGE_SOURCE_TABLE_ID",
+        ):
+            self.assertIn(expected, storage)
+
+    def test_coaching_skills_use_feishu_markdown_artifact_contract(self):
+        names = (
+            "resume-deepthink",
+            "interview-prep",
+            "mock-lab",
+            "talk-review",
+            "pm-sense",
+        )
+        for name in names:
+            skill = (SKILLS / name / "SKILL.md").read_text(encoding="utf-8")
+            self.assertIn("artifact-contract.md", skill, name)
+            self.assertIn("Markdown", skill, name)
+            self.assertIn("lark-doc", skill, name)
+            self.assertIn("run_id", skill, name)
+        product = (SKILLS / "pm-sense" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("不生成小红书", product)
+        mock = (SKILLS / "mock-lab" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("不得读取或依赖本地 `mock-interview`", mock)
+        for name in names:
+            skill = (SKILLS / name / "SKILL.md").read_text(encoding="utf-8")
+            self.assertIn("interview-question-bank", skill)
+
+    def test_event_consumers_share_recruiting_reminder_contract(self):
+        contract = (
+            SKILLS
+            / "recruiting-reminder"
+            / "references"
+            / "event-contract.md"
+        ).read_text(encoding="utf-8")
+        for name in ("interview-prep", "talk-review"):
+            skill = (SKILLS / name / "SKILL.md").read_text(encoding="utf-8")
+            self.assertIn("event-contract.md", skill)
+            self.assertIn("event_lookup.py", skill)
+        self.assertIn("不得在 `ambiguous` 时取第一条", contract)
+        self.assertIn("笔试：拒绝回填", contract)
+
     def test_local_deployment_workspaces_and_generated_state_are_ignored(self):
         ignore = (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
         for expected in ("/apps/", "/.hermes/", ".spark/", ".spark_project", "*.tsbuildinfo"):
@@ -210,8 +325,103 @@ class RepositoryContractTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("# OfferLoop 使用指南", template)
         self.assertIn("{{workbench_url}}", template)
+        self.assertIn("## OfferLoop 的 11 个 Skill", template)
+        for name in (
+            "offerloop-setup",
+            "offerloop-workspace",
+            "job-collection",
+            "recruiting-reminder",
+            "resume-deepthink",
+            "pm-sense",
+            "interview-prep",
+            "mock-lab",
+            "talk-review",
+            "interview-question-bank",
+            "knowledge-digest",
+        ):
+            self.assertIn(f"`{name}`", template)
         self.assertNotIn("OFFERLOOP:MANAGED", template)
         self.assertNotIn("请在飞书 UI 中插入", template)
+
+    def test_workspace_contract_uses_the_confirmed_eight_node_layout(self):
+        workspace = (
+            SKILLS / "offerloop-workspace" / "SKILL.md"
+        ).read_text(encoding="utf-8")
+        homepage = (
+            SKILLS / "offerloop-workspace" / "references" / "homepage-contract.md"
+        ).read_text(encoding="utf-8")
+        expected = (
+            "01｜当前简历",
+            "02｜简历深挖",
+            "03｜面试准备文档",
+            "04｜面试复盘",
+            "ASR待复盘",
+            "已完成复盘",
+            "05｜产品 Sense",
+            "06｜模拟面试",
+            "07｜题库",
+            "待学习题库",
+            "已学会题库",
+            "08｜新闻与知识摘要",
+            "新闻摘要",
+            "知识文章",
+            "多来源专题",
+        )
+        for text in (workspace, homepage):
+            for title in expected:
+                self.assertIn(title, text)
+            self.assertNotIn("03｜当前简历", text)
+            self.assertNotIn("06｜训练与题库", text)
+            self.assertNotIn("待学会题库", text)
+
+    def test_workbench_keeps_a_collapsible_eleven_skill_map(self):
+        page = (
+            SKILLS
+            / "offerloop-setup"
+            / "assets"
+            / "workbench-template"
+            / "client"
+            / "src"
+            / "pages"
+            / "workbench"
+            / "WorkbenchPage.tsx"
+        ).read_text(encoding="utf-8")
+        self.assertIn("OfferLoop 能力地图", page)
+        self.assertIn("<details", page)
+        self.assertIn("SKILL_GROUPS", page)
+        for name in (
+            "offerloop-setup",
+            "offerloop-workspace",
+            "job-collection",
+            "recruiting-reminder",
+            "resume-deepthink",
+            "pm-sense",
+            "interview-prep",
+            "mock-lab",
+            "talk-review",
+            "interview-question-bank",
+            "knowledge-digest",
+        ):
+            self.assertIn(f"name: '{name}'", page)
+
+    def test_only_offerloop_skills_are_packaged(self):
+        discovered = {
+            path.parent.name for path in SKILLS.glob("*/SKILL.md") if path.is_file()
+        }
+        for external in ("resume-craft", "resume-match", "cover-letter", "job-hunt"):
+            self.assertNotIn(external, discovered)
+
+    def test_resume_version_is_user_maintained_in_both_business_bases(self):
+        collection = (SKILLS / "job-collection" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        reminder = (SKILLS / "recruiting-reminder" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        for text in (collection, reminder):
+            self.assertIn("`投递简历版本`", text)
+            self.assertIn("SingleSelect", text)
+            self.assertIn("不读取飞书知识库", text)
 
     def test_deployable_templates_do_not_reconfigure_git_hooks(self):
         assets = SKILLS / "offerloop-setup" / "assets"
@@ -239,12 +449,19 @@ class RepositoryContractTest(unittest.TestCase):
         acceptance = (ROOT / "scripts" / "cold_install_acceptance.py").read_text(
             encoding="utf-8"
         )
+        end_to_end = (
+            ROOT / "docs" / "cases" / "end-to-end-acceptance.md"
+        ).read_text(encoding="utf-8")
         workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(
             encoding="utf-8"
         )
         security = (ROOT / "SECURITY.md").read_text(encoding="utf-8")
         for agent in ("codex", "claude-code", "hermes-agent"):
             self.assertIn(f'"{agent}"', acceptance)
+        self.assertIn("four Agents, eleven Skills", acceptance)
+        self.assertNotIn("four Agents, ten Skills", acceptance)
+        self.assertIn("版本升级为 4", end_to_end)
+        self.assertNotIn("版本升级为 3", end_to_end)
         self.assertIn("install_offerloop.py", acceptance)
         self.assertIn("already_installed", acceptance)
         self.assertIn("cold_install_acceptance.py", workflow)
@@ -257,6 +474,8 @@ class RepositoryContractTest(unittest.TestCase):
         installer = (ROOT / "scripts" / "install_offerloop.py").read_text(
             encoding="utf-8"
         )
+        self.assertIn("exactly the eleven supported OfferLoop Skills", installer)
+        self.assertNotIn("exactly the ten supported OfferLoop Skills", installer)
         for expected in (
             '"codex"',
             '"claude-code"',

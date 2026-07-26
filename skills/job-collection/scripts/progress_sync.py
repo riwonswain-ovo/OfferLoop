@@ -28,6 +28,7 @@ def build_progress_record(source, submitted_on: date | None):
         "投递岗位": "",
         "投递日期": submitted_on.isoformat() if submitted_on else "",
         "岗位 JD": "",
+        "投递简历版本": "",
         "公告链接": source.get("fields", {}).get("公告链接", ""),
         "投递链接": source.get("fields", {}).get("投递链接", ""),
         "企业清单 record_id": source["record_id"],
@@ -55,6 +56,7 @@ def merge_progress_record(
         result["投递日期"] = submitted_on.isoformat()
     result.setdefault("投递岗位", "")
     result.setdefault("岗位 JD", "")
+    result.setdefault("投递简历版本", "")
     return result
 
 

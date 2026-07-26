@@ -103,11 +103,13 @@ class OfferLoopWorkspaceTest(unittest.TestCase):
                 "target_base_url": "https://example.com/enterprise",
                 "progress_base_url": "https://example.com/progress",
                 "reminder_base_url": "https://example.com/interviews",
+                "knowledge_base_url": "https://example.com/knowledge",
             },
         )
 
         self.assertIn("https://example.com/workbench", rendered)
         self.assertIn("https://example.com/enterprise", rendered)
+        self.assertIn("https://example.com/knowledge", rendered)
         self.assertNotIn("{{workbench_url}}", rendered)
 
     def test_resource_registration_preserves_existing_config_and_rejects_secrets(self):

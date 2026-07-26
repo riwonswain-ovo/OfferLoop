@@ -20,7 +20,7 @@
 
 文件不存在时跳过。新文件权限设置为 `0600`；确认新位置可读前不要删除旧文件。
 
-## 2. 安装四个 Skill
+## 2. 安装十一个 Skill
 
 ```bash
 npx skills add riwonswain-ovo/OfferLoop -g
@@ -32,6 +32,13 @@ npx skills add riwonswain-ovo/OfferLoop -g
 - `job-collection`
 - `recruiting-reminder`
 - `offerloop-workspace`
+- `resume-deepthink`
+- `interview-prep`
+- `mock-lab`
+- `talk-review`
+- `pm-sense`
+- `interview-question-bank`
+- `knowledge-digest`
 
 先运行本地预检；预检不读邮件正文、不访问业务 Base。
 
@@ -58,7 +65,21 @@ npx skills add riwonswain-ovo/OfferLoop -g
 历史已投递记录无法可靠恢复投递日期时保持空白，不使用迁移日期冒充。轮次不明的旧面试
 只进入统一主表，不猜一面或二面。
 
-## 5. 回滚
+## 5. 按需启用求职训练
+
+旧用户的 schema v2 配置和既有能力继续有效。只有用户明确要求启用 `coaching` 时，才运行：
+
+```bash
+python3 skills/offerloop-setup/scripts/configure.py \
+  --enable-coaching --confirm-schema-v4
+```
+
+该操作保留全部既有公共配置和兼容 locator，迁移 `artifact_storage` 并升级为 schema v4；
+不创建或移动飞书节点。当前简历、训练目录、ASR 目录和双题库在对应 Skill 首次运行时经确认
+懒创建或登记。
+拒绝升级不影响招聘同步、提醒和原有工作区。
+
+## 6. 回滚
 
 新结构不可用时：
 

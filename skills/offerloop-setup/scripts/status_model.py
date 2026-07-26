@@ -5,7 +5,14 @@ from __future__ import annotations
 from collections import defaultdict
 
 
-VALID_CAPABILITIES = {"collection", "reminder", "workspace", "integration"}
+VALID_CAPABILITIES = {
+    "collection",
+    "reminder",
+    "workspace",
+    "coaching",
+    "knowledge",
+    "integration",
+}
 VALID_STATUSES = {
     "ready",
     "needs_action",

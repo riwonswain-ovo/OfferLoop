@@ -1,11 +1,17 @@
 import React from 'react';
 import dayjs from 'dayjs';
 import {
+  BellRing,
   BookOpen,
   BriefcaseBusiness,
+  ChevronDown,
+  Database,
   ExternalLink,
   FileSearch,
+  FolderKanban,
   RefreshCw,
+  Rss,
+  Settings,
   Sparkles,
 } from 'lucide-react';
 
@@ -34,6 +40,7 @@ import {
 } from '@client/src/components/ui/tabs';
 
 import { WorkbenchCalendar } from './WorkbenchCalendar';
+import { KnowledgeDigestCard } from './KnowledgeDigestCard';
 import {
   COMPANY_COLUMNS,
   EVENT_COLUMNS,
@@ -61,50 +68,163 @@ const WorkbenchSkeleton: React.FC = () => (
   </div>
 );
 
-const TrainingCard: React.FC = () => (
+const SKILL_GROUPS = [
+  {
+    name: '求职基础能力',
+    description: '配置、空间、岗位与笔面试安排',
+    skills: [
+      {
+        name: 'offerloop-setup',
+        title: '安装与配置',
+        description: '首次配置、环境检查、飞书授权和完整部署',
+        prompt: '介绍 OfferLoop 的十一个 Skill，并帮我完成第一次使用。',
+        icon: Settings,
+      },
+      {
+        name: 'offerloop-workspace',
+        title: '求职空间',
+        description: '管理飞书知识库、招聘工作台和材料目录',
+        prompt: '检查我的 OfferLoop 求职空间是否完整。',
+        icon: FolderKanban,
+      },
+      {
+        name: 'job-collection',
+        title: '招聘信息同步',
+        description: '从指定信息源收集岗位并整理到企业清单',
+        prompt: '同步我的招聘信息源。',
+        icon: Database,
+      },
+      {
+        name: 'recruiting-reminder',
+        title: '笔试面试提醒',
+        description: '从招聘邮件识别安排并同步笔面试中心和日历',
+        prompt: '检查最近 7 天的笔试面试邮件，先不要写入。',
+        icon: BellRing,
+      },
+    ],
+  },
+  {
+    name: '求职训练能力',
+    description: '素材沉淀、准备、练习与复盘',
+    skills: [
+      {
+        name: 'resume-deepthink',
+        title: '简历深挖',
+        description: '连续追问真实经历，生成简历表达和面试素材',
+        prompt: '追问深挖我简历中的一段实习经历。',
+        icon: FileSearch,
+      },
+      {
+        name: 'pm-sense',
+        title: '产品思维训练',
+        description: '训练产品与场景题，完善口语回答',
+        prompt: '让我先回答一道产品场景题，再帮我完善。',
+        icon: BookOpen,
+      },
+      {
+        name: 'interview-prep',
+        title: '面试准备',
+        description: '结合 JD、投递简历和素材生成针对性准备文档',
+        prompt: '根据下一场面试和实际投递简历帮我准备。',
+        icon: BriefcaseBusiness,
+      },
+      {
+        name: 'mock-lab',
+        title: '模拟面试',
+        description: '按真实节奏一题一答，结束后统一点评',
+        prompt: '用刚才的准备文档模拟面试。',
+        icon: Sparkles,
+      },
+      {
+        name: 'talk-review',
+        title: '真实面试复盘',
+        description: '根据 ASR 或转写还原问答并生成改进方案',
+        prompt: '根据这份 ASR 复盘刚结束的面试。',
+        icon: FileSearch,
+      },
+      {
+        name: 'interview-question-bank',
+        title: '面试题库',
+        description: '管理待学会和已学会题目，统一接收训练候选题',
+        prompt: '把我确认的题加入待学习题库。',
+        icon: BookOpen,
+      },
+    ],
+  },
+  {
+    name: '知识输入能力',
+    description: '知识库阅读规划与兴趣新闻追踪',
+    skills: [
+      {
+        name: 'knowledge-digest',
+        title: '知识速览',
+        description: '梳理完整知识库，并追踪兴趣范围内的新增新闻',
+        prompt: '帮我读完这个知识库。',
+        icon: Rss,
+      },
+    ],
+  },
+] as const;
+
+const SkillMapCard: React.FC = () => (
   <Card>
     <CardHeader>
       <CardTitle className="flex items-center gap-2 text-xl">
         <Sparkles className="size-5 text-primary" />
-        今日训练
+        OfferLoop 能力地图
       </CardTitle>
       <CardDescription>
-        先保留固定位置，后续由专用 Skill 自动生成
+        展开查看 11 个 Skill；无需记名称，直接对 Agent 描述目标即可
       </CardDescription>
     </CardHeader>
-    <CardContent className="space-y-6">
-      <div className="space-y-3">
-        <div className="flex items-center gap-2 font-medium">
-          <FileSearch className="size-4 text-primary" />
-          简历深挖 · 5 题
-        </div>
-        <div className="space-y-2">
-          {Array.from({ length: 5 }, (_value: unknown, index: number) => (
-            <div
-              key={`resume-${index + 1}`}
-              className="rounded-lg border border-dashed bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
-            >
-              第 {index + 1} 题将在简历深挖 Skill 启用后生成
+    <CardContent className="space-y-3">
+      {SKILL_GROUPS.map((group) => (
+        <details
+          key={group.name}
+          className="group rounded-lg border bg-muted/20"
+          open={group.name === '求职训练能力'}
+        >
+          <summary className="cursor-pointer list-none px-3 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="font-medium">{group.name}</div>
+                <div className="text-xs text-muted-foreground">
+                  {group.description}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary">{group.skills.length} 个</Badge>
+                <ChevronDown className="size-4 transition-transform group-open:rotate-180" />
+              </div>
             </div>
-          ))}
-        </div>
-      </div>
-      <div className="space-y-3">
-        <div className="flex items-center gap-2 font-medium">
-          <BookOpen className="size-4 text-primary" />
-          产品 Sense · 2 题
-        </div>
-        <div className="space-y-2">
-          {Array.from({ length: 2 }, (_value: unknown, index: number) => (
-            <div
-              key={`sense-${index + 1}`}
-              className="rounded-lg border border-dashed bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
-            >
-              第 {index + 1} 题将在产品 Sense Skill 启用后生成
-            </div>
-          ))}
-        </div>
-      </div>
+          </summary>
+          <div className="space-y-2 border-t p-3">
+            {group.skills.map((skill) => {
+              const Icon = skill.icon;
+              return (
+                <div
+                  key={skill.name}
+                  className="rounded-lg border bg-background px-3 py-3"
+                >
+                  <div className="mb-1 flex items-center gap-2 font-medium">
+                    <Icon className="size-4 text-primary" />
+                    {skill.title}
+                    <span className="font-mono text-xs text-muted-foreground">
+                      {skill.name}
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {skill.description}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    可以说：“{skill.prompt}”
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </details>
+      ))}
     </CardContent>
   </Card>
 );
@@ -322,8 +442,10 @@ const WorkbenchPage: React.FC = () => {
             calendarSourceUrl={state.data?.calendarSourceUrl ?? ''}
             loading={state.calendarLoading}
           />
-          <TrainingCard />
+          <SkillMapCard />
         </section>
+
+        <KnowledgeDigestCard />
 
         <WorkbenchDataCard state={state} />
       </div>

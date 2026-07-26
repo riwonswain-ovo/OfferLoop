@@ -15,22 +15,32 @@ import tempfile
 
 
 PLAN_VERSION = 1
-CAPABILITIES = {"collection", "reminder", "workspace", "full"}
+CAPABILITIES = {
+    "collection",
+    "reminder",
+    "workspace",
+    "coaching",
+    "knowledge",
+    "full",
+}
 RESOURCE_LOCATORS = {
     "enterprise_base": "target_base_url",
     "progress_base": "progress_base_url",
     "reminder_base": "reminder_base_url",
     "workbench": "workbench_url",
+    "knowledge_base": "knowledge_base_url",
 }
 TEMPLATE_DIRECTORIES = {
     "workbench": "assets/workbench-template",
     "progress_sync": "assets/progress-sync-template",
 }
 PHASES = (
-    ("preflight", "检查 Python、lark-cli、四个 Skill 与选定 profile"),
+    ("preflight", "检查 Python、lark-cli、十一个 Skill 与选定 profile"),
     ("bot_setup", "按需启用机器人能力、发布并安装应用，验证目标群成员关系"),
     ("bases", "创建或接管求职企业清单、求职进展与笔面试中心"),
     ("workspace", "创建私有知识库、固定目录和使用指南"),
+    ("coaching", "登记训练产物目录并启用 Markdown 飞书文档沉淀"),
+    ("knowledge", "创建或接管知识速览 Base、知识清单、阅读计划与新闻来源"),
     ("workbench", "发布招聘工作台"),
     ("progress_sync", "发布已投递即时同步服务并创建唯一 Base workflow"),
     ("imap", "创建本地 IMAP 模板，等待用户在本机填写授权码"),
@@ -69,7 +79,18 @@ def load_config(environ=None):
 def expand_capability(capability):
     if capability not in CAPABILITIES:
         raise ValueError(f"unsupported capability: {capability}")
-    return {"collection", "reminder", "workspace", "integration"} if capability == "full" else {capability}
+    return (
+        {
+            "collection",
+            "reminder",
+            "workspace",
+            "coaching",
+            "knowledge",
+            "integration",
+        }
+        if capability == "full"
+        else {capability}
+    )
 
 
 def _configured(config, resource):
@@ -85,11 +106,19 @@ def _configured(config, resource):
 
 
 def _required_resources(selected):
+    if selected == {"coaching"}:
+        return {"wiki_home"}
+    if selected == {"knowledge"}:
+        return {"knowledge_base", "wiki_home", "workbench"}
     required = {"enterprise_base", "progress_base"}
     if "reminder" in selected or "workspace" in selected:
         required.add("reminder_base")
     if "workspace" in selected:
         required.update({"wiki_home", "workbench"})
+    elif "coaching" in selected:
+        required.add("wiki_home")
+    if "knowledge" in selected:
+        required.update({"knowledge_base", "wiki_home", "workbench"})
     if "integration" in selected:
         required.add("progress_sync")
     return required
@@ -119,10 +148,12 @@ def build_plan(config, capability="full"):
         "phases": [
             {"id": phase_id, "summary": summary}
             for phase_id, summary in PHASES
-            if phase_id != "imap" or "reminder" in selected
+            if (phase_id != "imap" or "reminder" in selected)
+            and (phase_id != "coaching" or "coaching" in selected)
+            and (phase_id != "knowledge" or "knowledge" in selected)
         ],
         "confirmations": [
-            "创建或接管 Base、知识库、工作台和即时同步服务前的一次总确认",
+            "创建或接管 Base、知识库、知识速览、工作台和即时同步服务前的一次总确认",
             "启用通知时确认接收方式、目标名称、发送身份和最终摘要模板",
             "用户填写 IMAP 授权码后的一次仅连通性检查确认",
         ],

@@ -24,8 +24,8 @@ If a credential is exposed, revoke or rotate it immediately and remove it from G
 
 ## Release acceptance
 
-The release gate uses `skills@1.5.19` to install the four Skills into a temporary, project-scoped Codex
-workspace with copy mode. It verifies all four manifests, both app templates, a collection-only preflight,
+The release gate uses `skills@1.5.19` to install the ten Skills into a temporary, project-scoped Codex
+workspace with copy mode. It verifies all ten manifests, both app templates, a collection-only preflight,
 exact missing-dependency recovery, and report redaction. The CLI version is deliberately pinned; update it
 in the acceptance script through a reviewed pull request after testing the new installer contract.
 

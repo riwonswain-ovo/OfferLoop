@@ -60,6 +60,7 @@ class ProgressSyncTest(unittest.TestCase):
                 "投递岗位": "",
                 "投递日期": "2026-07-17",
                 "岗位 JD": "",
+                "投递简历版本": "",
                 "公告链接": "https://example.com/notice",
                 "投递链接": "https://example.com/apply",
                 "企业清单 record_id": "rec_source",
@@ -83,6 +84,7 @@ class ProgressSyncTest(unittest.TestCase):
             "投递岗位": "AI 产品经理",
             "投递日期": "2026-07-10",
             "岗位 JD": "负责 AI 产品规划",
+            "投递简历版本": "互联网产品经理岗 - 简历",
             "公告链接": "https://old.example/notice",
             "投递链接": "https://old.example/apply",
             "企业清单 record_id": "rec_source",
@@ -99,6 +101,7 @@ class ProgressSyncTest(unittest.TestCase):
         self.assertEqual(result["投递岗位"], "AI 产品经理")
         self.assertEqual(result["投递日期"], "2026-07-10")
         self.assertEqual(result["岗位 JD"], "负责 AI 产品规划")
+        self.assertEqual(result["投递简历版本"], "互联网产品经理岗 - 简历")
         self.assertEqual(result["公司"], "示例公司（更新）")
         self.assertNotIn("原招聘信息", result)
         self.assertEqual(result["公告链接"], "https://new.example/notice")

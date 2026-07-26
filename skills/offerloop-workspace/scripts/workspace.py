@@ -20,6 +20,10 @@ RESOURCE_KEYS = {
     "wiki_space_id",
     "workspace_home_node_token",
     "workbench_url",
+    "knowledge_base_url",
+    "knowledge_digest_table_id",
+    "knowledge_source_table_id",
+    "knowledge_wiki_folder_node_token",
     "workspace_calendar_table_id",
     "workspace_calendar_view_id",
     "schema_version",
@@ -165,6 +169,7 @@ def render_initial_homepage(template, config):
         "{{target_base_url}}": config.get("target_base_url", "待配置"),
         "{{progress_base_url}}": config.get("progress_base_url", "待配置"),
         "{{reminder_base_url}}": config.get("reminder_base_url", "待配置"),
+        "{{knowledge_base_url}}": config.get("knowledge_base_url", "待配置"),
     }
     for placeholder, value in replacements.items():
         result = result.replace(placeholder, str(value))

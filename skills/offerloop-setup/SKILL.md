@@ -1,18 +1,28 @@
 ---
 name: offerloop-setup
-description: 以渐进方式配置、检查和部署 OfferLoop。适用于“安装 OfferLoop”“第一次使用”“帮我配置”“检查环境”“一键部署 OfferLoop”，或 job-collection、recruiting-reminder、offerloop-workspace 不可用的情况；按岗位收集、邮件提醒、知识库工作台或完整流程分别预检、部署与验收，不要求一次配置全部功能。
+description: 介绍 OfferLoop 的十一个 Skill，并以渐进方式配置、检查和部署 OfferLoop。适用于“安装 OfferLoop”“第一次使用”“介绍十一个 Skill”“OfferLoop 能做什么”“帮我配置”“检查环境”“一键部署 OfferLoop”，或任一 OfferLoop Skill 不可用的情况；按岗位收集、邮件提醒、知识库工作台、知识速览、求职训练或完整流程分别预检、部署与验收，不要求一次配置全部功能。
 ---
 
 # OfferLoop Setup
 
-帮助用户以最少步骤启用 OfferLoop。先问本次要启用哪项能力：
+帮助用户理解并以最少步骤启用 OfferLoop。
+
+## 首次使用欢迎
+
+用户表示刚安装、第一次使用、不了解各 Skill，或明确要求介绍十一个 Skill 时，完整读取
+`references/welcome.md`，先展示十一项能力、三个常用闭环和隐私边界，再询问本次要启用哪项能力。
+不要在能力介绍前要求目标岗位、读取私人材料或运行线上检查。
+
+非首次使用的配置请求可以直接询问本次要启用哪项能力：
 
 - `collection`：招聘信息收集（`job-collection`）
 - `reminder`：笔试、测评和面试提醒（`recruiting-reminder`）
 - `workspace`：知识库和招聘工作台（`offerloop-workspace`）
+- `coaching`：简历深挖、产品思维、面试准备、模拟面试、真实复盘和面试题库
+- `knowledge`：知识库阅读规划、兴趣新闻追踪与知识速览（`knowledge-digest`）
 - `full`：以上全部，以及即时求职进展联动
 
-用户未指定时，不要猜测；请其从以上四项中选择。用户只选一项时，不要求配置其他功能。
+用户未指定时，不要猜测；请其从以上六项中选择。用户只选一项时，不要求配置其他功能。
 
 ## 安全边界
 
@@ -29,7 +39,7 @@ description: 以渐进方式配置、检查和部署 OfferLoop。适用于“安
 先根据当前 `SKILL.md` 的所在位置解析本 Skill 根目录，再从该目录运行所选能力的预检：
 
 ```bash
-python3 scripts/preflight.py --capability '<collection|reminder|workspace|full>' --json
+python3 scripts/preflight.py --capability '<collection|reminder|workspace|coaching|knowledge|full>' --json
 ```
 
 本 Skill 后续所有 `scripts/...` 和兄弟 Skill 脚本调用都遵循同一解析规则，不假设 Agent 的当前工作目录。
@@ -46,7 +56,7 @@ python3 scripts/preflight.py --capability '<collection|reminder|workspace|full>'
 
 ### 预检边界
 
-这不是完整安装或线上权限验证。预检仅检查本机 Python 版本、`lark-cli` 命令是否存在、四个
+这不是完整安装或线上权限验证。预检仅检查本机 Python 版本、`lark-cli` 命令是否存在、十一个
 OfferLoop Skill 与所选能力必需的外部 Lark Skill 文件是否存在，以及本地定位配置、IMAP 配置字段
 和文件权限。Skill 会在当前安装目录、`~/.agents/skills`、Codex、Claude Code、Hermes、
 WorkBuddy 的默认全局目录和 WorkBuddy 飞书连接器目录，以及 `CODEX_HOME`、
@@ -58,10 +68,13 @@ profile 的本机状态。它不验证在线身份、飞书权限或 token，也
 租户安装、Base/知识库共享、IMAP 连通性、个人日历授权、妙搭部署和工作台 OAuth 均须在用户确认后
 另行只读核验或配置。不要把 `ready` 表述为“已部署”或“已可用”。
 
-本仓库只包含 `offerloop-setup`、`job-collection`、`recruiting-reminder` 与
-`offerloop-workspace`。`collection` 核心流程直接使用 `lark-cli`；`reminder` 需要
+本仓库包含四个求职基础 Skill、六个求职训练 Skill 和一个知识输入 Skill。`collection` 核心流程直接使用
+`lark-cli`；`reminder` 需要
 `lark-calendar`；`workspace` 需要 `lark-base`、`lark-doc`、`lark-wiki`；`full` 还组合需要
-`lark-shared` 与 `lark-apps`。只有通知已启用时才检查通知依赖：目标已登记时运行期只需要
+`lark-shared` 与 `lark-apps`；`coaching` 需要 `lark-base`、`lark-doc`、`lark-wiki`。
+`knowledge` 需要 `lark-base`、`lark-doc`、`lark-wiki`，公开来源读取能力由当前 Agent
+提供。
+只有通知已启用时才检查通知依赖：目标已登记时运行期只需要
 `lark-im`，仅在启用的用户目标仍需按姓名解析时才需要 `lark-contact`。这些外部 Skill 不随
 OfferLoop 安装；缺失时按预检给出的动作安装或启用，并新开 Agent 会话。WorkBuddy 使用
 “专家·技能·连接器”中的飞书连接器，不执行不存在的 `npx skills -a workbuddy` 目标。
@@ -83,7 +96,12 @@ python3 scripts/configure.py --reminder-base-url '<BASE_URL>'
 python3 scripts/configure.py --wiki-space-id '<SPACE_ID>'
 python3 scripts/configure.py --workspace-home-node-token '<NODE_TOKEN>'
 python3 scripts/configure.py --workbench-url '<HTTPS_WORKBENCH_URL>'
-python3 scripts/configure.py --schema-version 2
+python3 scripts/configure.py \
+  --knowledge-base-url '<BASE_URL>' \
+  --knowledge-digest-table-id '<TABLE_ID>' \
+  --knowledge-source-table-id '<TABLE_ID>' \
+  --knowledge-wiki-folder-node-token '<NODE_TOKEN>'
+python3 scripts/configure.py --enable-coaching --confirm-schema-v4
 python3 scripts/configure.py \
   --progress-sync-app-id '<APP_ID>' \
   --progress-sync-endpoint '<HTTPS_ENDPOINT>' \
@@ -98,6 +116,10 @@ python3 scripts/configure.py \
 ```
 
 配置文件是 `~/.config/offerloop/config.json`（遵循 `XDG_CONFIG_HOME`），权限为 `0600`。其中不得保存密码、Cookie、App Secret、授权码或访问令牌。`workbench_url` 必须是没有用户名、密码或片段的 HTTPS 地址。
+
+`--enable-coaching` 只在用户明确确认后执行。它保留既有公共配置和兼容 locator，追加或迁移
+`artifact_storage` 并升级为 schema v4；不创建飞书节点。训练目录在首次运行对应 Skill 时
+由 `offerloop-workspace` 经用户确认懒创建。用户拒绝升级时，原有能力继续可用。
 
 飞书消息通知是可选能力。启用前必须让用户明确确认接收人或群、摘要模板和发送身份；保存
 `enabled` 即表示对 `job-collection` 与 `recruiting-reminder` 后续运行的一条最终摘要给予持续
@@ -178,7 +200,7 @@ python3 ../recruiting-reminder/scripts/fetch_mail.py --check-connection
 
 ## 故障路由
 
-- 找不到 Skill：检查 OfferLoop 安装是否同时包含 `offerloop-setup`、`offerloop-workspace`、`job-collection`、`recruiting-reminder`。
+- 找不到 Skill：检查 OfferLoop 安装是否包含四个基础 Skill 和六个求职训练 Skill。
 - 缺少 Python 或 lark-cli：先处理预检中的 `blocked` 项，暂停后续飞书操作。
 - bot 核验失败：检查应用 scope、版本发布、租户安装和目标 Base 权限；不要对 bot 执行 `auth login`。
 - user 核验失败：按最小 scope 发起 split-flow 授权；不要把个人日历查询改为 bot。
