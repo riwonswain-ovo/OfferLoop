@@ -1,0 +1,33 @@
+services:
+  notebooklm-browser:
+    image: ghcr.io/linuxserver/chromium:version-b0ddd401
+    container_name: offerloop-notebooklm-browser
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: Asia/Shanghai
+      CHROME_CLI: https://notebooklm.google.com/
+      TITLE: OfferLoop NotebookLM
+      PIXELFLUX_WAYLAND: "false"
+      START_DOCKER: "false"
+      SELKIES_UI_TITLE: NotebookLM
+      SELKIES_USE_CPU: "true|locked"
+      SELKIES_ENCODER: jpeg
+      SELKIES_FRAMERATE: "30"
+      SELKIES_AUDIO_ENABLED: "true|locked"
+      SELKIES_MICROPHONE_ENABLED: "true|locked"
+      SELKIES_FILE_TRANSFERS: upload,download
+      SELKIES_ENABLE_SHARING: "false"
+      SELKIES_ENABLE_COLLAB: "false"
+      SELKIES_ENABLE_SHARED: "false"
+      DISABLE_SUDO: "true"
+      DISABLE_TERMINALS: "true"
+    volumes:
+      - notebooklm-browser-data:/config
+    ports:
+      - "127.0.0.1:39000:3000"
+    shm_size: "1gb"
+    restart: unless-stopped
+
+volumes:
+  notebooklm-browser-data:
