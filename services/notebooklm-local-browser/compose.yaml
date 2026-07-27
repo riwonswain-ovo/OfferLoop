@@ -16,6 +16,7 @@ services:
       SELKIES_FRAMERATE: "30"
       SELKIES_AUDIO_ENABLED: "true|locked"
       SELKIES_MICROPHONE_ENABLED: "true|locked"
+      SELKIES_UI_SHOW_CORE_BUTTONS: "false|locked"
       SELKIES_FILE_TRANSFERS: upload,download
       SELKIES_ENABLE_SHARING: "false"
       SELKIES_ENABLE_COLLAB: "false"
@@ -25,7 +26,7 @@ services:
     volumes:
       - notebooklm-browser-data:/config
     ports:
-      - "127.0.0.1:39000:3000"
+      - "127.0.0.1:39002:3000"
     shm_size: "1gb"
     restart: unless-stopped
 

@@ -6,7 +6,7 @@ NotebookLM。Chromium 的个人资料和 Google 登录状态保存在 Docker vol
 
 ## 地址
 
-- 飞书内入口：`http://127.0.0.1:39000/`
+- 飞书内入口：`http://127.0.0.1:39002/`
 
 ## 运行
 
