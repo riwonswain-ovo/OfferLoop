@@ -33,13 +33,16 @@ Key，并直接保存在 macOS 钥匙串。原始密钥不会写入仓库或输�
 默认工作台地址已经内置。只有仓库位置变化时，才需要在 `.env.local` 中设置：
 
 ```bash
-OFFERLOOP_WORKSPACE=/absolute/path/to/OfferLoop
+OFFERLOOP_SOURCE_ROOT=/absolute/path/to/OfferLoop
 ```
 
 ## 安全边界
 
 - API Key 只允许领取任务和回传任务状态。
 - 工作台仍按当前飞书用户隔离对话任务。
+- Agent 在独立临时目录中运行；OfferLoop 源代码、Skills 和本机业务文件只读。
+- Agent 的命令网络仅放行飞书、Lark 和飞书文件资源域名。
+- 业务结果只允许写入用户已授权的飞书知识库、文档、Base 或日历。
 - 写入飞书或读取招聘邮件前，工作台会先要求用户确认。
 - Worker 不监听公网端口，也不需要 Cloudflare 或自定义域名。
 

@@ -1,6 +1,9 @@
 import { spawn } from 'node:child_process';
 
 const DETACHED_PROCESS = process.platform !== 'win32';
+const OFFERLOOP_PERMISSION_PROFILE = 'offerloop-feishu';
+const FEISHU_NETWORK_POLICY =
+  '{ "**.feishu.cn" = "allow", "**.feishucdn.com" = "allow", "**.larksuite.com" = "allow" }';
 const PROGRESS_BY_EVENT = new Map([
   ['thread.started', '已创建 OfferLoop 会话'],
   ['turn.started', '正在理解需求并选择 Skill'],
@@ -9,7 +12,7 @@ const PROGRESS_BY_EVENT = new Map([
   ['turn.completed', '正在整理结果'],
 ]);
 
-function buildAgentPrompt({ confirmed, message, route }) {
+function buildAgentPrompt({ confirmed, message, route, sourceRoot }) {
   const confirmationState = confirmed
     ? '用户已在飞书界面确认本轮中已展示的敏感操作。'
     : '用户尚未额外确认敏感操作。';
@@ -22,7 +25,14 @@ function buildAgentPrompt({ confirmed, message, route }) {
     '你是通过飞书工作台提供服务的 OfferLoop Agent。',
     '本轮是求职业务助手任务，不是代码开发任务。',
     '必须读取并严格遵循匹配的 OfferLoop SKILL.md；需要时使用该 Skill 指定的工具和脚本。',
-    '不要修改 OfferLoop 源代码，不要创建分支或提交代码。',
+    `本机 OfferLoop 只读根目录是 ${sourceRoot}。`,
+    '本机业务文件、OfferLoop 源代码和 Skills 均为只读；禁止修改、创建、移动或删除这些文件。',
+    '运行目录仅用于必要的临时缓存，不得把业务结果保存在本机。',
+    '业务内容只能写入用户已授权的飞书知识库、飞书文档、飞书 Base 或飞书日历。',
+    '写入或删除飞书内容前，必须遵循对应 Skill 的确认规则和用户授权范围。',
+    '报告飞书连接或权限失败前，必须实际执行对应 Skill 指定的只读状态检查，并以本轮命令结果为准；不得复用旧报错或凭历史记录推断。',
+    '若检查失败，须区分网络、登录授权和权限范围问题，并用不含凭证的原始错误摘要说明原因。',
+    '不要创建分支或提交代码。',
     '不要要求用户在聊天中提供密码、Cookie、App Secret、token 或邮箱授权码。',
     '如果 SKILL.md 要求确认，而当前确认不足，请停止在确认点并清楚说明影响范围。',
     confirmationState,
@@ -67,22 +77,47 @@ function extractCodexEvent(event) {
   return update;
 }
 
-function createCodexArgs({ confirmed, message, route, sessionId, workspace }) {
-  const prompt = buildAgentPrompt({ confirmed, message, route });
-  if (sessionId) {
-    return ['exec', 'resume', '--json', sessionId, prompt];
-  }
-  return [
+function createCodexArgs({
+  confirmed,
+  message,
+  route,
+  sessionId,
+  sourceRoot,
+  workspace,
+}) {
+  const prompt = buildAgentPrompt({
+    confirmed,
+    message,
+    route,
+    sourceRoot: sourceRoot ?? workspace,
+  });
+  const args = [
     'exec',
     '--json',
     '--color',
     'never',
-    '--sandbox',
-    'workspace-write',
+    '--skip-git-repo-check',
+    '-c',
+    `default_permissions="${OFFERLOOP_PERMISSION_PROFILE}"`,
+    '-c',
+    `permissions.${OFFERLOOP_PERMISSION_PROFILE}.filesystem={ ":root" = "read", ${JSON.stringify(workspace)} = "write" }`,
+    '-c',
+    `permissions.${OFFERLOOP_PERMISSION_PROFILE}.network.enabled=true`,
+    '-c',
+    `permissions.${OFFERLOOP_PERMISSION_PROFILE}.network.domains=${FEISHU_NETWORK_POLICY}`,
+    '-c',
+    'features.network_proxy.enabled=true',
+    '-c',
+    `features.network_proxy.domains=${FEISHU_NETWORK_POLICY}`,
     '-C',
     workspace,
-    prompt,
   ];
+  if (sessionId) {
+    args.push('resume', sessionId, prompt);
+  } else {
+    args.push(prompt);
+  }
+  return args;
 }
 
 function createCodexArchiveArgs(sessionId) {
@@ -147,6 +182,7 @@ function startCodexRun({
   onUpdate,
   route,
   sessionId,
+  sourceRoot,
   workspace,
 }) {
   const args = createCodexArgs({
@@ -154,6 +190,7 @@ function startCodexRun({
     message,
     route,
     sessionId,
+    sourceRoot,
     workspace,
   });
   const child = spawn(codexBin, args, {

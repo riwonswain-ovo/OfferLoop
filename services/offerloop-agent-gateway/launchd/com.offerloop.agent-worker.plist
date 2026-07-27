@@ -15,7 +15,7 @@
     <dict>
       <key>CODEX_BIN</key>
       <string>/Applications/ChatGPT.app/Contents/Resources/codex</string>
-      <key>OFFERLOOP_WORKSPACE</key>
+      <key>OFFERLOOP_SOURCE_ROOT</key>
       <string>/Users/langweixian/Desktop/ai coding/OfferLoop</string>
       <key>PATH</key>
       <string>/Users/langweixian/.local/share/fnm/node-versions/v24.15.0/installation/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Applications/ChatGPT.app/Contents/Resources</string>

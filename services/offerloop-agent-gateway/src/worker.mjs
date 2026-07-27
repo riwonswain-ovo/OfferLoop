@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
-import { hostname } from 'node:os';
-import { resolve } from 'node:path';
+import { mkdirSync } from 'node:fs';
+import { hostname, tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 
 import {
   signalCodexProcess,
@@ -9,7 +10,7 @@ import {
 } from './codex-runner.mjs';
 import { createWorkerClient } from './worker-client.mjs';
 
-const VERSION = '0.5.0';
+const VERSION = '0.6.0';
 const CODEX_ARCHIVE_ROUTE = '__codex_archive__';
 const FORCE_STOP_DELAY_MS = 2_000;
 const DEFAULT_WORKBENCH_URL =
@@ -18,7 +19,15 @@ const KEYCHAIN_SERVICE = 'OfferLoop Agent Worker';
 const KEYCHAIN_ACCOUNT = 'app_17abq8v4k7k';
 
 const CODEX_BIN = process.env.CODEX_BIN ?? 'codex';
-const WORKSPACE = resolve(process.env.OFFERLOOP_WORKSPACE ?? '../..');
+const SOURCE_ROOT = resolve(
+  process.env.OFFERLOOP_SOURCE_ROOT ??
+    process.env.OFFERLOOP_WORKSPACE ??
+    '../..',
+);
+const RUNTIME_WORKSPACE = resolve(
+  process.env.OFFERLOOP_RUNTIME_WORKSPACE ??
+    join(tmpdir(), 'offerloop-agent-runtime'),
+);
 const WORKBENCH_URL =
   process.env.OFFERLOOP_WORKBENCH_URL ?? DEFAULT_WORKBENCH_URL;
 const WORKER_ID = process.env.OFFERLOOP_WORKER_ID ?? 'offerloop-mac';
@@ -140,7 +149,7 @@ async function executeTask(client, task) {
         codexBin: CODEX_BIN,
         onUpdate,
         sessionId: task.sessionId,
-        workspace: WORKSPACE,
+        workspace: RUNTIME_WORKSPACE,
       })
     : startCodexRun({
         codexBin: CODEX_BIN,
@@ -149,7 +158,8 @@ async function executeTask(client, task) {
         onUpdate,
         route: task.route,
         sessionId: task.sessionId,
-        workspace: WORKSPACE,
+        sourceRoot: SOURCE_ROOT,
+        workspace: RUNTIME_WORKSPACE,
       });
   child = execution.child;
   activeChild = child;
@@ -224,6 +234,7 @@ async function executeTask(client, task) {
 }
 
 async function run() {
+  mkdirSync(RUNTIME_WORKSPACE, { recursive: true });
   const apiKey = readApiKey();
   if (!apiKey) {
     throw new Error(
@@ -238,7 +249,8 @@ async function run() {
   process.stdout.write(
     `OfferLoop Agent Worker ${VERSION} started for ${WORKBENCH_URL}\n`,
   );
-  process.stdout.write(`Workspace: ${WORKSPACE}\n`);
+  process.stdout.write(`Read-only OfferLoop root: ${SOURCE_ROOT}\n`);
+  process.stdout.write(`Writable runtime cache: ${RUNTIME_WORKSPACE}\n`);
 
   let retryDelayMs = POLL_INTERVAL_MS;
   while (!shuttingDown) {
