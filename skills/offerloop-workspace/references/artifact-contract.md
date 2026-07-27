@@ -9,9 +9,10 @@
 - `run_id`、标题、状态路由和 Markdown 校验；
 - 从 Agent 已读取的候选节点中按 `run_id` 判断唯一、缺失或冲突。
 
-脚本不访问飞书。Agent 必须先读取 `lark-wiki`、`lark-doc` 和按需使用的
-`lark-base` Skill，再完成节点查询、文档读写和 Base 回填。线上操作成功后，才登记返回的
-locator。不得把飞书 token、简历正文或 ASR 正文打印到日志。
+脚本不访问飞书。Agent 必须先读取 `lark-wiki`、`lark-doc`；只有对应业务流程明确要求或用户
+另行要求 Base 操作时才读取 `lark-base`。完成节点查询和文档读写后，按各 Skill 的明确规则
+决定是否回填 Base。线上操作成功后，才登记返回的 locator。不得把飞书 token、简历正文或
+ASR 正文打印到日志。
 
 ## 固定材料
 
@@ -77,7 +78,9 @@ python3 scripts/artifact_contract.py register-folder \
 
 ## 每次产物
 
-适用于 `experience-deepthink`、`pm-sense`、`interview-prep`、`mock-lab` 和 `talk-review`：
+适用于 `experience-deepthink`、`pm-sense`、`interview-prep`、`mock-lab` 和 `talk-review`。
+`interview-prep` 先在聊天中交付完整初稿；只有用户明确确认当前版本并要求保存后，才进入以下
+正式产物流程：
 
 1. 用 `new-run --skill <name>` 生成 `run_id`，并在会话内保留。
 2. 用 `route-folder` 获得目标目录键，再用 `resolve-folder` 获得 locator。
@@ -130,8 +133,11 @@ python3 scripts/artifact_contract.py register-folder \
   岗位方向不同才创建独立文档。发现旧版“简历深挖”候选时可以迁移唯一匹配文档；多个候选时
   让用户选择，不自动合并或删除。
 - `pm-sense`：默认不读取简历或其他知识库正文；用户要求延续同一训练时才读取指定训练文档。
-- `interview-prep`：先从 `求职进展` 读取 `岗位 JD` 和 `投递简历版本`，再按版本名读取唯一
-  简历；不得用其他简历替代。
+- `interview-prep`：以用户本次明确提供的公司、岗位、JD 和轮次为目标事实源。个人材料使用
+  用户手动指定的 `experience-deepthink` 产物（飞书候选须先列出并让用户选择）或用户上传的
+  简历；上一轮准备文档只在用户手动指定后读取。聊天交付不要求任何 locator；用户确认保存时
+  只要求 `interview_prep` locator，若用户选择从飞书读取经历深挖则另需
+  `resume_deepthink` locator。
 - `mock-lab`：读取用户选定的简历，并按本次岗位方向和简历中可见经历选择相关经历深挖文档；
   JD 有则读取，无则按用户确认的方向进行。
 - `talk-review`：读取用户选定的 ASR、简历，并按实际面试岗位方向和转写中涉及的经历选择相关

@@ -1,4 +1,4 @@
 interface:
   display_name: "面试准备"
-  short_description: "按固定轮次融合面经与经历，生成金字塔式准备文档"
-  default_prompt: "Use $interview-prep to create a pyramid-structured guide for my current interview round from my JD, submitted resume, interview experiences, and prior review."
+  short_description: "适配各行业岗位，生成兼顾快速复习与系统练习的分轮准备"
+  default_prompt: "Use $interview-prep to build a role-adapted, practice-first guide for my company, JD, interview round, and selected experience materials."

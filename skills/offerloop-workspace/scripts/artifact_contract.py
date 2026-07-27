@@ -85,7 +85,7 @@ REQUIRED_LOCATORS = {
         "folders": ("current_resumes", "resume_deepthink"),
     },
     "interview-prep": {
-        "folders": ("current_resumes", "interview_prep"),
+        "folders": ("interview_prep",),
     },
     "mock-lab": {
         "folders": ("current_resumes", "resume_deepthink", "mock_lab"),
