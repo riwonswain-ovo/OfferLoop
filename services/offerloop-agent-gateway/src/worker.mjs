@@ -3,16 +3,11 @@ import { mkdirSync } from 'node:fs';
 import { hostname, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-import {
-  signalCodexProcess,
-  startCodexArchive,
-  startCodexRun,
-} from './codex-runner.mjs';
+import { createCodexAppServerClient } from './codex-app-server-client.mjs';
 import { createWorkerClient } from './worker-client.mjs';
 
-const VERSION = '0.6.0';
+const VERSION = '0.7.0';
 const CODEX_ARCHIVE_ROUTE = '__codex_archive__';
-const FORCE_STOP_DELAY_MS = 2_000;
 const DEFAULT_WORKBENCH_URL =
   'https://ccn3d1ndeqey.aiforce.cloud/app/app_17abq8v4k7k';
 const KEYCHAIN_SERVICE = 'OfferLoop Agent Worker';
@@ -34,12 +29,12 @@ const WORKER_ID = process.env.OFFERLOOP_WORKER_ID ?? 'offerloop-mac';
 const WORKER_NAME =
   process.env.OFFERLOOP_WORKER_NAME ?? `${hostname()} · OfferLoop`;
 const POLL_INTERVAL_MS = Math.max(
-  1_000,
-  Number(process.env.OFFERLOOP_POLL_INTERVAL_MS ?? '3000'),
+  500,
+  Number(process.env.OFFERLOOP_POLL_INTERVAL_MS ?? '1000'),
 );
 
 let shuttingDown = false;
-let activeChild = null;
+let appServerClient = null;
 
 function sleep(milliseconds) {
   return new Promise((resolvePromise) => {
@@ -72,32 +67,20 @@ function readApiKey() {
   return lookup.status === 0 ? lookup.stdout.trim() : '';
 }
 
-function checkCodex() {
-  const result = spawnSync(CODEX_BIN, ['--version'], {
-    encoding: 'utf8',
-    timeout: 5_000,
-  });
-  return result.status === 0;
-}
-
-async function executeTask(client, task) {
+async function executeTask(client, codexClient, task) {
   let latestProgress = '正在启动 OfferLoop Agent';
   let latestResult = '';
   let latestSessionId = task.sessionId;
   let cancellationRequested = false;
-  let child = null;
-  let forceStopTimer = null;
   let communicationFailure = null;
-  const stopChild = () => {
-    if (!child) {
-      return;
-    }
-    signalCodexProcess(child, 'SIGTERM');
-    if (!forceStopTimer) {
-      forceStopTimer = setTimeout(() => {
-        signalCodexProcess(child, 'SIGKILL');
-      }, FORCE_STOP_DELAY_MS);
-      forceStopTimer.unref?.();
+  const stopTurn = async () => {
+    try {
+      const interrupted = await codexClient.interrupt();
+      if (!interrupted) {
+        codexClient.close();
+      }
+    } catch {
+      codexClient.close();
     }
   };
   const sendProgress = async () => {
@@ -106,6 +89,7 @@ async function executeTask(client, task) {
     }
     const response = await client.updateRun(task.runId, {
       progress: latestProgress,
+      result: latestResult || undefined,
       sessionId: latestSessionId,
       status: 'running',
       workerId: WORKER_ID,
@@ -113,7 +97,7 @@ async function executeTask(client, task) {
     if (response.cancelRequested) {
       cancellationRequested = true;
       latestProgress = '正在停止任务';
-      stopChild();
+      await stopTurn();
     }
     return response;
   };
@@ -144,25 +128,26 @@ async function executeTask(client, task) {
     }
   };
   const archiveTask = task.route === CODEX_ARCHIVE_ROUTE;
-  const execution = archiveTask
-    ? startCodexArchive({
-        codexBin: CODEX_BIN,
-        onUpdate,
-        sessionId: task.sessionId,
-        workspace: RUNTIME_WORKSPACE,
-      })
-    : startCodexRun({
-        codexBin: CODEX_BIN,
+  let completion;
+  try {
+    if (archiveTask) {
+      latestProgress = '正在归档 Codex 对话';
+      await codexClient.archive(task.sessionId);
+      completion = Promise.resolve({ ok: true });
+    } else {
+      const execution = await codexClient.runTurn({
         confirmed: task.confirmed,
         message: task.message,
         onUpdate,
         route: task.route,
         sessionId: task.sessionId,
-        sourceRoot: SOURCE_ROOT,
-        workspace: RUNTIME_WORKSPACE,
       });
-  child = execution.child;
-  activeChild = child;
+      latestSessionId = execution.threadId;
+      completion = execution.completion;
+    }
+  } catch (error) {
+    completion = Promise.resolve({ error: error.message, ok: false });
+  }
 
   const progressTimer = setInterval(() => {
     void sendProgress().catch((error) => {
@@ -170,16 +155,12 @@ async function executeTask(client, task) {
       process.stderr.write(
         `Unable to update Agent progress: ${error.message}\n`,
       );
-      stopChild();
+      void stopTurn();
     });
-  }, 2_000);
+  }, 750);
 
-  const outcome = await execution.completion;
+  const outcome = await completion;
   clearInterval(progressTimer);
-  activeChild = null;
-  if (forceStopTimer) {
-    clearTimeout(forceStopTimer);
-  }
   if (communicationFailure) {
     throw new Error(
       `Agent result channel failed: ${communicationFailure.message}`,
@@ -245,6 +226,12 @@ async function run() {
     apiKey,
     baseUrl: WORKBENCH_URL,
   });
+  appServerClient = createCodexAppServerClient({
+    codexBin: CODEX_BIN,
+    runtimeWorkspace: RUNTIME_WORKSPACE,
+    sourceRoot: SOURCE_ROOT,
+  });
+  await appServerClient.start();
 
   process.stdout.write(
     `OfferLoop Agent Worker ${VERSION} started for ${WORKBENCH_URL}\n`,
@@ -255,16 +242,15 @@ async function run() {
   let retryDelayMs = POLL_INTERVAL_MS;
   while (!shuttingDown) {
     try {
-      const codexAvailable = checkCodex();
       const response = await client.poll({
-        codexAvailable,
+        codexAvailable: true,
         displayName: WORKER_NAME,
         version: VERSION,
         workerId: WORKER_ID,
       });
       retryDelayMs = POLL_INTERVAL_MS;
       if (response.task) {
-        await executeTask(client, response.task);
+        await executeTask(client, appServerClient, response.task);
       } else {
         await sleep(POLL_INTERVAL_MS);
       }
@@ -279,13 +265,7 @@ async function run() {
 for (const signal of ['SIGINT', 'SIGTERM']) {
   process.on(signal, () => {
     shuttingDown = true;
-    if (activeChild) {
-      signalCodexProcess(activeChild, 'SIGTERM');
-      const forceStopTimer = setTimeout(() => {
-        signalCodexProcess(activeChild, 'SIGKILL');
-      }, FORCE_STOP_DELAY_MS);
-      forceStopTimer.unref?.();
-    }
+    appServerClient?.close();
   });
 }
 

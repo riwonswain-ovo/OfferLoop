@@ -12,19 +12,30 @@ const PROGRESS_BY_EVENT = new Map([
   ['turn.completed', '正在整理结果'],
 ]);
 
-function buildAgentPrompt({ confirmed, message, route, sourceRoot }) {
+function buildAgentInstructions({ confirmed, route, sourceRoot }) {
   const confirmationState = confirmed
     ? '用户已在飞书界面确认本轮中已展示的敏感操作。'
     : '用户尚未额外确认敏感操作。';
-  const routeHint =
-    route && route !== 'auto'
-      ? `界面初步识别的 Skill 是 ${route}，但仍须以实际 SKILL.md 触发规则为准。`
-      : '请根据用户需求自动选择最合适的 OfferLoop Skill。';
+  let routeHint =
+    '先判断本轮是否真的需要 Skill。只有明确的求职业务任务才选择并读取最合适的 OfferLoop Skill。';
+  if (route === 'chat') {
+    routeHint =
+      '本轮是普通求职对话。不要读取 Skill、不要调用工具，直接自然回答用户。';
+  } else if (route === 'continue') {
+    routeHint =
+      '本轮是上一任务的省略式续聊。结合当前 Codex 任务上下文继续；若用户明确提出新任务，必须重新选择匹配的 Skill。';
+  } else if (route && route !== 'auto') {
+    routeHint = `界面初步识别的 Skill 是 ${route}，但仍须以实际 SKILL.md 触发规则为准。`;
+  }
+  const skillRequired =
+    route === 'chat'
+      ? '本轮禁止为了展示流程而调用 Skill。'
+      : '若本轮需要 Skill，必须读取并严格遵循匹配的 OfferLoop SKILL.md；不需要 Skill 时直接回答。';
 
   return [
     '你是通过飞书工作台提供服务的 OfferLoop Agent。',
     '本轮是求职业务助手任务，不是代码开发任务。',
-    '必须读取并严格遵循匹配的 OfferLoop SKILL.md；需要时使用该 Skill 指定的工具和脚本。',
+    skillRequired,
     `本机 OfferLoop 只读根目录是 ${sourceRoot}。`,
     '本机业务文件、OfferLoop 源代码和 Skills 均为只读；禁止修改、创建、移动或删除这些文件。',
     '运行目录仅用于必要的临时缓存，不得把业务结果保存在本机。',
@@ -37,7 +48,13 @@ function buildAgentPrompt({ confirmed, message, route, sourceRoot }) {
     '如果 SKILL.md 要求确认，而当前确认不足，请停止在确认点并清楚说明影响范围。',
     confirmationState,
     routeHint,
-    '最终使用简洁、自然的中文回复，并明确说明实际调用了哪个 Skill。',
+    '最终使用简洁、自然的中文回复。仅在实际调用 Skill 时说明 Skill 名称；普通对话不要声称调用了 Skill。',
+  ].join('\n');
+}
+
+function buildAgentPrompt({ confirmed, message, route, sourceRoot }) {
+  return [
+    buildAgentInstructions({ confirmed, route, sourceRoot }),
     '',
     `用户消息：${message}`,
   ].join('\n');
@@ -254,6 +271,9 @@ function startCodexRun({
 }
 
 export {
+  FEISHU_NETWORK_POLICY,
+  OFFERLOOP_PERMISSION_PROFILE,
+  buildAgentInstructions,
   buildAgentPrompt,
   createCodexArchiveArgs,
   createCodexArgs,

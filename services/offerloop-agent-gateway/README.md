@@ -10,12 +10,12 @@ Codex，然后把进度和结果回传。整个过程中只有本机主动发起
 
 1. 用户在 OfferLoop 工作台右侧发送消息。
 2. 工作台将任务写入自身数据库。
-3. 本机 Worker 每 3 秒主动领取一个任务。
-4. Worker 使用本机 Codex 登录与 OfferLoop Skills 执行任务。
-5. 工作台轮询任务状态并展示最终结果。
+3. 本机 Worker 最多约 1 秒内领取任务。
+4. Worker 通过常驻的 Codex app-server 创建或续接原生 Codex 任务。
+5. 工作台持续展示生成中的回复；停止和归档直接调用 Codex 原生能力。
 
 飞书群里的 `lark-channel-bridge` 不受影响；两者共用本机已经可用的 Codex
-运行环境与 Skills，但各自维护独立会话。
+运行环境与 Skills。工作台中新建的对话会作为原生任务出现在 Codex 侧边栏。
 
 ## macOS 配置
 
