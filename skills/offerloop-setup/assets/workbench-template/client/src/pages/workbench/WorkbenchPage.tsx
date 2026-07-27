@@ -10,7 +10,6 @@ import {
   FileSearch,
   FolderKanban,
   RefreshCw,
-  Rss,
   Settings,
   Sparkles,
 } from 'lucide-react';
@@ -40,7 +39,6 @@ import {
 } from '@client/src/components/ui/tabs';
 
 import { WorkbenchCalendar } from './WorkbenchCalendar';
-import { KnowledgeDigestCard } from './KnowledgeDigestCard';
 import {
   COMPANY_COLUMNS,
   EVENT_COLUMNS,
@@ -77,7 +75,7 @@ const SKILL_GROUPS = [
         name: 'offerloop-setup',
         title: '安装与配置',
         description: '首次配置、环境检查、飞书授权和完整部署',
-        prompt: '介绍 OfferLoop 的十一个 Skill，并帮我完成第一次使用。',
+        prompt: '介绍 OfferLoop 的九个 Skill，并帮我完成第一次使用。',
         icon: Settings,
       },
       {
@@ -142,26 +140,6 @@ const SKILL_GROUPS = [
         prompt: '根据这份 ASR 复盘刚结束的面试。',
         icon: FileSearch,
       },
-      {
-        name: 'interview-question-bank',
-        title: '面试题库',
-        description: '管理待学会和已学会题目，统一接收训练候选题',
-        prompt: '把我确认的题加入待学习题库。',
-        icon: BookOpen,
-      },
-    ],
-  },
-  {
-    name: '知识输入能力',
-    description: '知识库阅读规划与兴趣新闻追踪',
-    skills: [
-      {
-        name: 'knowledge-digest',
-        title: '知识速览',
-        description: '梳理完整知识库，并追踪兴趣范围内的新增新闻',
-        prompt: '帮我读完这个知识库。',
-        icon: Rss,
-      },
     ],
   },
 ] as const;
@@ -174,7 +152,7 @@ const SkillMapCard: React.FC = () => (
         OfferLoop 能力地图
       </CardTitle>
       <CardDescription>
-        展开查看 11 个 Skill；无需记名称，直接对 Agent 描述目标即可
+        展开查看 9 个 Skill；无需记名称，直接对 Agent 描述目标即可
       </CardDescription>
     </CardHeader>
     <CardContent className="space-y-3">
@@ -444,8 +422,6 @@ const WorkbenchPage: React.FC = () => {
           />
           <SkillMapCard />
         </section>
-
-        <KnowledgeDigestCard />
 
         <WorkbenchDataCard state={state} />
       </div>

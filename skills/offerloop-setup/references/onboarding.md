@@ -1,15 +1,15 @@
 # OfferLoop 新用户接入
 
-本接入指南采用渐进配置：只配置用户当前要用的能力。先确认十一个 OfferLoop Skill 已安装在
+本接入指南采用渐进配置：只配置用户当前要用的能力。先确认九个 OfferLoop Skill 已安装在
 同一个 Agent 环境，并在安装后新开会话让它们加载；再在 `offerloop-setup` 中选择
 `collection`、`reminder`、`workspace`、`coaching` 或 `full`，并运行对应的离线预检。
 
-首次安装、第一次使用或用户要求理解十一个 Skill 时，先完整读取 `welcome.md`，展示十一项能力、
+首次安装、第一次使用或用户要求理解九个 Skill 时，先完整读取 `welcome.md`，展示九项能力、
 自然语言示例、常用闭环和隐私边界，再让用户选择当前能力。不要要求用户先记技术名称，也不要
 在介绍阶段询问目标岗位或访问线上资源。
 
 这一步是新用户的最小成功：Skill 能被发现并能开始只读本机引导。它不是飞书、邮箱、妙搭或
-工作台已经配置完成的声明。本仓库提供四个基础 Skill 和六个求职训练 Skill；运行时、飞书
+工作台已经配置完成的声明。本仓库提供四个求职基础 Skill 和五个求职训练 Skill；运行时、飞书
 身份和外部 Lark Skill 都需要单独准备。
 
 ## 1. 能力与最小配置
@@ -45,7 +45,7 @@
 python3 scripts/preflight.py --capability '<collection|reminder|workspace|coaching|full>' --json
 ```
 
-它不访问飞书、浏览器、工作台或邮箱。它只检查 Python 版本、`lark-cli` 命令、十一个 OfferLoop
+它不访问飞书、浏览器、工作台或邮箱。它只检查 Python 版本、`lark-cli` 命令、九个 OfferLoop
 Skill、所选能力必需的外部 Lark Skill 目录、本地配置字段及 IMAP 配置文件状态；不验证 Node/npx、
 在线身份、飞书权限、IMAP 连通性或妙搭权限。已登记 profile 的本机状态会通过
 `lark-cli profile list` 和 `lark-cli doctor --offline` 验证。外部 Skill 会跨当前安装目录、

@@ -35,7 +35,6 @@ SKILL_CONFIG_KEYS = {
     "mock-lab": "mock_lab",
     "talk-review": "talk_review",
     "pm-sense": "pm_sense",
-    "interview-question-bank": "interview_question_bank",
 }
 FOLDER_KEYS = (
     "current_resumes",
@@ -46,7 +45,6 @@ FOLDER_KEYS = (
     "interview_asr",
     "interview_review",
 )
-DOCUMENT_KEYS = ("question_bank_pending", "question_bank_mastered")
 LOCATOR_PATHS = {
     "folders": {
         "current_resumes": ("01｜当前简历",),
@@ -56,10 +54,6 @@ LOCATOR_PATHS = {
         "interview_asr": ("04｜面试复盘", "ASR待复盘"),
         "pm_sense": ("05｜产品 Sense",),
         "mock_lab": ("06｜模拟面试",),
-    },
-    "documents": {
-        "question_bank_pending": ("07｜题库", "待学习题库"),
-        "question_bank_mastered": ("07｜题库", "已学会题库"),
     },
 }
 ROUTES = {
@@ -87,15 +81,12 @@ ROUTES = {
 REQUIRED_LOCATORS = {
     "resume-deepthink": {
         "folders": ("current_resumes", "resume_deepthink"),
-        "documents": (),
     },
     "interview-prep": {
         "folders": ("current_resumes", "interview_prep"),
-        "documents": (),
     },
     "mock-lab": {
         "folders": ("current_resumes", "resume_deepthink", "mock_lab"),
-        "documents": (),
     },
     "talk-review": {
         "folders": (
@@ -104,13 +95,8 @@ REQUIRED_LOCATORS = {
             "interview_asr",
             "interview_review",
         ),
-        "documents": (),
     },
-    "pm-sense": {"folders": ("pm_sense",), "documents": ()},
-    "interview-question-bank": {
-        "folders": (),
-        "documents": ("question_bank_pending", "question_bank_mastered"),
-    },
+    "pm-sense": {"folders": ("pm_sense",)},
 }
 RUN_ID_RE = re.compile(
     r"^(?P<skill>[a-z0-9-]+)-(?P<timestamp>\d{14})-(?P<suffix>[a-z0-9]{8})$"
@@ -169,7 +155,6 @@ def default_artifact_storage():
         "save_policy": "auto_on_completion",
         "readiness": {key: False for key in SKILL_CONFIG_KEYS.values()},
         "folders": {key: "" for key in FOLDER_KEYS},
-        "documents": {key: "" for key in DOCUMENT_KEYS},
     }
 
 
@@ -186,24 +171,18 @@ def validate_artifact_storage(storage):
         )
     readiness = storage.get("readiness")
     folders = storage.get("folders")
-    documents = storage.get("documents")
     if not isinstance(readiness, dict):
         raise ValueError("artifact_storage.readiness must be a JSON object")
     if not isinstance(folders, dict):
         raise ValueError("artifact_storage.folders must be a JSON object")
-    if not isinstance(documents, dict):
-        raise ValueError("artifact_storage.documents must be a JSON object")
     if set(readiness) != set(SKILL_CONFIG_KEYS.values()):
         raise ValueError("artifact_storage.readiness keys do not match schema")
     if set(folders) != set(FOLDER_KEYS):
         raise ValueError("artifact_storage.folders keys do not match schema")
-    if set(documents) != set(DOCUMENT_KEYS):
-        raise ValueError("artifact_storage.documents keys do not match schema")
     if any(not isinstance(value, bool) for value in readiness.values()):
         raise ValueError("artifact_storage readiness values must be booleans")
-    for mapping in (folders, documents):
-        if any(not isinstance(value, str) for value in mapping.values()):
-            raise ValueError("artifact_storage locators must be strings")
+    if any(not isinstance(value, str) for value in folders.values()):
+        raise ValueError("artifact_storage locators must be strings")
     return True
 
 
@@ -281,9 +260,8 @@ def _recalculate_readiness(storage):
     for skill, required in REQUIRED_LOCATORS.items():
         key = SKILL_CONFIG_KEYS[skill]
         storage["readiness"][key] = all(
-            bool(storage[locator_type].get(locator))
-            for locator_type in ("folders", "documents")
-            for locator in required[locator_type]
+            bool(storage["folders"].get(locator))
+            for locator in required["folders"]
         )
     _recalculate_storage_status(storage)
 
@@ -296,19 +274,6 @@ def register_folder(path, kind, node_token):
     config = load_config(path)
     storage = _storage(config)
     storage["folders"][kind] = str(node_token).strip()
-    _recalculate_readiness(storage)
-    _write_private_json(path, config)
-    return config
-
-
-def register_document(path, kind, node_token):
-    if kind not in DOCUMENT_KEYS:
-        raise ValueError(f"unknown document kind: {kind}")
-    if not str(node_token).strip():
-        raise ValueError("node token must not be empty")
-    config = load_config(path)
-    storage = _storage(config)
-    storage["documents"][kind] = str(node_token).strip()
     _recalculate_readiness(storage)
     _write_private_json(path, config)
     return config
@@ -329,11 +294,10 @@ def resolve_locator(config, locator_type, kind):
 
 def describe_layout():
     return {
-        locator_type: {
+        "folders": {
             key: list(path)
-            for key, path in LOCATOR_PATHS[locator_type].items()
+            for key, path in LOCATOR_PATHS["folders"].items()
         }
-        for locator_type in ("folders", "documents")
     }
 
 
@@ -513,24 +477,11 @@ def _parser():
     resolve_folder.add_argument("--config")
     resolve_folder.add_argument("--json", action="store_true")
 
-    resolve_document = subparsers.add_parser("resolve-document")
-    resolve_document.add_argument("--kind", required=True, choices=DOCUMENT_KEYS)
-    resolve_document.add_argument("--config")
-    resolve_document.add_argument("--json", action="store_true")
-
     register_folder_parser = subparsers.add_parser("register-folder")
     register_folder_parser.add_argument("--kind", required=True, choices=FOLDER_KEYS)
     register_folder_parser.add_argument("--node-token", required=True)
     register_folder_parser.add_argument("--config")
     register_folder_parser.add_argument("--json", action="store_true")
-
-    register_document_parser = subparsers.add_parser("register-document")
-    register_document_parser.add_argument(
-        "--kind", required=True, choices=DOCUMENT_KEYS
-    )
-    register_document_parser.add_argument("--node-token", required=True)
-    register_document_parser.add_argument("--config")
-    register_document_parser.add_argument("--json", action="store_true")
 
     title = subparsers.add_parser("build-title")
     title.add_argument("--skill", required=True, choices=SKILLS)
@@ -587,8 +538,6 @@ def main():
             data = describe_layout()
         elif args.command == "resolve-folder":
             data = resolve_locator(load_config(path), "folders", args.kind)
-        elif args.command == "resolve-document":
-            data = resolve_locator(load_config(path), "documents", args.kind)
         elif args.command == "register-folder":
             registered = register_folder(path, args.kind, args.node_token)
             data = {
@@ -596,9 +545,6 @@ def main():
                 "registered": True,
                 "storage_status": registered["artifact_storage"]["status"],
             }
-        elif args.command == "register-document":
-            register_document(path, args.kind, args.node_token)
-            data = {"kind": args.kind, "registered": True}
         elif args.command == "build-title":
             data = {
                 "title": build_title(

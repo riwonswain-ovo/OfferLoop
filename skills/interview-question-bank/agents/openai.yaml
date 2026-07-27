@@ -1,4 +1,0 @@
-interface:
-  display_name: "面试题库"
-  short_description: "管理待学会与已学会面试题，统一接收训练产出的候选题"
-  default_prompt: "Use $interview-question-bank to add confirmed interview questions or move learned questions from the pending bank to the mastered bank."

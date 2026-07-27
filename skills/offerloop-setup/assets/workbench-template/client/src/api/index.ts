@@ -2,7 +2,6 @@ import { logger } from '@lark-apaas/client-toolkit/logger';
 import { axiosForBackend } from '@lark-apaas/client-toolkit/utils/getAxiosForBackend';
 
 import type {
-  KnowledgeDigestResponse,
   WorkbenchCalendarResponse,
   WorkbenchDataset,
   WorkbenchDatasetQuery,
@@ -18,19 +17,6 @@ const getWorkbench = async (): Promise<WorkbenchResponse> => {
     return response.data as WorkbenchResponse;
   } catch (error: unknown) {
     logger.error('读取 OfferLoop 工作台数据失败', error);
-    throw error;
-  }
-};
-
-const getKnowledgeDigest = async (): Promise<KnowledgeDigestResponse> => {
-  try {
-    const response = await axiosForBackend({
-      url: '/api/workbench/knowledge-digest',
-      method: 'GET',
-    });
-    return response.data as KnowledgeDigestResponse;
-  } catch (error: unknown) {
-    logger.error('读取知识速览失败', error);
     throw error;
   }
 };
@@ -83,7 +69,6 @@ const completeWorkbenchCalendarOAuth = async (
 
 export {
   completeWorkbenchCalendarOAuth,
-  getKnowledgeDigest,
   getWorkbench,
   getWorkbenchCalendar,
   getWorkbenchDataset,

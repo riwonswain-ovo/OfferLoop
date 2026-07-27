@@ -25,7 +25,7 @@ def load_module():
 
 
 class ArtifactContractTest(unittest.TestCase):
-    def test_layout_names_match_the_confirmed_knowledge_base_tree(self):
+    def test_layout_names_match_the_confirmed_workspace_tree(self):
         contract = load_module()
         self.assertEqual(
             contract.describe_layout(),
@@ -38,10 +38,6 @@ class ArtifactContractTest(unittest.TestCase):
                     "interview_asr": ["04｜面试复盘", "ASR待复盘"],
                     "pm_sense": ["05｜产品 Sense"],
                     "mock_lab": ["06｜模拟面试"],
-                },
-                "documents": {
-                    "question_bank_pending": ["07｜题库", "待学习题库"],
-                    "question_bank_mastered": ["07｜题库", "已学会题库"],
                 },
             },
         )
@@ -106,7 +102,7 @@ class ArtifactContractTest(unittest.TestCase):
             "fact-a1b2c3d4",
         )
 
-    def test_folder_and_document_tokens_are_separate_and_readiness_is_per_skill(self):
+    def test_folder_tokens_drive_readiness_per_skill(self):
         contract = load_module()
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "config.json"
@@ -118,22 +114,13 @@ class ArtifactContractTest(unittest.TestCase):
             result = contract.register_folder(
                 path, "resume_deepthink", "wik_folder_b"
             )
-            contract.register_document(
-                path, "question_bank_pending", "wik_doc_c"
-            )
             storage = contract.load_config(path)["artifact_storage"]
             self.assertTrue(storage["readiness"]["resume_deepthink"])
             self.assertEqual(storage["status"], "partial")
             self.assertEqual(
                 storage["folders"]["resume_deepthink"], "wik_folder_b"
             )
-            self.assertEqual(
-                storage["documents"]["question_bank_pending"], "wik_doc_c"
-            )
-            self.assertNotEqual(
-                storage["folders"]["resume_deepthink"],
-                storage["documents"]["question_bank_pending"],
-            )
+            self.assertNotIn("documents", storage)
             self.assertEqual(result["schema_version"], 4)
 
     def test_v3_storage_migrates_to_current_resume_and_fixed_output_folders(self):
@@ -164,7 +151,7 @@ class ArtifactContractTest(unittest.TestCase):
         self.assertEqual(storage["folders"]["interview_asr"], "asr-folder")
         self.assertEqual(storage["folders"]["interview_review"], "review-folder")
         self.assertNotIn("historical_resumes", storage["folders"])
-        self.assertNotIn("experience_master", storage["documents"])
+        self.assertNotIn("documents", storage)
 
     def test_find_by_run_never_chooses_first_ambiguous_candidate(self):
         contract = load_module()

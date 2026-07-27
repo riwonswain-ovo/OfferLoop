@@ -28,15 +28,12 @@ BUNDLED_SKILLS = (
     "mock-lab",
     "talk-review",
     "pm-sense",
-    "interview-question-bank",
-    "knowledge-digest",
 )
 EXTERNAL_SKILLS_BY_CAPABILITY = {
     "collection": (),
     "reminder": ("lark-calendar",),
     "workspace": ("lark-base", "lark-doc", "lark-wiki"),
     "coaching": ("lark-base", "lark-doc", "lark-wiki"),
-    "knowledge": ("lark-base", "lark-doc", "lark-wiki"),
     "integration": ("lark-shared", "lark-apps"),
 }
 LARK_CLI_RECOVERY = (
@@ -89,10 +86,6 @@ WORKSPACE_LOCATORS = (
     "wiki_space_id",
     "workspace_home_node_token",
     "workbench_url",
-    "knowledge_base_url",
-    "knowledge_digest_table_id",
-    "knowledge_source_table_id",
-    "knowledge_wiki_folder_node_token",
     "schema_version",
 )
 IMAP_REQUIRED_KEYS = {
@@ -636,7 +629,7 @@ def _capability_report(source, capability, skills_roots=None):
                     "local.skills",
                     selected_capability,
                     "ready" if all(bundled_skills.values()) else "blocked",
-                    "OfferLoop 十一个 Skill 已安装"
+                    "OfferLoop 九个 Skill 已安装"
                     if all(bundled_skills.values())
                     else "OfferLoop Skill 安装不完整",
                     "重新安装缺失的 OfferLoop Skill"
@@ -785,7 +778,6 @@ def _capability_report(source, capability, skills_roots=None):
             "mock_lab",
             "talk_review",
             "pm_sense",
-            "interview_question_bank",
         }
         storage_valid = (
             config.get("schema_version") == 4
@@ -799,34 +791,11 @@ def _capability_report(source, capability, skills_roots=None):
                 "local.coaching_storage",
                 "coaching",
                 "ready" if all_ready else "needs_action",
-                "六项训练能力的飞书材料均已登记"
+                "五项训练能力的飞书材料均已登记"
                 if all_ready
                 else "训练产物配置尚未升级或仍有目录待首次启用",
-                "确认升级 schema v4，并按需创建和登记训练目录与双题库"
+                "确认升级 schema v4，并按需创建和登记训练目录"
                 if not all_ready
-                else "",
-            )
-        )
-
-    if "knowledge" in selected:
-        required = (
-            "knowledge_base_url",
-            "knowledge_digest_table_id",
-            "knowledge_source_table_id",
-            "knowledge_wiki_folder_node_token",
-            "workbench_url",
-        )
-        missing = [name for name in required if config.get(name) in (None, "")]
-        checks.append(
-            _check(
-                "local.knowledge_locators",
-                "knowledge",
-                "ready" if not missing else "needs_action",
-                "知识速览 Base、知识库目录与工作台定位已登记"
-                if not missing
-                else "知识速览的来源表、摘要表、知识库目录或工作台定位不完整",
-                "登记知识速览 Base、两张表、摘要目录和工作台地址"
-                if missing
                 else "",
             )
         )
@@ -875,7 +844,6 @@ def main():
             "reminder",
             "workspace",
             "coaching",
-            "knowledge",
             "full",
         ),
         help="run a capability-specific offline preflight",

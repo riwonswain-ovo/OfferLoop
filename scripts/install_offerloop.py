@@ -29,8 +29,6 @@ SKILL_NAMES = (
     "mock-lab",
     "talk-review",
     "pm-sense",
-    "interview-question-bank",
-    "knowledge-digest",
 )
 STANDARD_AGENTS = ("codex", "claude-code", "hermes-agent", "workbuddy")
 ALL_AGENTS = STANDARD_AGENTS
@@ -56,7 +54,7 @@ MANIFEST_NAME = ".offerloop-install.json"
 WELCOME = {
     "headline": "欢迎使用 OfferLoop",
     "summary": (
-        "OfferLoop 包含 11 个可以独立或组合使用的 Skill。"
+        "OfferLoop 包含 9 个可以独立或组合使用的 Skill。"
         "用户不需要记住名称，只需描述当前想解决的问题。"
     ),
     "groups": [
@@ -122,33 +120,15 @@ WELCOME = {
                     "purpose": "根据 ASR 或转写还原问答并生成改进方案",
                     "example": "根据这份 ASR 复盘刚结束的面试。",
                 },
-                {
-                    "name": "interview-question-bank",
-                    "title": "面试题库",
-                    "purpose": "管理待学会和已学会题目，统一接收训练候选题",
-                    "example": "把我确认的题加入待学习题库。",
-                },
-            ],
-        },
-        {
-            "name": "知识输入能力",
-            "skills": [
-                {
-                    "name": "knowledge-digest",
-                    "title": "知识速览",
-                    "purpose": "订阅用户指定的信息源，增量读取并生成金字塔摘要",
-                    "example": "订阅这个信息源，每天总结新增内容。",
-                },
             ],
         },
     ],
     "workflows": [
         "招聘信息同步 → 真实投递 → 邮件识别 → 笔试面试安排",
         "简历深挖 / 产品思维 → 面试准备 → 模拟面试 → 真实面试复盘",
-        "登记信息源 → 增量发现 → 金字塔摘要 → 工作台知识速览",
     ],
     "next_prompt": (
-        "我刚安装 OfferLoop。请先介绍 11 个 Skill，"
+        "我刚安装 OfferLoop。请先介绍 9 个 Skill，"
         "再做只读检查并带我完成第一次使用。"
     ),
     "privacy_notice": (
@@ -798,7 +778,7 @@ def main(argv=None) -> int:
         if not args.dry_run and any(
             report["status"] in completed for report in reports
         ):
-            print("OfferLoop 的 11 个 Skill 已处理完成。")
+            print("OfferLoop 的 9 个 Skill 已处理完成。")
             if show_welcome:
                 _print_welcome()
             else:

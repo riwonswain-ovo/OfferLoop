@@ -20,7 +20,7 @@
 
 文件不存在时跳过。新文件权限设置为 `0600`；确认新位置可读前不要删除旧文件。
 
-## 2. 安装十一个 Skill
+## 2. 安装九个 Skill
 
 ```bash
 npx skills add riwonswain-ovo/OfferLoop -g
@@ -37,10 +37,12 @@ npx skills add riwonswain-ovo/OfferLoop -g
 - `mock-lab`
 - `talk-review`
 - `pm-sense`
-- `interview-question-bank`
-- `knowledge-digest`
 
 先运行本地预检；预检不读邮件正文、不访问业务 Base。
+
+从 `0.1.0-alpha.6` 起不再安装 `interview-question-bank` 和 `knowledge-digest`。升级不会删除
+用户飞书中的既有题库、知识摘要文档、知识速览 Base 或旧配置键；这些资源只是不再由当前
+OfferLoop 管理，可由用户自行保留或另行归档。
 
 ## 3. 旧双 Base 兼容
 
@@ -75,7 +77,7 @@ python3 skills/offerloop-setup/scripts/configure.py \
 ```
 
 该操作保留全部既有公共配置和兼容 locator，迁移 `artifact_storage` 并升级为 schema v4；
-不创建或移动飞书节点。当前简历、训练目录、ASR 目录和双题库在对应 Skill 首次运行时经确认
+不创建或移动飞书节点。当前简历、训练目录和 ASR 目录在对应 Skill 首次运行时经确认
 懒创建或登记。
 拒绝升级不影响招聘同步、提醒和原有工作区。
 

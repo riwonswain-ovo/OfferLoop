@@ -11,7 +11,6 @@ import {
 import type { Request, Response } from 'express';
 
 import type {
-  KnowledgeDigestResponse,
   WorkbenchCalendarResponse,
   WorkbenchDataset,
   WorkbenchDatasetQuery,
@@ -42,11 +41,6 @@ export class WorkbenchController {
   @Get()
   async getWorkbench(): Promise<WorkbenchResponse> {
     return this.workbenchService.getWorkbench();
-  }
-
-  @Get('knowledge-digest')
-  async getKnowledgeDigest(): Promise<KnowledgeDigestResponse> {
-    return this.workbenchService.getKnowledgeDigest();
   }
 
   @Get('dataset')

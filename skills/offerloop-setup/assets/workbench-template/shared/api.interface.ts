@@ -57,48 +57,6 @@ export interface WorkbenchCalendarResponse {
   message?: string;
 }
 
-export interface KnowledgeDigestSummary {
-  recordId: string;
-  title: string;
-  sourceName: string;
-  sourceType: string;
-  publishedAt?: string;
-  conclusion: string;
-  keyPoints: string[];
-  value: string;
-  boundary: string;
-  tags: string[];
-  sourceUrl?: string;
-  documentUrl?: string;
-  status: string;
-}
-
-export interface KnowledgeDigestSource {
-  recordId: string;
-  name: string;
-  mode: string;
-  type: string;
-  interests: string[];
-  enabled: boolean;
-  lastSyncedAt?: string;
-  status: string;
-  message: string;
-  totalItems: number;
-  completedItems: number;
-  nextBatch: string;
-  targetDate?: string;
-  planUrl?: string;
-}
-
-export interface KnowledgeDigestResponse {
-  configured: boolean;
-  generatedAt: string;
-  summaries: KnowledgeDigestSummary[];
-  sources: KnowledgeDigestSource[];
-  baseUrl?: string;
-  message?: string;
-}
-
 export interface WorkbenchResponse {
   generatedAt: string;
   calendarSourceUrl: string;

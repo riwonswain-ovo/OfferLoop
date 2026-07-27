@@ -1,4 +1,0 @@
-interface:
-  display_name: "知识速览"
-  short_description: "梳理完整知识库阅读计划，并追踪兴趣范围内的新增新闻"
-  default_prompt: "Use $knowledge-digest to map this knowledge base or track relevant new articles from this news source."

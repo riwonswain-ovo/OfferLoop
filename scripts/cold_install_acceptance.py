@@ -22,8 +22,6 @@ SKILL_NAMES = (
     "mock-lab",
     "talk-review",
     "pm-sense",
-    "interview-question-bank",
-    "knowledge-digest",
 )
 AGENT_ROOTS = {
     "codex": Path(".codex/skills"),

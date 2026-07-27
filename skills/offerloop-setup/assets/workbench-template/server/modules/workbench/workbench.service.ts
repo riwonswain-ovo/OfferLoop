@@ -10,9 +10,6 @@ import { firstValueFrom } from 'rxjs';
 
 import type {
   BaseCellValue,
-  KnowledgeDigestResponse,
-  KnowledgeDigestSource,
-  KnowledgeDigestSummary,
   WorkbenchDataset,
   WorkbenchDatasetQuery,
   WorkbenchRecord,
@@ -84,12 +81,6 @@ interface DatasetConfig {
   tableId: string;
 }
 
-interface KnowledgeDigestConfig {
-  baseToken: string;
-  digestTableId: string;
-  sourceTableId: string;
-}
-
 interface WorkbenchMetadata {
   companiesConfig: DatasetConfig;
   companyViews: WorkbenchViewMeta[];
@@ -158,62 +149,6 @@ export class WorkbenchService {
       progressViews: metadata.progressViews,
       events,
       eventTables: metadata.eventTables,
-    };
-  }
-
-  async getKnowledgeDigest(): Promise<KnowledgeDigestResponse> {
-    const generatedAt: string = new Date().toISOString();
-    const config: KnowledgeDigestConfig | null =
-      this.readKnowledgeDigestConfig();
-    if (!config) {
-      return {
-        configured: false,
-        generatedAt,
-        summaries: [],
-        sources: [],
-        message: '知识速览尚未配置。登记知识库或新闻来源后即可查看进度与摘要。',
-      };
-    }
-
-    const [digestDataset, sourceDataset]: WorkbenchDataset[] =
-      await Promise.all([
-        this.readDatasetPage(
-          { baseToken: config.baseToken, tableId: config.digestTableId },
-          '',
-        ),
-        this.readDatasetPage(
-          { baseToken: config.baseToken, tableId: config.sourceTableId },
-          '',
-        ),
-      ]);
-    const summaries: KnowledgeDigestSummary[] = digestDataset.records
-      .map((record: WorkbenchRecord): KnowledgeDigestSummary =>
-        this.toKnowledgeDigestSummary(record),
-      )
-      .filter((summary: KnowledgeDigestSummary): boolean =>
-        Boolean(summary.title || summary.conclusion),
-      )
-      .sort(
-        (left: KnowledgeDigestSummary, right: KnowledgeDigestSummary): number =>
-          this.dateSortValue(right.publishedAt)
-          - this.dateSortValue(left.publishedAt),
-      )
-      .slice(0, 12);
-    const sources: KnowledgeDigestSource[] = sourceDataset.records
-      .map((record: WorkbenchRecord): KnowledgeDigestSource =>
-        this.toKnowledgeDigestSource(record),
-      )
-      .filter((source: KnowledgeDigestSource): boolean => Boolean(source.name));
-
-    return {
-      configured: true,
-      generatedAt,
-      summaries,
-      sources,
-      baseUrl: `https://my.feishu.cn/base/${config.baseToken}`,
-      message: summaries.length === 0
-        ? '信息源已经配置，等待第一次知识盘点或新闻增量同步。'
-        : undefined,
     };
   }
 
@@ -327,164 +262,6 @@ export class WorkbenchService {
       baseToken: this.requireEnv(`${prefix}_BASE_TOKEN`),
       tableId: this.requireEnv(`${prefix}_TABLE_ID`),
     };
-  }
-
-  private readKnowledgeDigestConfig(): KnowledgeDigestConfig | null {
-    const baseToken: string = String(
-      process.env.KNOWLEDGE_BASE_TOKEN ?? '',
-    ).trim();
-    const digestTableId: string = String(
-      process.env.KNOWLEDGE_DIGEST_TABLE_ID ?? '',
-    ).trim();
-    const sourceTableId: string = String(
-      process.env.KNOWLEDGE_SOURCE_TABLE_ID ?? '',
-    ).trim();
-    return baseToken && digestTableId && sourceTableId
-      ? { baseToken, digestTableId, sourceTableId }
-      : null;
-  }
-
-  private toKnowledgeDigestSummary(
-    record: WorkbenchRecord,
-  ): KnowledgeDigestSummary {
-    const fields = record.fields;
-    return {
-      recordId: record.recordId,
-      title: this.cellText(fields['标题']),
-      sourceName: this.cellText(fields['信息源']),
-      sourceType: this.cellText(fields['来源类型']) || '知识文章',
-      publishedAt: this.cellDate(fields['发布时间']),
-      conclusion: this.cellText(fields['一句话结论']),
-      keyPoints: this.cellLines(fields['核心要点']).slice(0, 4),
-      value: this.cellText(fields['价值说明']),
-      boundary: this.cellText(fields['边界']),
-      tags: this.cellList(fields['标签']),
-      sourceUrl: this.cellUrl(fields['原文链接']),
-      documentUrl: this.cellUrl(fields['完整摘要']),
-      status: this.cellText(fields['状态']) || '已完成',
-    };
-  }
-
-  private toKnowledgeDigestSource(
-    record: WorkbenchRecord,
-  ): KnowledgeDigestSource {
-    const fields = record.fields;
-    const enabledText: string = this.cellText(fields['启用状态']);
-    const sourceType: string = this.cellText(fields['来源类型']);
-    const sourceMode: string = this.cellText(fields['来源模式'])
-      || (
-        ['飞书知识库', '登录态浏览器'].includes(sourceType)
-          ? '知识库'
-          : '新闻站点'
-      );
-    return {
-      recordId: record.recordId,
-      name: this.cellText(fields['来源名称']),
-      mode: sourceMode,
-      type: sourceType,
-      interests: this.cellList(fields['关注主题']),
-      enabled: !['已暂停', '停用', 'false', '否'].includes(enabledText),
-      lastSyncedAt: this.cellDate(fields['上次成功时间']),
-      status: this.cellText(fields['同步状态']) || '待同步',
-      message: this.cellText(fields['状态说明']),
-      totalItems: this.cellNumber(fields['文章总数']),
-      completedItems: this.cellNumber(fields['已读数量']),
-      nextBatch: this.cellText(fields['下一批']),
-      targetDate: this.cellDate(fields['计划完成日']),
-      planUrl: this.cellUrl(fields['阅读计划']),
-    };
-  }
-
-  private cellText(value: BaseCellValue | undefined): string {
-    if (value === null || value === undefined) {
-      return '';
-    }
-    if (typeof value === 'string' || typeof value === 'number'
-      || typeof value === 'boolean') {
-      return String(value).trim();
-    }
-    if (Array.isArray(value)) {
-      return value
-        .map((item: BaseCellValue): string => this.cellText(item))
-        .filter(Boolean)
-        .join('、');
-    }
-    for (const key of ['text', 'name', 'label', 'value']) {
-      const candidate: BaseCellValue | undefined = value[key];
-      const text: string = this.cellText(candidate);
-      if (text) {
-        return text;
-      }
-    }
-    return '';
-  }
-
-  private cellUrl(value: BaseCellValue | undefined): string | undefined {
-    if (typeof value === 'string') {
-      return /^https?:\/\//u.test(value.trim()) ? value.trim() : undefined;
-    }
-    if (Array.isArray(value)) {
-      for (const item of value) {
-        const url: string | undefined = this.cellUrl(item);
-        if (url) {
-          return url;
-        }
-      }
-      return undefined;
-    }
-    if (value && typeof value === 'object') {
-      for (const key of ['link', 'url', 'href']) {
-        const candidate: BaseCellValue | undefined = value[key];
-        const url: string | undefined = this.cellUrl(candidate);
-        if (url) {
-          return url;
-        }
-      }
-    }
-    return undefined;
-  }
-
-  private cellDate(value: BaseCellValue | undefined): string | undefined {
-    const raw: string = this.cellText(value);
-    if (!raw) {
-      return undefined;
-    }
-    const numeric: number = Number(raw);
-    const date = new Date(Number.isFinite(numeric) && numeric > 0
-      ? numeric
-      : raw);
-    return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
-  }
-
-  private cellNumber(value: BaseCellValue | undefined): number {
-    const numeric: number = Number(this.cellText(value));
-    return Number.isFinite(numeric) && numeric >= 0 ? numeric : 0;
-  }
-
-  private cellList(value: BaseCellValue | undefined): string[] {
-    if (Array.isArray(value)) {
-      return value
-        .map((item: BaseCellValue): string => this.cellText(item))
-        .filter(Boolean);
-    }
-    return this.cellText(value)
-      .split(/[，,、]/u)
-      .map((item: string): string => item.trim())
-      .filter(Boolean);
-  }
-
-  private cellLines(value: BaseCellValue | undefined): string[] {
-    return this.cellText(value)
-      .split(/\r?\n|；/u)
-      .map((item: string): string =>
-        item.replace(/^\s*[-*•\d.、)]+\s*/u, '').trim(),
-      )
-      .filter(Boolean);
-  }
-
-  private dateSortValue(value?: string): number {
-    const timestamp: number = value ? Date.parse(value) : 0;
-    return Number.isNaN(timestamp) ? 0 : timestamp;
   }
 
   private requireEnv(name: string): string {

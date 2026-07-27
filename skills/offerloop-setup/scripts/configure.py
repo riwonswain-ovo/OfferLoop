@@ -24,10 +24,6 @@ PUBLIC_LOCATOR_KEYS = {
     "wiki_space_id",
     "workspace_home_node_token",
     "workbench_url",
-    "knowledge_base_url",
-    "knowledge_digest_table_id",
-    "knowledge_source_table_id",
-    "knowledge_wiki_folder_node_token",
     "schema_version",
 }
 PROGRESS_SYNC_KEYS = {"app_id", "endpoint", "workflow_id", "status"}
@@ -247,13 +243,6 @@ def main():
     parser.add_argument("--wiki-space-id", help="OfferLoop Wiki space ID")
     parser.add_argument("--workspace-home-node-token", help="OfferLoop homepage Wiki node")
     parser.add_argument("--workbench-url", help="published OfferLoop workbench HTTPS URL")
-    parser.add_argument("--knowledge-base-url", help="OfferLoop knowledge digest Base URL")
-    parser.add_argument("--knowledge-digest-table-id", help="knowledge summary table ID")
-    parser.add_argument("--knowledge-source-table-id", help="knowledge source table ID")
-    parser.add_argument(
-        "--knowledge-wiki-folder-node-token",
-        help="Wiki folder for full knowledge summaries",
-    )
     parser.add_argument("--schema-version", type=int, help="OfferLoop schema version")
     parser.add_argument("--progress-sync-app-id", help="published sync app ID")
     parser.add_argument("--progress-sync-endpoint", help="published sync HTTPS endpoint")
@@ -302,10 +291,6 @@ def main():
         "wiki_space_id": args.wiki_space_id,
         "workspace_home_node_token": args.workspace_home_node_token,
         "workbench_url": args.workbench_url,
-        "knowledge_base_url": args.knowledge_base_url,
-        "knowledge_digest_table_id": args.knowledge_digest_table_id,
-        "knowledge_source_table_id": args.knowledge_source_table_id,
-        "knowledge_wiki_folder_node_token": args.knowledge_wiki_folder_node_token,
         "schema_version": args.schema_version,
     }
     if any(value is not None for value in updates.values()):

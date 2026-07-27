@@ -10,7 +10,6 @@ VALID_CAPABILITIES = {
     "reminder",
     "workspace",
     "coaching",
-    "knowledge",
     "integration",
 }
 VALID_STATUSES = {

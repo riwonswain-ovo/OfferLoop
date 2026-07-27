@@ -5,7 +5,7 @@
 `scripts/artifact_contract.py` 只处理本地确定性逻辑：
 
 - schema v3 到 v4 的配置迁移；
-- 固定文件夹和题库文档 locator 的校验、登记与解析；
+- 固定文件夹 locator 的校验、登记与解析；
 - `run_id`、标题、状态路由和 Markdown 校验；
 - 从 Agent 已读取的候选节点中按 `run_id` 判断唯一、缺失或冲突。
 
@@ -45,7 +45,6 @@ AI 产品经理岗 - 简历
 04｜面试复盘 / ASR待复盘、已完成复盘
 05｜产品 Sense
 06｜模拟面试
-07｜题库 / 待学习题库、已学会题库
 ```
 
 ## 固定 locator
@@ -62,13 +61,6 @@ interview_asr
 interview_review
 ```
 
-以及两份题库文档：
-
-```text
-question_bank_pending
-question_bank_mastered
-```
-
 线上创建或确认唯一节点后，分别使用：
 
 ```text
@@ -77,8 +69,6 @@ python3 scripts/artifact_contract.py describe-layout --json
 python3 scripts/artifact_contract.py register-folder \
   --kind current_resumes --node-token '<NODE_TOKEN>'
 
-python3 scripts/artifact_contract.py register-document \
-  --kind question_bank_pending --node-token '<NODE_TOKEN>'
 ```
 
 `describe-layout` 是目录名称与 locator 的唯一机器可读映射；线上查找时必须使用该映射，不得从
@@ -137,18 +127,6 @@ python3 scripts/artifact_contract.py register-document \
 - `talk-review`：读取用户选定的 ASR、简历和与该简历版本匹配的简历深挖文档。
 
 每个消费方先读节点标题和产物信息，再读取匹配正文；不得默认扫描无关目录。
-
-## 面试题候选
-
-五个产出型 Skill 可在自身文档中整理候选题，但不得直接修改题库。文档保存完成后：
-
-1. 向用户展示候选题及进入题库的理由。
-2. 询问用户要加入哪些题；沉默不视为同意。
-3. 只把用户确认的题交给 `interview-question-bank`。
-4. 题库写入失败不回滚已完成的产物。
-
-题库 schema、去重和迁移规则以
-`interview-question-bank/references/question-bank-contract.md` 为准。
 
 ## 迁移
 
