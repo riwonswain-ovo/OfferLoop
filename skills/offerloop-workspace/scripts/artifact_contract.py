@@ -23,14 +23,16 @@ import tempfile
 ARTIFACT_SCHEMA_VERSION = 1
 CONFIG_SCHEMA_VERSION = 4
 SKILLS = (
-    "resume-deepthink",
+    "experience-deepthink",
     "interview-prep",
     "mock-lab",
     "talk-review",
     "pm-sense",
 )
+LEGACY_SKILLS = ("resume-deepthink",)
 SKILL_CONFIG_KEYS = {
-    "resume-deepthink": "resume_deepthink",
+    # Keep this schema-v4 key so existing registered Feishu folders remain usable.
+    "experience-deepthink": "resume_deepthink",
     "interview-prep": "interview_prep",
     "mock-lab": "mock_lab",
     "talk-review": "talk_review",
@@ -48,7 +50,7 @@ FOLDER_KEYS = (
 LOCATOR_PATHS = {
     "folders": {
         "current_resumes": ("02｜当前简历",),
-        "resume_deepthink": ("03｜简历深挖",),
+        "resume_deepthink": ("03｜经历深挖",),
         "interview_prep": ("04｜面试准备",),
         "interview_review": ("05｜面试复盘", "已完成复盘"),
         "interview_asr": ("05｜面试复盘", "ASR 待复盘"),
@@ -57,7 +59,7 @@ LOCATOR_PATHS = {
     },
 }
 ROUTES = {
-    "resume-deepthink": {
+    "experience-deepthink": {
         "completed": "resume_deepthink",
         "incomplete": "resume_deepthink",
     },
@@ -79,7 +81,7 @@ ROUTES = {
     },
 }
 REQUIRED_LOCATORS = {
-    "resume-deepthink": {
+    "experience-deepthink": {
         "folders": ("current_resumes", "resume_deepthink"),
     },
     "interview-prep": {
@@ -326,7 +328,7 @@ def new_entity_id(kind, *, suffix=None):
 
 def parse_run_id(run_id, *, expected_skill=None):
     match = RUN_ID_RE.fullmatch(str(run_id))
-    if not match or match.group("skill") not in SKILLS:
+    if not match or match.group("skill") not in SKILLS + LEGACY_SKILLS:
         raise ValueError("invalid run_id")
     if expected_skill and match.group("skill") != expected_skill:
         raise ValueError("run_id does not belong to the requested skill")
@@ -369,11 +371,8 @@ def build_title(
     company = _clean_title_part(company, "独立任务")
     position = _clean_title_part(position, "岗位待确认")
     stage = _clean_title_part(stage, "环节待确认")
-    if skill == "resume-deepthink":
-        return (
-            f"简历深挖｜{resume_version}｜{subject}｜{target_direction}｜"
-            f"{title_date}｜{run_id}"
-        )
+    if skill == "experience-deepthink":
+        return f"经历深挖｜{subject}｜{target_direction}"
     if skill == "interview-prep":
         return f"{company}｜{position}｜{stage}准备｜{title_date}｜{run_id}"
     if skill == "mock-lab":
@@ -411,18 +410,40 @@ def find_by_run(candidates, run_id):
     return {"match_status": status, "matches": matches}
 
 
-def validate_markdown(markdown, *, run_id=None):
+def find_by_title(candidates, title):
+    if not isinstance(candidates, list):
+        raise ValueError("candidates must be a JSON array")
+    expected = str(title).strip()
+    if not expected:
+        raise ValueError("title must not be empty")
+    matches = []
+    for candidate in candidates:
+        if not isinstance(candidate, dict):
+            raise ValueError("each candidate must be a JSON object")
+        if str(candidate.get("title", "")).strip() == expected:
+            matches.append(candidate)
+    status = (
+        "missing"
+        if not matches
+        else "found"
+        if len(matches) == 1
+        else "ambiguous"
+    )
+    return {"match_status": status, "matches": matches}
+
+
+def validate_markdown(markdown, *, run_id=None, content_only=False):
     text = str(markdown).strip()
     errors = []
     if not text.startswith("# "):
         errors.append("document must start with one level-1 title")
     if len(re.findall(r"^# ", text, flags=re.MULTILINE)) != 1:
         errors.append("document must contain exactly one level-1 title")
-    if "## 产物信息" not in text:
+    if not content_only and "## 产物信息" not in text:
         errors.append("document must contain a 产物信息 section")
     if run_id:
         parse_run_id(run_id)
-        if run_id not in text:
+        if not content_only and run_id not in text:
             errors.append("document does not contain the requested run_id")
     if re.search(r"<(?:html|body|script)\b", text, flags=re.IGNORECASE):
         errors.append("HTML output is not allowed")
@@ -508,9 +529,17 @@ def _parser():
     find.add_argument("--run-id", required=True)
     find.add_argument("--json", action="store_true")
 
+    find_title = subparsers.add_parser("find-by-title")
+    find_title.add_argument(
+        "--candidates", required=True, help="JSON file or - for stdin"
+    )
+    find_title.add_argument("--title", required=True)
+    find_title.add_argument("--json", action="store_true")
+
     validate = subparsers.add_parser("validate-markdown")
     validate.add_argument("--file", required=True, help="Markdown file or - for stdin")
     validate.add_argument("--run-id")
+    validate.add_argument("--content-only", action="store_true")
     validate.add_argument("--json", action="store_true")
     return parser
 
@@ -569,9 +598,15 @@ def main():
             data = find_by_run(
                 _read_json_source(args.candidates), args.run_id
             )
+        elif args.command == "find-by-title":
+            data = find_by_title(
+                _read_json_source(args.candidates), args.title
+            )
         else:
             result = validate_markdown(
-                _read_text_source(args.file), run_id=args.run_id
+                _read_text_source(args.file),
+                run_id=args.run_id,
+                content_only=args.content_only,
             )
             if not result["valid"]:
                 raise ValueError("; ".join(result["errors"]))

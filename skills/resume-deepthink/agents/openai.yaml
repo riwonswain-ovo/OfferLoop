@@ -1,4 +1,0 @@
-interface:
-  display_name: "简历深挖"
-  short_description: "按目标岗位深挖经历，生成岗位专属项目介绍和面试问答"
-  default_prompt: "Use $resume-deepthink to select my target role, probe one resume experience with the matching role playbook, and create a role-specific deep-dive document."

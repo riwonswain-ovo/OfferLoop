@@ -166,7 +166,7 @@ class OfferLoopSetupTest(unittest.TestCase):
                     "offerloop-agent",
                     "job-collection",
                     "recruiting-reminder",
-                    "resume-deepthink",
+                    "experience-deepthink",
                     "interview-prep",
                     "mock-lab",
                     "talk-review",

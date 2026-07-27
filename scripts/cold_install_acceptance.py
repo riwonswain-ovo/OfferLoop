@@ -20,7 +20,7 @@ SKILL_NAMES = (
     "offerloop-workspace",
     "offerloop-workbench",
     "offerloop-agent",
-    "resume-deepthink",
+    "experience-deepthink",
     "interview-prep",
     "mock-lab",
     "talk-review",

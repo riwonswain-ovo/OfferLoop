@@ -91,11 +91,11 @@ const OFFERLOOP_SKILLS: SkillDefinition[] = [
     keywords: ['offerloop agent', '智能助手', 'agent 右侧栏', 'codex 右侧栏'],
   },
   {
-    key: 'resume-deepthink',
-    title: '简历深挖',
-    description: '围绕目标岗位深入梳理简历经历与证据。',
+    key: 'experience-deepthink',
+    title: '经历深挖',
+    description: '面向任意岗位方向持续深挖一段真实经历，维护口述稿、事实边界和故事素材。',
     requiresConfirmation: false,
-    keywords: ['简历深挖', '项目经历', '简历追问', '经历梳理'],
+    keywords: ['经历深挖', '实习经历', '项目经历', '科研经历', '竞赛经历', '学生工作', '财务岗', 'hr岗', '经历梳理'],
   },
   {
     key: 'interview-prep',

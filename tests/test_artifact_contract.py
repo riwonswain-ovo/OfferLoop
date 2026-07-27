@@ -32,7 +32,7 @@ class ArtifactContractTest(unittest.TestCase):
             {
                 "folders": {
                     "current_resumes": ["02｜当前简历"],
-                    "resume_deepthink": ["03｜简历深挖"],
+                    "resume_deepthink": ["03｜经历深挖"],
                     "interview_prep": ["04｜面试准备"],
                     "interview_review": ["05｜面试复盘", "已完成复盘"],
                     "interview_asr": ["05｜面试复盘", "ASR 待复盘"],
@@ -62,7 +62,7 @@ class ArtifactContractTest(unittest.TestCase):
         contract = load_module()
         now = datetime(2026, 7, 24, 12, 30, 45, tzinfo=timezone.utc)
         cases = {
-            "resume-deepthink": "简历深挖｜互联网产品经理岗 - 简历｜推荐系统实习｜产品经理｜2026-07-24｜",
+            "experience-deepthink": "经历深挖｜推荐系统实习｜产品经理",
             "interview-prep": "示例公司｜产品经理｜一面准备｜2026-07-24｜",
             "mock-lab": "示例公司产品面｜模拟面试｜2026-07-24｜",
             "talk-review": "示例公司｜产品经理｜一面复盘｜2026-07-24｜",
@@ -78,7 +78,7 @@ class ArtifactContractTest(unittest.TestCase):
                     run_id,
                     subject=(
                         "推荐系统实习"
-                        if skill == "resume-deepthink"
+                        if skill == "experience-deepthink"
                         else "示例公司产品面"
                         if skill == "mock-lab"
                         else "AI 搜索设计"
@@ -90,17 +90,21 @@ class ArtifactContractTest(unittest.TestCase):
                     stage="一面",
                 )
                 self.assertTrue(title.startswith(prefix))
-                self.assertTrue(title.endswith(run_id))
+                if skill == "experience-deepthink":
+                    self.assertEqual(title, prefix)
+                    self.assertNotIn(run_id, title)
+                else:
+                    self.assertTrue(title.endswith(run_id))
 
-    def test_resume_deepthink_titles_differ_by_target_direction(self):
+    def test_experience_deepthink_title_is_stable_per_experience_and_direction(self):
         contract = load_module()
         run_id_product = contract.new_run_id(
-            "resume-deepthink",
+            "experience-deepthink",
             now=datetime(2026, 7, 24, 12, 30, 45, tzinfo=timezone.utc),
             suffix="a1b2c3d4",
         )
         run_id_operations = contract.new_run_id(
-            "resume-deepthink",
+            "experience-deepthink",
             now=datetime(2026, 7, 24, 12, 30, 46, tzinfo=timezone.utc),
             suffix="e5f6g7h8",
         )
@@ -109,20 +113,42 @@ class ArtifactContractTest(unittest.TestCase):
             "resume_version": "互联网产品经理岗 - 简历",
         }
         product = contract.build_title(
-            "resume-deepthink",
+            "experience-deepthink",
             run_id_product,
             target_direction="产品经理",
             **shared,
         )
         operations = contract.build_title(
-            "resume-deepthink",
+            "experience-deepthink",
             run_id_operations,
             target_direction="运营",
             **shared,
         )
-        self.assertIn("｜产品经理｜", product)
-        self.assertIn("｜运营｜", operations)
+        self.assertTrue(product.endswith("｜产品经理"))
+        self.assertTrue(operations.endswith("｜运营"))
         self.assertNotEqual(product, operations)
+
+        later_product = contract.build_title(
+            "experience-deepthink",
+            run_id_operations,
+            target_direction="产品经理",
+            **shared,
+        )
+        self.assertEqual(product, later_product)
+
+    def test_find_by_title_never_chooses_first_ambiguous_candidate(self):
+        contract = load_module()
+        title = "经历深挖｜推荐系统实习｜产品经理"
+        result = contract.find_by_title(
+            [
+                {"title": title, "node_token": "one"},
+                {"title": title, "node_token": "two"},
+                {"title": "经历深挖｜其他经历｜产品经理", "node_token": "three"},
+            ],
+            title,
+        )
+        self.assertEqual(result["match_status"], "ambiguous")
+        self.assertEqual(len(result["matches"]), 2)
 
     def test_entity_ids_use_stable_schema_prefixes(self):
         contract = load_module()
@@ -212,6 +238,24 @@ class ArtifactContractTest(unittest.TestCase):
             run_id=run_id,
         )
         self.assertFalse(invalid["valid"])
+
+    def test_experience_deepthink_content_only_markdown_omits_metadata(self):
+        contract = load_module()
+        run_id = "experience-deepthink-20260724123045-a1b2c3d4"
+        markdown = (
+            "# 经历深挖｜竞赛经历｜财务分析岗\n\n"
+            "## 一、经历全景与基础口述稿\n\n内容"
+        )
+        self.assertFalse(
+            contract.validate_markdown(markdown, run_id=run_id)["valid"]
+        )
+        self.assertTrue(
+            contract.validate_markdown(
+                markdown,
+                run_id=run_id,
+                content_only=True,
+            )["valid"]
+        )
 
     def test_storage_schema_rejects_missing_locator_keys(self):
         contract = load_module()

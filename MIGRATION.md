@@ -34,13 +34,25 @@ npx skills add riwonswain-ovo/OfferLoop -g
 - `offerloop-workspace`
 - `offerloop-workbench`
 - `offerloop-agent`
-- `resume-deepthink`
+- `experience-deepthink`
 - `interview-prep`
 - `mock-lab`
 - `talk-review`
 - `pm-sense`
 
 先运行本地预检；预检不读邮件正文、不访问业务 Base。
+
+### `resume-deepthink` 更名为 `experience-deepthink`
+
+旧版 `resume-deepthink` 已更名为 `experience-deepthink`，中文名由“简历深挖”改为
+“经历深挖”。使用仓库安装器升级时，旧 Skill 目录会先移动到 Skills 发现范围之外的可恢复
+备份，再安装新名称；不会删除飞书中的旧文档。
+
+schema v4 的内部 locator 键 `resume_deepthink` 为兼容既有配置继续保留。已有用户仍复用原飞书
+目录，不自动移动或重命名线上节点；新初始化目录显示为 `03｜经历深挖`。
+
+旧文档首次被新 Skill 使用时，按“经历名称 + 完整岗位方向”识别。唯一候选可迁移为持续维护的
+主文档；存在多个候选时必须由用户选择，不自动合并或删除。
 
 从 `0.1.0-alpha.6` 起不再安装 `interview-question-bank` 和 `knowledge-digest`。升级不会删除
 用户飞书中的既有题库、知识摘要文档、知识速览 Base 或旧配置键；这些资源只是不再由当前

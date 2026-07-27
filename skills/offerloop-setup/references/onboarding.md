@@ -113,7 +113,8 @@ python3 scripts/configure.py --workbench-url '<HTTPS_WORKBENCH_URL>'
 
 启用 `coaching` 时，`--enable-coaching --confirm-schema-v4` 保留现有配置并追加
 `artifact_storage`。新用户的训练目录随核心知识库初始化创建；旧用户缺失时经确认补齐。
-每次完整运行或明确提前结束后自动保存独立 Markdown 飞书文档。
+经历深挖按“经历 + 岗位方向”持续维护同一份 Markdown；其他训练在完整运行或明确提前结束后
+保存独立 Markdown 飞书文档。
 
 飞书消息通知可选。启用前必须确认固定接收方、最终摘要内容和发送身份；`user` 目标使用
 `ou_` 开头的 open ID，`chat` 目标使用 `oc_` 开头的 chat ID。该确认可作为后续运行的持续

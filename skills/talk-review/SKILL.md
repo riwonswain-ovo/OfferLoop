@@ -1,6 +1,6 @@
 ---
 name: talk-review
-description: 从 OfferLoop 飞书知识库的固定 ASR 文件夹读取用户选择的真实面试转写，并读取指定当前简历及该版本的简历深挖文档，还原问题与追问链、逐题评价和总结改进，保存到独立复盘文件夹。用户说“复盘刚才的面试”“分析这份面试转写”“根据 ASR 帮我复盘”时使用。
+description: 从 OfferLoop 飞书知识库的固定 ASR 文件夹读取用户选择的真实面试转写，并读取指定当前简历及方向和经历匹配的经历深挖文档，还原问题与追问链、逐题评价和总结改进，保存到独立复盘文件夹。用户说“复盘刚才的面试”“分析这份面试转写”“根据 ASR 帮我复盘”时使用。
 ---
 
 # Talk Review
@@ -16,7 +16,7 @@ description: 从 OfferLoop 飞书知识库的固定 ASR 文件夹读取用户选
 2. 定位兄弟 `offerloop-workspace`，完整读取其 `references/artifact-contract.md`。
 3. 定位兄弟 `recruiting-reminder`，完整读取其 `references/event-contract.md`。
 4. 读取 `lark-wiki`、`lark-doc`、`lark-base` Skill。
-5. 检查 `interview_asr`、`current_resumes`、`resume_deepthink` 和
+5. 检查 `interview_asr`、`current_resumes`、兼容目录键 `resume_deepthink` 和
    `interview_review` 目录；首次创建节点前展示目标并取得确认。
 
 schema v4、依赖或权限未就绪时路由到 `offerloop-setup`，不要自行扩大权限。
@@ -25,7 +25,8 @@ schema v4、依赖或权限未就绪时路由到 `offerloop-setup`，不要自�
 
 - 用户上传到 `05｜面试复盘/ASR 待复盘` 的文档：列出候选并让用户选择，读取后原位保留。
 - 列出 `02｜当前简历` 并让用户选择本次面试使用的简历，按标题精确匹配。
-- 读取所有 `关联简历版本` 与该版本一致的简历深挖文档。
+- 按实际面试岗位方向和转写中涉及的经历，选择相关的经历深挖文档；不按简历版本排除同一
+  真实经历，也不读取方向不符或无关经历。
 - 可选读取面试事件、岗位 JD 和本轮面试准备文档。
 - 用户直接粘贴 ASR 时可以继续，但最终文档必须标记“来源为对话粘贴，未存入 ASR 文件夹”。
 
@@ -41,7 +42,8 @@ schema v4、依赖或权限未就绪时路由到 `offerloop-setup`，不要自�
 4. 对比准备文档，识别命中、遗漏和临场新增题目。
 5. 按内容、结构、证据、表达和岗位匹配逐题评价。
 6. 改进表达只能使用确认事实；面试官关注点必须标记为推断。
-7. 新发现经历事实经用户确认后只列为复盘建议，不自动修改简历或既有简历深挖文档。
+7. 新发现经历事实经用户确认后只列为复盘建议，不自动修改简历或既有经历深挖文档；需要回流
+   时建议用户继续运行 `experience-deepthink`。
 
 ## 保存与回填
 

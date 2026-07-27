@@ -121,10 +121,10 @@ const SKILL_GROUPS = [
     description: '素材沉淀、准备、练习与复盘',
     skills: [
       {
-        name: 'resume-deepthink',
-        title: '简历深挖',
-        description: '连续追问真实经历，生成简历表达和面试素材',
-        prompt: '追问深挖我简历中的一段实习经历。',
+        name: 'experience-deepthink',
+        title: '经历深挖',
+        description: '从 Chat 经历讲述和岗位方向开始，持续维护口述稿、事实边界和故事素材',
+        prompt: '我会直接讲一段竞赛经历，想用它准备财务分析岗，请开始深挖。',
         icon: FileSearch,
       },
       {

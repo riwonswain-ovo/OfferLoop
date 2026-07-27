@@ -25,7 +25,7 @@ BUNDLED_SKILLS = (
     "offerloop-agent",
     "job-collection",
     "recruiting-reminder",
-    "resume-deepthink",
+    "experience-deepthink",
     "interview-prep",
     "mock-lab",
     "talk-review",
@@ -42,7 +42,7 @@ REQUIRED_BUNDLED_BY_CAPABILITY = {
     "coaching": {
         "offerloop-setup",
         "offerloop-workspace",
-        "resume-deepthink",
+        "experience-deepthink",
         "interview-prep",
         "mock-lab",
         "talk-review",

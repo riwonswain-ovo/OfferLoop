@@ -1,0 +1,4 @@
+interface:
+  display_name: "经历深挖"
+  short_description: "按岗位方向持续深挖一段真实经历并维护专属素材文档"
+  default_prompt: "Use $experience-deepthink. Ask me to describe one real experience and name my target role directly in Chat, then probe it one question at a time and maintain its evidence and story document."

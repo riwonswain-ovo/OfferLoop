@@ -13,7 +13,7 @@ const ROUTE_CATEGORIES: Record<string, string> = {
   'offerloop-workspace': '求职知识库',
   'pm-sense': '产品思维训练',
   'recruiting-reminder': '招聘日程',
-  'resume-deepthink': '简历深挖',
+  'experience-deepthink': '经历深挖',
   'talk-review': '面试复盘',
 };
 
@@ -27,7 +27,7 @@ const ROUTE_CATEGORY_HINTS: Record<string, string[]> = {
   'offerloop-workspace': ['使用指南', '知识库'],
   'pm-sense': ['产品思维', '产品 sense', '产品'],
   'recruiting-reminder': ['招聘日程', '招聘管理', '日程'],
-  'resume-deepthink': ['简历深挖', '简历', '求职材料'],
+  'experience-deepthink': ['经历深挖', '实习经历', '项目经历', '科研经历', '竞赛经历', '学生工作', '财务岗', 'hr岗'],
   'talk-review': ['面试复盘', '复盘'],
 };
 

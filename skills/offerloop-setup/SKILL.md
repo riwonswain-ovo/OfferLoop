@@ -18,7 +18,7 @@ description: 介绍 OfferLoop 的十一个 Skill，并初始化必需的私有�
 - `collection`：招聘信息收集（`job-collection`）
 - `reminder`：笔试、测评和面试提醒（`recruiting-reminder`）
 - `workspace`：初始化或检查必需的私有求职知识库（`offerloop-workspace`）
-- `coaching`：简历深挖、产品思维、面试准备、模拟面试和真实复盘
+- `coaching`：经历深挖、产品思维、面试准备、模拟面试和真实复盘
 - `workbench`：按需部署可选飞书工作台（`offerloop-workbench`）
 - `agent`：在已有工作台里加装 Codex 右侧栏（`offerloop-agent`）
 - `full`：核心知识库、全部业务与训练能力、工作台和即时求职进展联动；不自动安装 Codex Agent

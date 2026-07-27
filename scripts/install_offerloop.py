@@ -26,12 +26,15 @@ SKILL_NAMES = (
     "offerloop-workspace",
     "offerloop-workbench",
     "offerloop-agent",
-    "resume-deepthink",
+    "experience-deepthink",
     "interview-prep",
     "mock-lab",
     "talk-review",
     "pm-sense",
 )
+LEGACY_SKILL_RENAMES = {
+    "experience-deepthink": "resume-deepthink",
+}
 STANDARD_AGENTS = ("codex", "claude-code", "hermes-agent", "workbuddy")
 ALL_AGENTS = STANDARD_AGENTS
 RESULT_STATUSES = (
@@ -105,10 +108,10 @@ WELCOME = {
             "name": "求职训练能力",
             "skills": [
                 {
-                    "name": "resume-deepthink",
-                    "title": "简历深挖",
-                    "purpose": "连续追问真实经历，生成简历表达和面试素材",
-                    "example": "追问深挖我简历中的一段实习经历。",
+                    "name": "experience-deepthink",
+                    "title": "经历深挖",
+                    "purpose": "直接从 Chat 中的经历讲述和岗位方向开始，持续维护口述稿、事实边界和故事素材",
+                    "example": "我想讲一段竞赛经历，用来准备财务分析岗，请开始深挖。",
                 },
                 {
                     "name": "pm-sense",
@@ -139,7 +142,7 @@ WELCOME = {
     ],
     "workflows": [
         "招聘信息同步 → 真实投递 → 邮件识别 → 笔试面试安排",
-        "简历深挖 / 产品思维 → 面试准备 → 模拟面试 → 真实面试复盘",
+        "经历深挖 / 产品思维 → 面试准备 → 模拟面试 → 真实面试复盘",
     ],
     "next_prompt": (
         "我刚安装 OfferLoop。请先介绍 11 个 Skill，"
@@ -491,6 +494,11 @@ def _hermes_external_duplicates(
         for name in SKILL_NAMES:
             for candidate in _skill_directories(external_root, name):
                 duplicates.setdefault(name, []).append((external_root, candidate))
+        for new_name, legacy_name in LEGACY_SKILL_RENAMES.items():
+            for candidate in _skill_directories(external_root, legacy_name):
+                duplicates.setdefault(new_name, []).append(
+                    (external_root, candidate)
+                )
     return duplicates
 
 
@@ -502,6 +510,11 @@ def _workbuddy_import_duplicates(root: Path) -> dict[str, list[tuple[Path, Path]
         for candidate in _skill_directories(root, name):
             if candidate != direct:
                 duplicates.setdefault(name, []).append((root, candidate))
+    for new_name, legacy_name in LEGACY_SKILL_RENAMES.items():
+        direct_legacy = root / legacy_name
+        for candidate in _skill_directories(root, legacy_name):
+            if candidate != direct_legacy:
+                duplicates.setdefault(new_name, []).append((root, candidate))
     return duplicates
 
 
@@ -525,13 +538,23 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
     had_offerloop_install = (
         (root / MANIFEST_NAME).is_file()
         or any((root / name).exists() for name in SKILL_NAMES)
+        or any((root / name).exists() for name in LEGACY_SKILL_RENAMES.values())
         or bool(runtime_duplicates)
     )
     operations = []
     conflicts = []
     for name in SKILL_NAMES:
         destination = root / name
-        if name in runtime_duplicates and not upgrade:
+        legacy_destination = root / LEGACY_SKILL_RENAMES.get(name, "")
+        has_legacy_name = (
+            name in LEGACY_SKILL_RENAMES and legacy_destination.exists()
+        )
+        if has_legacy_name and not upgrade:
+            operations.append((name, "conflict"))
+            conflicts.append(name)
+        elif has_legacy_name and upgrade:
+            operations.append((name, "upgraded"))
+        elif name in runtime_duplicates and not upgrade:
             operations.append((name, "conflict"))
             conflicts.append(name)
         elif name in runtime_duplicates and upgrade:
@@ -621,6 +644,20 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
                 raise RuntimeError(f"{name}: staged copy failed integrity validation")
         external_backups: list[tuple[Path, Path]] = []
         try:
+            for new_name, legacy_name in LEGACY_SKILL_RENAMES.items():
+                legacy = root / legacy_name
+                if not legacy.exists():
+                    continue
+                backup = (
+                    root.parent
+                    / ".offerloop-backups"
+                    / timestamp
+                    / f"{legacy_name}-renamed-to-{new_name}"
+                )
+                backup.parent.mkdir(parents=True, exist_ok=True)
+                _move_directory(legacy, backup)
+                external_backups.append((backup, legacy))
+
             for name, candidates in runtime_duplicates.items():
                 for index, (external_root, candidate) in enumerate(candidates, 1):
                     relative = candidate.relative_to(external_root)
@@ -682,7 +719,7 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
             not had_offerloop_install
             or any(
                 name in {
-                    "resume-deepthink",
+                    "experience-deepthink",
                     "interview-prep",
                     "mock-lab",
                     "talk-review",

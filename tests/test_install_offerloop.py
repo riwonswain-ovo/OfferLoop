@@ -116,6 +116,38 @@ class OfferLoopInstallerTest(unittest.TestCase):
             self.assertEqual(len(backups), 1)
             self.assertEqual(backups[0].read_text(encoding="utf-8"), "user content\n")
 
+    def test_legacy_resume_deepthink_requires_upgrade_and_is_backed_up(self):
+        with tempfile.TemporaryDirectory() as directory:
+            environment = {"HOME": directory, "PATH": ""}
+            root = Path(directory) / ".codex" / "skills"
+            legacy = root / "resume-deepthink"
+            legacy.mkdir(parents=True)
+            (legacy / "SKILL.md").write_text(
+                "legacy experience content\n", encoding="utf-8"
+            )
+
+            report = self.installer.install_agent("codex", environ=environment)
+            self.assertEqual(report["status"], "conflict")
+            self.assertTrue(legacy.exists())
+            self.assertFalse((root / "experience-deepthink").exists())
+
+            upgraded = self.installer.install_agent(
+                "codex", environ=environment, upgrade=True
+            )
+            self.assertEqual(upgraded["status"], "upgraded")
+            self.assertFalse(legacy.exists())
+            self.assertTrue((root / "experience-deepthink" / "SKILL.md").is_file())
+            backups = list(
+                (root.parent / ".offerloop-backups").glob(
+                    "*/resume-deepthink-renamed-to-experience-deepthink/SKILL.md"
+                )
+            )
+            self.assertEqual(len(backups), 1)
+            self.assertEqual(
+                backups[0].read_text(encoding="utf-8"),
+                "legacy experience content\n",
+            )
+
     def test_hermes_external_skill_collision_is_not_silently_installed(self):
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)

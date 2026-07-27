@@ -55,7 +55,7 @@ OfferLoop 求职空间（独立、默认私有）
 │   ├── 求职进展（Base）
 │   └── 笔面试中心（Base）
 ├── 02｜当前简历
-├── 03｜简历深挖
+├── 03｜经历深挖
 ├── 04｜面试准备
 ├── 05｜面试复盘
 │   ├── ASR 待复盘
@@ -67,7 +67,8 @@ OfferLoop 求职空间（独立、默认私有）
 1. 首页是使用指南和导航，不是实时数据副本。
 2. 工作台已配置时可展示入口；未配置时显示为可选能力，不视为缺失。
 3. `02｜当前简历` 可保存多个当前使用版本，文档标题是唯一简历版本名。
-4. 五类训练产物按固定目录归位，每次完整运行或明确提前结束都保存独立 Markdown 飞书文档。
+4. 五类训练产物按固定目录归位；`experience-deepthink` 按“经历 + 岗位方向”持续维护同一文档，
+   其他训练 Skill 每次完整运行或明确提前结束保存独立 Markdown 飞书文档。
 5. `ASR 待复盘` 保存待处理转写；完成产物写入 `已完成复盘`，原始 ASR 不自动移动或删除。
 6. 创建、移动、分享、权限变更或把既有 Base 纳入知识库前，列出精确目标并取得确认。
 
@@ -86,7 +87,7 @@ OfferLoop 求职空间（独立、默认私有）
 
 ## 训练产物契约
 
-涉及 `resume-deepthink`、`interview-prep`、`mock-lab`、`talk-review` 或 `pm-sense` 时，完整
+涉及 `experience-deepthink`、`interview-prep`、`mock-lab`、`talk-review` 或 `pm-sense` 时，完整
 读取 `references/artifact-contract.md`。
 
 `scripts/artifact_contract.py` 不访问飞书，只管理 schema v4、locator、`run_id`、标题、路由和

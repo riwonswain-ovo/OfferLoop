@@ -8,18 +8,14 @@ SKILLS = ROOT / "skills"
 
 
 class RepositoryContractTest(unittest.TestCase):
-    def test_resume_deepthink_has_separate_role_playbooks(self):
-        root = SKILLS / "resume-deepthink"
+    def test_experience_deepthink_uses_optional_playbooks_without_a_role_whitelist(self):
+        root = SKILLS / "experience-deepthink"
         expected = {
             "product.md",
             "operations.md",
             "pmo.md",
             "business-analysis.md",
             "data-analysis.md",
-            "algorithm.md",
-            "frontend.md",
-            "backend.md",
-            "testing.md",
         }
         discovered = {
             path.name
@@ -29,26 +25,49 @@ class RepositoryContractTest(unittest.TestCase):
         skill = (root / "SKILL.md").read_text(encoding="utf-8")
         for name in expected:
             self.assertIn(f"references/role-playbooks/{name}", skill)
-        self.assertIn("(简历版本, 经历名称, 目标岗位/投递方向)", skill)
+        self.assertIn("(经历名称, 完整岗位方向)", skill)
+        self.assertIn("不是岗位白名单", skill)
+        self.assertIn("岗位未命中上述参考时不得停止", skill)
+        self.assertIn("财务、HR、法务、市场、销售", skill)
+        self.assertNotIn("目标岗位必须映射", skill)
+        self.assertIn("在用户完成上述输入前，不读取简历", skill)
+        self.assertNotIn("检查 `current_resumes`", skill)
 
-    def test_resume_deepthink_output_keeps_two_sections_and_six_question_types(self):
+    def test_experience_deepthink_output_keeps_reusable_evidence_and_stories(self):
         schema = (
-            SKILLS / "resume-deepthink" / "references" / "output-schema.md"
+            SKILLS / "experience-deepthink" / "references" / "output-schema.md"
         ).read_text(encoding="utf-8")
         template = schema.split("```markdown", 1)[1].split("```", 1)[0]
         self.assertEqual(
             re.findall(r"^## .+$", template, re.MULTILINE),
-            ["## 一、项目全景介绍", "## 二、项目细节深挖"],
+            [
+                "## 一、经历全景与基础口述稿",
+                "## 二、故事素材",
+                "## 三、待补充与建议深挖方向",
+            ],
         )
         for heading in (
-            "方案实现细节类",
-            "异常问题归因类",
-            "决策判断权衡类",
-            "项目推进经历类",
-            "产品价值拔高类",
-            "个人规划认知类",
+            "背景 3 分钟口述稿",
+            "目标 3 分钟口述稿",
+            "方案与行动路径 3 分钟口述稿",
+            "结果 3 分钟口述稿",
+            "团队成果与个人贡献",
+            "数据口径",
+            "事实边界",
+            "失败故事",
+            "冲突故事",
+            "决策故事",
+            "协作故事",
+            "重来一次想改进哪个部分",
         ):
             self.assertIn(heading, template)
+        self.assertNotIn("## 产物信息", template)
+        self.assertNotIn("## 二、事实、贡献与证据边界", template)
+        self.assertNotIn("维护记录", template)
+        self.assertIn("相同经历名称和岗位方向只维护一份正式文档", schema)
+        self.assertIn("不生成固定题型题库", schema)
+        self.assertIn("岗位方向不受预设分类限制", schema)
+        self.assertIn("严格按金字塔原理组织", schema)
 
     def test_expected_skills_are_discoverable(self):
         expected = {
@@ -58,7 +77,7 @@ class RepositoryContractTest(unittest.TestCase):
             "offerloop-agent",
             "job-collection",
             "recruiting-reminder",
-            "resume-deepthink",
+            "experience-deepthink",
             "interview-prep",
             "mock-lab",
             "talk-review",
@@ -95,7 +114,7 @@ class RepositoryContractTest(unittest.TestCase):
         for name in (
             "job-collection",
             "recruiting-reminder",
-            "resume-deepthink",
+            "experience-deepthink",
             "interview-prep",
             "mock-lab",
             "talk-review",
@@ -167,7 +186,7 @@ class RepositoryContractTest(unittest.TestCase):
             "offerloop-workbench",
             "job-collection",
             "recruiting-reminder",
-            "resume-deepthink",
+            "experience-deepthink",
             "pm-sense",
             "interview-prep",
             "mock-lab",
@@ -242,7 +261,7 @@ class RepositoryContractTest(unittest.TestCase):
             "### `offerloop-workspace`",
             "### `offerloop-workbench`",
             "### `offerloop-agent`",
-            "### `resume-deepthink`",
+            "### `experience-deepthink`",
             "### `pm-sense`",
             "### `interview-prep`",
             "### `mock-lab`",
@@ -297,7 +316,7 @@ class RepositoryContractTest(unittest.TestCase):
 
     def test_coaching_skills_use_feishu_markdown_artifact_contract(self):
         names = (
-            "resume-deepthink",
+            "experience-deepthink",
             "interview-prep",
             "mock-lab",
             "talk-review",
@@ -350,7 +369,7 @@ class RepositoryContractTest(unittest.TestCase):
             "offerloop-agent",
             "job-collection",
             "recruiting-reminder",
-            "resume-deepthink",
+            "experience-deepthink",
             "pm-sense",
             "interview-prep",
             "mock-lab",
@@ -373,7 +392,7 @@ class RepositoryContractTest(unittest.TestCase):
             "求职进展",
             "笔面试中心",
             "02｜当前简历",
-            "03｜简历深挖",
+            "03｜经历深挖",
             "04｜面试准备",
             "05｜面试复盘",
             "ASR 待复盘",
@@ -410,7 +429,7 @@ class RepositoryContractTest(unittest.TestCase):
             "offerloop-agent",
             "job-collection",
             "recruiting-reminder",
-            "resume-deepthink",
+            "experience-deepthink",
             "pm-sense",
             "interview-prep",
             "mock-lab",
