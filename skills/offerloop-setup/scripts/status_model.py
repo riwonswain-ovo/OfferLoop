@@ -11,6 +11,7 @@ VALID_CAPABILITIES = {
     "workspace",
     "coaching",
     "workbench",
+    "agent",
     "integration",
 }
 VALID_STATUSES = {
@@ -32,8 +33,10 @@ STATUS_PRECEDENCE = {
 def expand_selection(capability):
     """Return internal capabilities selected by one user-facing choice."""
     if capability == "full":
-        return set(VALID_CAPABILITIES)
-    if capability in VALID_CAPABILITIES - {"integration"}:
+        return set(VALID_CAPABILITIES) - {"agent"}
+    if capability == "agent":
+        return {"workspace", "workbench", "agent"}
+    if capability in VALID_CAPABILITIES - {"integration", "agent"}:
         return {"workspace", capability}
     raise ValueError(f"unknown capability: {capability}")
 

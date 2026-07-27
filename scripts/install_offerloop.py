@@ -25,6 +25,7 @@ SKILL_NAMES = (
     "recruiting-reminder",
     "offerloop-workspace",
     "offerloop-workbench",
+    "offerloop-agent",
     "resume-deepthink",
     "interview-prep",
     "mock-lab",
@@ -55,7 +56,7 @@ MANIFEST_NAME = ".offerloop-install.json"
 WELCOME = {
     "headline": "欢迎使用 OfferLoop",
     "summary": (
-        "OfferLoop 包含 10 个可以独立或组合使用的 Skill。"
+        "OfferLoop 包含 11 个可以独立或组合使用的 Skill。"
         "用户不需要记住名称，只需描述当前想解决的问题。"
     ),
     "groups": [
@@ -91,6 +92,12 @@ WELCOME = {
                     "title": "可选工作台",
                     "purpose": "按需部署妙搭工作台和 OAuth",
                     "example": "为我的 OfferLoop 搭建飞书工作台。",
+                },
+                {
+                    "name": "offerloop-agent",
+                    "title": "可选 Codex Agent",
+                    "purpose": "在已有工作台中加装本机 Codex 智能助手右侧栏",
+                    "example": "把 Codex 接入我现有的 OfferLoop 工作台。",
                 },
             ],
         },
@@ -135,7 +142,7 @@ WELCOME = {
         "简历深挖 / 产品思维 → 面试准备 → 模拟面试 → 真实面试复盘",
     ],
     "next_prompt": (
-        "我刚安装 OfferLoop。请先介绍 10 个 Skill，"
+        "我刚安装 OfferLoop。请先介绍 11 个 Skill，"
         "再做只读检查并带我完成第一次使用。"
     ),
     "privacy_notice": (
@@ -351,6 +358,32 @@ def _write_manifest(root: Path, agent: str, digests: dict[str, str]) -> None:
     )
     os.chmod(temporary, 0o600)
     temporary.replace(destination)
+
+
+def _move_directory(source: Path, destination: Path) -> None:
+    """Move a directory across platforms, including Windows hosted runners."""
+    if destination.exists():
+        raise FileExistsError(f"destination already exists: {destination.name}")
+    shutil.move(str(source), str(destination))
+
+
+def _safe_error_payload(exc: Exception, agent: str | None) -> dict:
+    """Return actionable installer diagnostics without exposing paths or values."""
+    error = {
+        "phase": "source_validation" if agent is None else "agent_install",
+        "type": type(exc).__name__,
+    }
+    if agent is not None:
+        error["agent"] = agent
+    for attribute in ("errno", "winerror"):
+        value = getattr(exc, attribute, None)
+        if isinstance(value, int):
+            error[attribute] = value
+    return {
+        "schema_version": 1,
+        "status": "error",
+        "error": error,
+    }
 
 
 def _yaml_scalar(value: str) -> str:
@@ -605,7 +638,7 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
                         / relative
                     )
                     backup.parent.mkdir(parents=True, exist_ok=True)
-                    candidate.replace(backup)
+                    _move_directory(candidate, backup)
                     external_backups.append((backup, candidate))
 
             for name, status in operations:
@@ -617,19 +650,19 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
                     # become active through recursive Skill discovery.
                     backup = root.parent / ".offerloop-backups" / timestamp / name
                     backup.parent.mkdir(parents=True, exist_ok=True)
-                    destination.replace(backup)
+                    _move_directory(destination, backup)
                 if status != "already_installed":
                     try:
-                        staged.replace(destination)
+                        _move_directory(staged, destination)
                     except Exception:
                         if backup and backup.exists() and not destination.exists():
-                            backup.replace(destination)
+                            _move_directory(backup, destination)
                         raise
         except Exception:
             for backup, candidate in reversed(external_backups):
                 if backup.exists() and not candidate.exists():
                     candidate.parent.mkdir(parents=True, exist_ok=True)
-                    backup.replace(candidate)
+                    _move_directory(backup, candidate)
             raise
 
     statuses = {status for _, status in operations}
@@ -719,7 +752,7 @@ def main(argv=None) -> int:
                         "installer_version": INSTALLER_VERSION,
                         "offerloop_version": offerloop_version(),
                     },
-                    ensure_ascii=False,
+                    ensure_ascii=True,
                     indent=2,
                 )
             )
@@ -732,19 +765,27 @@ def main(argv=None) -> int:
     if not args.agent:
         parser.error("at least one --agent is required")
 
+    current_agent = None
     try:
         validate_sources()
-        reports = [
-            install_agent(
-                agent,
-                dry_run=args.dry_run,
-                upgrade=args.upgrade,
+        reports = []
+        for current_agent in _expand_agents(args.agent):
+            reports.append(
+                install_agent(
+                    current_agent,
+                    dry_run=args.dry_run,
+                    upgrade=args.upgrade,
+                )
             )
-            for agent in _expand_agents(args.agent)
-        ]
     except (OSError, ValueError, RuntimeError) as exc:
         if args.as_json:
-            print(json.dumps({"schema_version": 1, "status": "error"}, indent=2))
+            print(
+                json.dumps(
+                    _safe_error_payload(exc, current_agent),
+                    ensure_ascii=True,
+                    indent=2,
+                )
+            )
         else:
             print(f"OfferLoop installation failed: {exc}", file=sys.stderr)
         return 1
@@ -762,7 +803,7 @@ def main(argv=None) -> int:
     if show_welcome:
         payload["welcome"] = WELCOME
     if args.as_json:
-        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        print(json.dumps(payload, ensure_ascii=True, indent=2))
     else:
         if args.dry_run:
             print("DRY RUN：仅预览，未写入任何 Skill 文件。")
@@ -785,7 +826,7 @@ def main(argv=None) -> int:
         if not args.dry_run and any(
             report["status"] in completed for report in reports
         ):
-            print("OfferLoop 的 10 个 Skill 已处理完成。")
+            print("OfferLoop 的 11 个 Skill 已处理完成。")
             if show_welcome:
                 _print_welcome()
             else:

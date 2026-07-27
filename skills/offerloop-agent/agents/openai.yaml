@@ -1,0 +1,4 @@
+interface:
+  display_name: "OfferLoop Agent"
+  short_description: "为 OfferLoop 飞书工作台加装本机 Codex 智能助手右侧栏"
+  default_prompt: "Use $offerloop-agent to add the local Codex agent sidebar to my existing OfferLoop workbench."

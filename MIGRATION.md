@@ -20,7 +20,7 @@
 
 文件不存在时跳过。新文件权限设置为 `0600`；确认新位置可读前不要删除旧文件。
 
-## 2. 安装十个 Skill
+## 2. 安装十一个 Skill
 
 ```bash
 npx skills add riwonswain-ovo/OfferLoop -g
@@ -33,6 +33,7 @@ npx skills add riwonswain-ovo/OfferLoop -g
 - `recruiting-reminder`
 - `offerloop-workspace`
 - `offerloop-workbench`
+- `offerloop-agent`
 - `resume-deepthink`
 - `interview-prep`
 - `mock-lab`

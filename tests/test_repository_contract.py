@@ -55,6 +55,7 @@ class RepositoryContractTest(unittest.TestCase):
             "offerloop-setup",
             "offerloop-workspace",
             "offerloop-workbench",
+            "offerloop-agent",
             "job-collection",
             "recruiting-reminder",
             "resume-deepthink",
@@ -215,8 +216,10 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertIn("标准 `SKILL.md`", readme)
         self.assertIn("可恢复备份", readme)
         self.assertNotIn("--agent", readme)
-        for product_name in ("Codex", "Claude Code", "Hermes", "WorkBuddy"):
+        for product_name in ("Claude Code", "Hermes", "WorkBuddy"):
             self.assertNotIn(product_name, readme)
+        self.assertIn("当前只支持 Codex", readme)
+        self.assertIn("不会新建第二个妙搭应用", readme)
         self.assertIn("~/.config/offerloop/", readme)
         self.assertIn("~/.local/state/offerloop/", readme)
 
@@ -225,7 +228,7 @@ class RepositoryContractTest(unittest.TestCase):
         sections = (
             "## 1. 安装前准备",
             "## 2. 如何安装",
-            "## 3. 认识十个 Skill",
+            "## 3. 认识十一个 Skill",
             "## 4. 旧用户如何升级",
             "## 5. 其他说明",
         )
@@ -238,6 +241,7 @@ class RepositoryContractTest(unittest.TestCase):
             "### `recruiting-reminder`",
             "### `offerloop-workspace`",
             "### `offerloop-workbench`",
+            "### `offerloop-agent`",
             "### `resume-deepthink`",
             "### `pm-sense`",
             "### `interview-prep`",
@@ -338,11 +342,12 @@ class RepositoryContractTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("# OfferLoop 使用指南", template)
         self.assertIn("OFFERLOOP:OPTIONAL:WORKBENCH", template)
-        self.assertIn("## OfferLoop 的 10 个 Skill", template)
+        self.assertIn("## OfferLoop 的 11 个 Skill", template)
         for name in (
             "offerloop-setup",
             "offerloop-workspace",
             "offerloop-workbench",
+            "offerloop-agent",
             "job-collection",
             "recruiting-reminder",
             "resume-deepthink",
@@ -402,6 +407,7 @@ class RepositoryContractTest(unittest.TestCase):
             "offerloop-setup",
             "offerloop-workspace",
             "offerloop-workbench",
+            "offerloop-agent",
             "job-collection",
             "recruiting-reminder",
             "resume-deepthink",
@@ -472,8 +478,8 @@ class RepositoryContractTest(unittest.TestCase):
         security = (ROOT / "SECURITY.md").read_text(encoding="utf-8")
         for agent in ("codex", "claude-code", "hermes-agent"):
             self.assertIn(f'"{agent}"', acceptance)
-        self.assertIn("four Agents, ten Skills", acceptance)
-        self.assertNotIn("four Agents, eleven Skills", acceptance)
+        self.assertIn("four Agents, eleven Skills", acceptance)
+        self.assertNotIn("four Agents, ten Skills", acceptance)
         self.assertIn("版本升级为 4", end_to_end)
         self.assertNotIn("版本升级为 3", end_to_end)
         self.assertIn("install_offerloop.py", acceptance)

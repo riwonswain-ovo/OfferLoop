@@ -3,7 +3,9 @@ import contextlib
 import importlib.util
 import io
 import json
+import os
 import shutil
+import subprocess
 import tempfile
 import unittest
 from unittest import mock
@@ -216,7 +218,7 @@ class OfferLoopInstallerTest(unittest.TestCase):
 
             rendered = output.getvalue()
             self.assertEqual(exit_code, 0)
-            self.assertIn("10 个 Skill 已处理完成", rendered)
+            self.assertIn("11 个 Skill 已处理完成", rendered)
             self.assertIn("欢迎使用 OfferLoop", rendered)
             self.assertIn("求职基础能力", rendered)
             self.assertIn("求职训练能力", rendered)
@@ -224,7 +226,7 @@ class OfferLoopInstallerTest(unittest.TestCase):
                 self.assertIn(name, rendered)
             self.assertIn("安装只添加 Skill", rendered)
             self.assertIn("结束当前 Agent 会话并新开会话", rendered)
-            self.assertIn("请先介绍 10 个 Skill", rendered)
+            self.assertIn("请先介绍 11 个 Skill", rendered)
 
     def test_json_install_returns_structured_welcome_only_on_first_install(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -254,9 +256,57 @@ class OfferLoopInstallerTest(unittest.TestCase):
                     len(group["skills"])
                     for group in first["welcome"]["groups"]
                 ),
-                10,
+                11,
             )
             self.assertNotIn("welcome", second)
+
+    def test_json_install_is_safe_for_windows_legacy_code_pages(self):
+        with tempfile.TemporaryDirectory() as directory:
+            environment = dict(os.environ)
+            environment.update(
+                {
+                    "HOME": directory,
+                    "PATH": "",
+                    "PYTHONIOENCODING": "cp1252",
+                }
+            )
+            completed = subprocess.run(
+                [
+                    os.sys.executable,
+                    str(SCRIPT),
+                    "--agent",
+                    "codex",
+                    "--json",
+                ],
+                env=environment,
+                check=True,
+                text=True,
+                stdout=subprocess.PIPE,
+            )
+
+        payload = json.loads(completed.stdout)
+        self.assertEqual(payload["results"][0]["status"], "installed")
+        self.assertEqual(payload["welcome"]["headline"], "欢迎使用 OfferLoop")
+
+    def test_json_error_is_actionable_without_exposing_exception_text(self):
+        private_path = "/private/example/user/secret"
+        error = PermissionError(13, "denied", private_path)
+        output = io.StringIO()
+        with mock.patch.object(
+            self.installer, "install_agent", side_effect=error
+        ), contextlib.redirect_stdout(output):
+            exit_code = self.installer.main(["--agent", "codex", "--json"])
+
+        payload = json.loads(output.getvalue())
+        serialized = json.dumps(payload)
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(payload["status"], "error")
+        self.assertEqual(payload["error"]["phase"], "agent_install")
+        self.assertEqual(payload["error"]["agent"], "codex")
+        self.assertEqual(payload["error"]["type"], "PermissionError")
+        self.assertEqual(payload["error"]["errno"], 13)
+        self.assertNotIn(private_path, serialized)
+        self.assertNotIn("denied", serialized)
 
     def test_generated_directories_do_not_affect_digest_or_copy(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -295,7 +345,7 @@ class OfferLoopInstallerTest(unittest.TestCase):
 
     def test_version_reports_installer_and_offerloop_versions(self):
         self.assertEqual(self.installer.INSTALLER_VERSION, "1.1")
-        self.assertEqual(self.installer.offerloop_version(), "0.1.0-alpha.7")
+        self.assertEqual(self.installer.offerloop_version(), "0.1.0-alpha.8")
 
     def test_workbuddy_install_is_complete_and_idempotent(self):
         with tempfile.TemporaryDirectory() as directory:

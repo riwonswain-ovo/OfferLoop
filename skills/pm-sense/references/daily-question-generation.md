@@ -200,7 +200,7 @@ Agent 研究，不得从固定题库随机抽取，也不得只把旧题换公�
 
 ## 写入工作台
 
-目标应用为 `app_17abq8v4k7k`，写入线上表
+目标应用为用户公共配置中登记的现有工作台 App ID，写入线上表
 `product_sense_daily_question`。先查询用户、当天最大批次和最近题目，再以一个
 新批次写入三行。每行写入同一个 `owner`、`question_date`、`batch_no`，`position`
 依次为 1、2、3，`status` 为 `available`。

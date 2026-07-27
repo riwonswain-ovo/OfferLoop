@@ -2,6 +2,7 @@ import React from 'react';
 import dayjs from 'dayjs';
 import {
   BellRing,
+  Bot,
   BookOpen,
   BriefcaseBusiness,
   ChevronDown,
@@ -75,7 +76,7 @@ const SKILL_GROUPS = [
         name: 'offerloop-setup',
         title: '安装与配置',
         description: '首次配置、环境检查、飞书授权和完整部署',
-        prompt: '介绍 OfferLoop 的十个 Skill，并帮我完成第一次使用。',
+        prompt: '介绍 OfferLoop 的十一个 Skill，并帮我完成第一次使用。',
         icon: Settings,
       },
       {
@@ -105,6 +106,13 @@ const SKILL_GROUPS = [
         description: '按需部署和维护飞书可视化工作台',
         prompt: '为我的 OfferLoop 搭建飞书工作台。',
         icon: ExternalLink,
+      },
+      {
+        name: 'offerloop-agent',
+        title: '可选 Codex Agent',
+        description: '在已有工作台中加装本机 Codex 智能助手右侧栏',
+        prompt: '把 Codex 接入我现有的 OfferLoop 工作台。',
+        icon: Bot,
       },
     ],
   },
@@ -159,7 +167,7 @@ const SkillMapCard: React.FC = () => (
         OfferLoop 能力地图
       </CardTitle>
       <CardDescription>
-        展开查看 10 个 Skill；无需记名称，直接对 Agent 描述目标即可
+        展开查看 11 个 Skill；无需记名称，直接对 Agent 描述目标即可
       </CardDescription>
     </CardHeader>
     <CardContent className="space-y-3">
