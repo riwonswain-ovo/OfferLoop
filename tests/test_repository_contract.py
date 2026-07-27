@@ -69,6 +69,66 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertIn("岗位方向不受预设分类限制", schema)
         self.assertIn("严格按金字塔原理组织", schema)
 
+    def test_mock_lab_uses_optional_product_playbook_and_question_patterns(self):
+        root = SKILLS / "mock-lab"
+        skill = (root / "SKILL.md").read_text(encoding="utf-8")
+        protocol = (root / "references" / "interview-protocol.md").read_text(
+            encoding="utf-8"
+        )
+        role_playbooks = {
+            path.name
+            for path in (root / "references" / "role-playbooks").glob("*.md")
+        }
+        question_patterns = {
+            path.name
+            for path in (root / "references" / "question-patterns").glob("*.md")
+        }
+        self.assertEqual(role_playbooks, {"product.md"})
+        self.assertEqual(question_patterns, {"product.md"})
+        for expected in (
+            "references/role-playbooks/product.md",
+            "references/question-patterns/product.md",
+            "不是岗位",
+            "岗位未命中现有参考时不得停止",
+            "目标岗位是启动模拟的唯一必需输入",
+            "不机械复述原题",
+        ):
+            self.assertIn(expected, skill)
+        for expected in (
+            "通用面试协议",
+            "用户选择的面试模式",
+            "可选岗位 Playbook",
+            "JD 与用户真实材料",
+            "不顺序遍历文件",
+            "不得声称改写后的问题是真实公司原题",
+        ):
+            self.assertIn(expected, protocol)
+        product_role = (
+            root / "references" / "role-playbooks" / "product.md"
+        ).read_text(encoding="utf-8")
+        product_patterns = (
+            root / "references" / "question-patterns" / "product.md"
+        ).read_text(encoding="utf-8")
+        for expected in (
+            "用户理解与需求发现",
+            "方案设计、优先级与取舍",
+            "数据指标、实验与效果归因",
+            "项目推进与跨团队协作",
+            "商业模式、行业与竞争判断",
+        ):
+            self.assertIn(expected, product_role)
+        for expected in (
+            "经历全景与个人贡献",
+            "指标设计、异常诊断与效果归因",
+            "B 端、平台与数据产品",
+            "AI 产品与技术应用",
+            "估算、发散与表达",
+        ):
+            self.assertIn(expected, product_patterns)
+        combined = product_role + product_patterns
+        for forbidden in ("建议全文背诵", "把同龄人卷成春饼"):
+            self.assertNotIn(forbidden, combined)
+
     def test_expected_skills_are_discoverable(self):
         expected = {
             "offerloop-setup",
