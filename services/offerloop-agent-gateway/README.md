@@ -27,6 +27,9 @@ npm run start:local
 `npm run configure` 会创建一个仅能访问两个 Agent Worker 路由的妙搭 OpenAPI
 Key，并直接保存在 macOS 钥匙串。原始密钥不会写入仓库或输出到聊天。
 
+当前 Mac 也可以把 `launchd/com.offerloop.agent-worker.plist` 安装到
+`~/Library/LaunchAgents/`，让 Worker 在登录后自动启动，并在意外退出后自动恢复。
+
 默认工作台地址已经内置。只有仓库位置变化时，才需要在 `.env.local` 中设置：
 
 ```bash
