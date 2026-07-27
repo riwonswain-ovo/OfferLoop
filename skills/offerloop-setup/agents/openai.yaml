@@ -1,4 +1,4 @@
 interface:
   display_name: "OfferLoop Setup"
-  short_description: "介绍九个 Skill，按需预检或部署 OfferLoop"
-  default_prompt: "Use $offerloop-setup to introduce all nine OfferLoop skills, then help me choose and preflight one capability."
+  short_description: "介绍十个 Skill，初始化知识库、三张 Base 与飞书配置"
+  default_prompt: "Use $offerloop-setup to introduce all ten OfferLoop skills and initialize the required Feishu knowledge base."

@@ -20,25 +20,27 @@ CAPABILITIES = {
     "reminder",
     "workspace",
     "coaching",
+    "workbench",
     "full",
 }
 RESOURCE_LOCATORS = {
     "enterprise_base": "target_base_url",
     "progress_base": "progress_base_url",
     "reminder_base": "reminder_base_url",
+    "core_data": "workspace_core_data_node_token",
     "workbench": "workbench_url",
 }
 TEMPLATE_DIRECTORIES = {
-    "workbench": "assets/workbench-template",
+    "workbench": "../offerloop-workbench/assets/workbench-template",
     "progress_sync": "assets/progress-sync-template",
 }
 PHASES = (
-    ("preflight", "检查 Python、lark-cli、九个 Skill 与选定 profile"),
+    ("preflight", "检查 Python、lark-cli、所选 Skill 与选定 profile"),
     ("bot_setup", "按需启用机器人能力、发布并安装应用，验证目标群成员关系"),
     ("bases", "创建或接管求职企业清单、求职进展与笔面试中心"),
     ("workspace", "创建私有知识库、固定目录和使用指南"),
     ("coaching", "登记训练产物目录并启用 Markdown 飞书文档沉淀"),
-    ("workbench", "发布招聘工作台"),
+    ("workbench", "按用户选择发布可选招聘工作台"),
     ("progress_sync", "发布已投递即时同步服务并创建唯一 Base workflow"),
     ("imap", "创建本地 IMAP 模板，等待用户在本机填写授权码"),
     ("acceptance", "运行只读验收；即时联动演练必须使用并清理临时记录"),
@@ -82,10 +84,11 @@ def expand_capability(capability):
             "reminder",
             "workspace",
             "coaching",
+            "workbench",
             "integration",
         }
         if capability == "full"
-        else {capability}
+        else {"workspace", capability}
     )
 
 
@@ -102,15 +105,15 @@ def _configured(config, resource):
 
 
 def _required_resources(selected):
-    if selected == {"coaching"}:
-        return {"wiki_home"}
-    required = {"enterprise_base", "progress_base"}
-    if "reminder" in selected or "workspace" in selected:
-        required.add("reminder_base")
-    if "workspace" in selected:
-        required.update({"wiki_home", "workbench"})
-    elif "coaching" in selected:
-        required.add("wiki_home")
+    required = {
+        "enterprise_base",
+        "progress_base",
+        "reminder_base",
+        "wiki_home",
+        "core_data",
+    }
+    if "workbench" in selected:
+        required.add("workbench")
     if "integration" in selected:
         required.add("progress_sync")
     return required
@@ -142,9 +145,11 @@ def build_plan(config, capability="full"):
             for phase_id, summary in PHASES
             if (phase_id != "imap" or "reminder" in selected)
             and (phase_id != "coaching" or "coaching" in selected)
+            and (phase_id != "workbench" or "workbench" in selected)
         ],
         "confirmations": [
-            "创建或接管 Base、知识库、工作台和即时同步服务前的一次总确认",
+            "创建或接管三张 Base、必需知识库和即时同步服务前的一次总确认",
+            "选择工作台时，对妙搭应用、OAuth 和发布范围单独确认",
             "启用通知时确认接收方式、目标名称、发送身份和最终摘要模板",
             "用户填写 IMAP 授权码后的一次仅连通性检查确认",
         ],

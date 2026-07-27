@@ -30,7 +30,6 @@ description: 从 IMAP 邮箱识别校招笔试、在线测评和面试通知，�
 - `lark_profile`：固定的 lark-cli profile；
 - `reminder_base_url`：统一 `笔面试中心` Base；
 - `progress_base_url`：独立 `求职进展` Base；
-- `workspace_home_node_token`：可选，供成功后刷新工作台。
 - `notifications`：可选的飞书消息通知配置，包含 `status`、`target_type`、`target_name`、`target_id`、`identity`。
 
 IMAP 凭证仍从 `~/.config/offerloop/recruiting-reminder/.env` 读取。缺任一业务 URL 时先报告，
@@ -52,7 +51,7 @@ IMAP 凭证仍从 `~/.config/offerloop/recruiting-reminder/.env` 读取。缺任
 5. 写入 `笔面试中心`，随后按事件环节单调推进每条已关联求职记录的阶段。
 6. 先处理固定时间事件，再为异步笔试计算空档。
 7. 展示日历方案，取得第二次确认后创建或更新日程。
-8. 回填日历 ID，记录已处理邮件；若配置工作台，调用 `offerloop-workspace` 滚动“未来 7 天”日历视图的上限日期。
+8. 回填日历 ID，记录已处理邮件；知识库和可选工作台会读取这些既有真源，无需刷新首页。
 9. 若飞书消息通知已获持续授权并启用，发送本次最终结果或部分完成提醒。
 
 两次确认都不能省略：第一次确认邮件抽取和关联，第二次确认日历安排。dry-run 时完成第 4
@@ -273,18 +272,13 @@ IF(
 `~/.config/offerloop/recruiting-reminder/base_config.json`，不要迁移、删除或修改旧双 Base
 结构；读取 `references/legacy-dual-base.md` 按旧入口继续运行，并提示统一中心尚未切换。
 
-## 工作台协作
+## 知识库与可选工作台
 
-事件、求职阶段和日历全部成功后，如果 `offerloop-workspace` 可用且配置了
-`workspace_calendar_table_id`、`workspace_calendar_view_id`，运行：
+笔面试中心已作为唯一 Base 对象纳入 OfferLoop 知识库；本 Skill 直接写 Base 和个人日历，不
+调用 `offerloop-workspace` 改写首页。
 
-```bash
-python3 ../offerloop-workspace/scripts/workspace.py --calendar-filter
-```
-
-再把输出原样传给 `lark-cli base +view-set-filter`，目标固定为笔面试中心主表的配置 table/view。
-它只滚动未来 7 天的日期上限，不读写首页文档、个人区域或训练题。刷新失败只记录摘要，
-不回滚已成功的 Base 或日历写入。
+`offerloop-workbench` 是可选读模型，会自行按未来 7 天范围读取日历和笔面试中心。未部署或
+读取失败不影响邮件处理、Base 写入、求职阶段推进或日历结果。
 
 ## 飞书消息通知
 

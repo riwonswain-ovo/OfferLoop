@@ -31,7 +31,8 @@ class RecruitingConfigTest(unittest.TestCase):
             "面试准备文档",
             "面试复盘文档",
             "投递简历版本",
-            "offerloop-workspace",
+            "offerloop-workbench",
+            "可选",
             "未来 7 天",
         ):
             self.assertIn(expected, content)

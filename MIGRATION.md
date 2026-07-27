@@ -20,7 +20,7 @@
 
 文件不存在时跳过。新文件权限设置为 `0600`；确认新位置可读前不要删除旧文件。
 
-## 2. 安装九个 Skill
+## 2. 安装十个 Skill
 
 ```bash
 npx skills add riwonswain-ovo/OfferLoop -g
@@ -32,6 +32,7 @@ npx skills add riwonswain-ovo/OfferLoop -g
 - `job-collection`
 - `recruiting-reminder`
 - `offerloop-workspace`
+- `offerloop-workbench`
 - `resume-deepthink`
 - `interview-prep`
 - `mock-lab`
@@ -59,10 +60,14 @@ OfferLoop 管理，可由用户自行保留或另行归档。
 
 1. 对企业清单、旧笔试 Base、旧面试 Base 建立并验证备份。
 2. 创建独立求职进展、统一笔面试中心和私有 `OfferLoop 求职空间`。
-3. 将三个业务 Base URL、知识库 ID 和首页节点写入共享公共配置。
-4. 迁移历史记录，以企业 record ID 和来源邮件 ID 幂等去重。
-5. 小流量验证即时进展同步、人工字段保护、同公司多岗位、改期和日历更新。
-6. 验收通过后才切换日常写入；旧双 Base 和旧配置永久保留为回滚入口。
+3. 将三张既有 Base 纳入知识库 `01｜核心求职数据`；不得复制记录或另建同名 Base。
+4. 将三个业务 Base URL、知识库 ID、首页和核心数据节点写入共享公共配置。
+5. 迁移历史记录，以企业 record ID 和来源邮件 ID 幂等去重。
+6. 小流量验证即时进展同步、人工字段保护、同公司多岗位、改期和日历更新。
+7. 验收通过后才切换日常写入；旧双 Base 和旧配置永久保留为回滚入口。
+
+飞书工作台不属于核心迁移前置条件。只有用户明确选择时才运行 `offerloop-workbench`；未部署或
+失败不影响知识库、三张 Base、日历和训练产物。
 
 历史已投递记录无法可靠恢复投递日期时保持空白，不使用迁移日期冒充。轮次不明的旧面试
 只进入统一主表，不猜一面或二面。

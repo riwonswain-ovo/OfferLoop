@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -17,6 +18,7 @@ SKILL_NAMES = (
     "job-collection",
     "recruiting-reminder",
     "offerloop-workspace",
+    "offerloop-workbench",
     "resume-deepthink",
     "interview-prep",
     "mock-lab",
@@ -126,6 +128,16 @@ def assert_collection_preflight(project, skills_root, env):
     configure = setup_scripts / "configure.py"
     preflight = setup_scripts / "preflight.py"
 
+    # The core workspace is mandatory for every capability. Simulate the
+    # separately installed official Lark Skills in this isolated Agent root.
+    for name in ("lark-base", "lark-doc", "lark-wiki"):
+        skill_dir = skills_root / name
+        skill_dir.mkdir(parents=True, exist_ok=True)
+        (skill_dir / "SKILL.md").write_text(
+            f"---\nname: {name}\ndescription: cold-install fixture\n---\n",
+            encoding="utf-8",
+        )
+
     fake_bin = project / "test-bin"
     fake_bin.mkdir()
     fake_program = fake_bin / "fake_lark.py"
@@ -168,6 +180,18 @@ def assert_collection_preflight(project, skills_root, env):
             "cold-install-check",
             "--target-base-url",
             "https://example.feishu.cn/base/cold-install-check",
+            "--progress-base-url",
+            "https://example.feishu.cn/base/cold-progress-check",
+            "--reminder-base-url",
+            "https://example.feishu.cn/base/cold-reminder-check",
+            "--wiki-space-id",
+            "cold_space",
+            "--workspace-home-node-token",
+            "cold_home",
+            "--workspace-core-data-node-token",
+            "cold_core_data",
+            "--schema-version",
+            "4",
         ],
         cwd=project,
         env=ready_env,
@@ -185,8 +209,8 @@ def assert_collection_preflight(project, skills_root, env):
     if local_failures:
         raise AssertionError(f"configured collection preflight failed: {local_failures}")
     checks = {check["id"]: check for check in report["checks"]}
-    if checks["local.progress_locator"]["status"] != "unverified":
-        raise AssertionError("optional progress locator must remain unverified")
+    if checks["local.progress_locator"]["status"] != "ready":
+        raise AssertionError("mandatory progress locator must be ready")
     if checks["online.permissions"]["status"] != "unverified":
         raise AssertionError("offline acceptance must not claim online permissions")
 
@@ -209,6 +233,8 @@ def assert_collection_preflight(project, skills_root, env):
     if recovery != LARK_CLI_RECOVERY:
         raise AssertionError("lark-cli recovery instruction changed")
 
+    for name in ("lark-base", "lark-doc", "lark-wiki"):
+        shutil.rmtree(skills_root / name)
     workspace_report = load_report(
         [sys.executable, str(preflight), "--capability", "workspace", "--json"],
         cwd=project,
@@ -264,7 +290,7 @@ def main():
         roots = install_all_agents(source, project, home, env)
         assert_collection_preflight(project, roots["codex"], env)
         print(
-            "cold install accepted: four Agents, eleven Skills, idempotency, "
+            "cold install accepted: four Agents, ten Skills, idempotency, "
             "collection preflight, recovery, and redaction"
         )
 

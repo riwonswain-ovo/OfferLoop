@@ -1,7 +1,8 @@
 # OfferLoop 工作台一次成功部署路径
 
-本文件是部署 `workspace` 或 `full` 时的强制执行契约。它固化已经在线跑通的方案，优先级高于
-临时猜测或旧实现。除用户亲自同意 OAuth 外，其余步骤由 Agent 连续完成并逐门验收。
+本文件只在用户明确选择 `workbench` 或包含工作台的 `full` 部署时强制执行。它固化已经在线
+跑通的方案，优先级高于临时猜测或旧实现。没有选择工作台时不得运行这些步骤，也不得影响核心
+知识库和业务 Skill 的就绪状态。
 
 ## 1. 发布前固定契约
 
@@ -89,7 +90,7 @@ release ID 后，每 20 秒用 `+release-get` 查询，只有同一 release 返�
 6. 查看线上日志/Trace：OAuth complete 为成功响应，calendar GET 为 200；确认 release commit ID 是
    本轮提交。不得读取或输出 Cookie/token。
 
-只有六步全部通过，`workspace` 才能标为 `ready`。
+只有六步全部通过，`workbench` 才能标为 `ready`。
 
 ## 4. 症状到修复的固定映射
 

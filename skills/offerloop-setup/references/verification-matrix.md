@@ -4,7 +4,7 @@
 
 ## 0. 开始前
 
-1. 先执行 `python3 scripts/preflight.py --capability <collection|reminder|workspace|coaching|full> --json`。
+1. 先执行 `python3 scripts/preflight.py --capability <collection|reminder|workspace|coaching|workbench|full> --json`。
 2. 仅对预检中已经配置、且用户本次明确要求验证的能力执行在线核验。
 3. 在线操作前确认当前 `lark-cli` 身份；涉及用户文档、知识库或日历时使用 `--as user`，涉及应用可见性或工作流时使用 `--as bot`。
 4. 所有命令输出只保留状态、资源类型、数量和错误类别；不要粘贴 URL 中的 token、邮箱地址、Cookie、授权码或 IMAP 密码。
@@ -17,7 +17,7 @@
 | 目标表存在 | user / bot | `base +table-list` | 找到已配置的招聘信息表 |
 | 字段契约 | user / bot | `base +field-list` | 能读取字段列表；缺字段记为 `needs_action`，不自动补建 |
 | 视图可读取 | user / bot | `base +view-list` | 可读取至少一个视图；不创建、不改筛选 |
-| 增量写入元数据 | 本地 | 查看预检报告的 `local.progress_locator` | 没有同步定位器时标为 `unverified`，不猜测记录 |
+| 求职进展定位 | 本地 | 查看预检报告的 `local.progress_locator` | 已登记核心空间中的求职进展 Base；缺失时为 `needs_action`，不猜测记录 |
 
 推荐命令顺序（将尖括号替换为已配置值，不要在聊天中回显真实 URL）：
 
@@ -50,16 +50,15 @@ python3 skills/recruiting-reminder/scripts/fetch_mail.py --check-connection
 
 执行日历命令前，先阅读 `lark-calendar` Skill 的 `references/lark-calendar-agenda.md` 或 `references/lark-calendar-freebusy.md`，再按其中当前 CLI 参数传入未来 7 天的开始与结束时间。
 
-## 3. `workspace`：知识库与工作台入口
+## 3. `workspace`：必需知识库
 
 | 核验项 | 身份 | 只读操作 | 通过条件 |
 | --- | --- | --- | --- |
 | 知识库节点可读取 | user | `wiki +node-get`、`wiki +node-list` | 配置的根节点与子节点可读取 |
-| 文档入口可读取 | user | `wiki +node-get` 或 `docx` 读取 | 使用指南和入口文档存在 |
-| 工作台可访问 | 浏览器 / HTTP GET | 访问 `workbench_url` | 返回可加载的页面外壳；不提交表单、不写入数据 |
-| 工作台首屏性能 | 浏览器 / Trace | 首次打开后查询 `GET /api/workbench` Trace | 首屏接口按需读取默认视图，每个数据集最多 30 条，不扫描所有视图记录 |
-| 工作台日历 OAuth | 浏览器 | 按 `workbench-golden-path.md` 完成两权限授权并刷新一次 | 连接按钮消失、日历 Base 按钮保留、未来 7 天读取成功；刷新后仍连接，且无 CSRF、会话过长或读取失败提示 |
-| Base 入口可读取 | user | 对已配置各 Base 执行 `+url-resolve`、`+base-get` | 入口没有失效 |
+| 使用指南可读取 | user | `wiki +node-get` 或 `docx` 读取 | `00｜OfferLoop 使用指南` 存在 |
+| 核心数据目录 | user | `wiki +node-list` | `01｜核心求职数据` 下存在三张既有 Base 节点 |
+| Base 入口可读取 | user / bot | 对已配置各 Base 执行 `+url-resolve`、`+base-get` | 三张 Base 入口均指向唯一业务真源 |
+| 工作台可选状态 | 本地 | 查看 `workbench_url` | 缺失时为 `not_selected`，不影响 workspace 通过 |
 
 知识库读取示例：
 
@@ -68,12 +67,8 @@ lark-cli wiki +node-get --node-token '<NODE_TOKEN>' --as user
 lark-cli wiki +node-list --space-id '<SPACE_ID>' --as user
 ```
 
-不要在验收中移动知识库节点、创建文档或更改成员权限。OAuth 同意必须由用户本人操作；
-验收只观察连接状态和未来 7 天只读结果，不读取或展示 token/Cookie。
-
-首屏还需记录从刷新到可交互的耗时并查看 `GET /api/workbench` 与当前数据集请求 Trace。默认视图
-不得预读全部 Base/子视图记录，每个请求最多返回 30 条；若常规网络下首屏超过 10 秒，保持
-`needs_action` 并先排查全量扫描、重复 React 初始化请求和串行 Base 请求，不把慢页面交付为 ready。
+不要在验收中移动知识库节点、创建文档或更改成员权限。三张 Base 必须通过已登记 URL 与 Wiki
+节点相互核对，不按标题猜测，也不复制记录验证。
 
 ## 4. `coaching`：求职训练产物
 
@@ -88,7 +83,22 @@ lark-cli wiki +node-list --space-id '<SPACE_ID>' --as user
 只读验收不得创建空主档、训练文档或测试 Base 记录。多个同名目录保持 `needs_action`，等待用户
 选择，不能自动取第一条。
 
-## 5. `integration`：求职进展即时联动
+## 5. `workbench`：可选飞书工作台
+
+只有用户本次明确选择工作台时执行。完整读取
+`../../offerloop-workbench/references/golden-path.md`：
+
+| 核验项 | 身份 | 只读操作 | 通过条件 |
+| --- | --- | --- | --- |
+| 页面可访问 | 浏览器 / HTTP GET | 访问已登记 HTTPS URL | 返回可加载页面外壳 |
+| 首屏性能 | 浏览器 / Trace | 查询 `GET /api/workbench` Trace | 每个数据集最多 30 条，不扫描所有视图 |
+| 三张 Base | 浏览器 | 切换三个数据集 | 只读加载既有 Base，不创建副本 |
+| 日历 OAuth | 浏览器 | 用户亲自授权并刷新一次 | 刷新后仍连接，无 CSRF、会话过长或读取错误 |
+
+未选择或未部署工作台时保持 `not_selected`，不得降低 workspace、collection、reminder 或
+coaching 状态。
+
+## 6. `integration`：求职进展即时联动
 
 | 核验项 | 身份 | 只读操作 | 通过条件 |
 | --- | --- | --- | --- |
@@ -107,7 +117,7 @@ lark-cli base +workflow-list --base-token '<BASE_TOKEN>' --table-id '<TABLE_ID>'
 
 执行运行历史查询前先阅读 `lark-base` Skill 的 `references/lark-base-workflow-run-history.md`，以该参考中的当前参数为准。验收阶段禁止启用、停用、创建或执行工作流。
 
-## 6. 状态解释与交接
+## 7. 状态解释与交接
 
 - `ready`：已完成所选能力的离线检查，且本次已执行的只读在线检查通过。
 - `needs_action`：配置、字段、权限或入口缺失，需用户确认后才可修复。

@@ -8,13 +8,15 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Skills](https://img.shields.io/badge/Skills-9-7C3AED)](#3-认识九个-skill)
+[![Skills](https://img.shields.io/badge/Skills-10-7C3AED)](#3-认识十个-skill)
 
 </div>
 
-> 当前版本：0.1.0-alpha.6。旧用户请直接阅读[如何升级](#4-旧用户如何升级)。
+> 当前版本：0.1.0-alpha.7。旧用户请直接阅读[如何升级](#4-旧用户如何升级)。
 
-OfferLoop 包含 9 个可以独立使用、也可以组合使用的标准 Agent Skill。安装全部 Skill 不代表必须启用全部功能；你可以只同步招聘信息、只管理笔面试提醒、只使用求职空间，也可以按需启用简历深挖、产品思维、面试准备、模拟面试和真实复盘。
+OfferLoop 包含 10 个标准 Agent Skill。完成线上初始化后一定会有一个默认私有的飞书知识库，
+其中组织三张业务 Base、当前简历和每次训练 Markdown 产物；飞书工作台是可选项，未部署不影响
+招聘同步、笔面试提醒或任何训练 Skill。
 
 ## 1. 安装前准备
 
@@ -41,19 +43,19 @@ OfferLoop 遵循标准 `SKILL.md` 目录结构。只要 Agent 能加载标准 Ag
 请帮我安装这个 GitHub 仓库中的 OfferLoop：
 https://github.com/riwonswain-ovo/OfferLoop
 
-请安装仓库 skills/ 下的 9 个 Skill，并使用你自己的标准 Skills 目录。
+请安装仓库 skills/ 下的 10 个 Skill，并使用你自己的标准 Skills 目录。
 先预览安装目标和冲突；确认安全后再安装。不要覆盖来源不明的同名 Skill。
-安装完成后介绍这 9 个 Skill 的用途和一句使用示例，说明隐私边界，并提醒我重新开启会话。
+安装完成后介绍这 10 个 Skill 的用途和一句使用示例，说明隐私边界，并提醒我重新开启会话。
 ```
 
-Agent 可能会请求访问 GitHub 或写入 Skills 目录的权限。确认目标是本仓库的九个 Skill 后再授权。
+Agent 可能会请求访问 GitHub 或写入 Skills 目录的权限。确认目标是本仓库的十个 Skill 后再授权。
 
 ### 方式二：在终端安装
 
 ```bash
 npx skills add riwonswain-ovo/OfferLoop -g \
   -s offerloop-setup job-collection recruiting-reminder offerloop-workspace \
-  resume-deepthink interview-prep mock-lab talk-review pm-sense -y
+  offerloop-workbench resume-deepthink interview-prep mock-lab talk-review pm-sense -y
 ```
 
 安装工具若发现同名但内容不同的旧副本，应先报告冲突，不应直接覆盖。确认属于旧版 OfferLoop 后，先把旧副本备份到 Skills 发现范围之外，再安装新版。
@@ -63,27 +65,28 @@ npx skills add riwonswain-ovo/OfferLoop -g \
 Agent 通常只在会话开始时发现 Skill。安装完成后结束当前会话并新开会话，然后发送：
 
 ```text
-我刚安装 OfferLoop。请调用 offerloop-setup，先介绍 9 个 Skill，再做只读检查并带我完成第一次使用；不要创建或修改飞书资源。
+我刚安装 OfferLoop。请调用 offerloop-setup，先介绍 10 个 Skill，再做只读检查并带我完成第一次使用；不要创建或修改飞书资源。
 ```
 
-首次安装欢迎会按“4 个求职基础能力 + 5 个求职训练能力”完整介绍九个 Skill，并给出两条常用
+首次安装欢迎会按“4 个核心与业务能力 + 1 个可选工作台 + 5 个求职训练能力”介绍十个 Skill，并给出两条常用
 闭环和一条可直接复制的首次使用指令。重复安装不会反复显示完整欢迎；Skill 能被发现仍需重新
 开启 Agent 会话。
 
-## 3. 认识九个 Skill
+## 3. 认识十个 Skill
 
-九个 Skill 的关系如下：
+十个 Skill 的关系如下：
 
 ```text
 offerloop-setup
+  ├─ 必然初始化 offerloop-workspace 的私有知识库和三张 Base
   ├─ 为 job-collection 做首次预检与配置
   ├─ 为 recruiting-reminder 做首次预检与配置
-  ├─ 为 offerloop-workspace 做首次预检与配置
   └─ 为五个求职训练 Skill 做统一存储预检与配置
 
 job-collection ── 已投递记录 ──> 求职进展
 recruiting-reminder ── 笔面试事件 ──> 求职进展 + 个人日历
-offerloop-workspace ── 统一入口 ──> 工作台 + 三张 Base + 私有知识库
+offerloop-workspace ── 必需核心空间 ──> 私有知识库 + 三张 Base + 训练产物
+offerloop-workbench ── 可选体验层 ──> 聚合读取三张 Base + 日历
 
 resume-deepthink ── 当前简历 + 投递方向 ──> 简历深挖文档
 pm-sense ── 产品判断与答案 ──> 产品 Sense 训练文档
@@ -100,18 +103,18 @@ talk-review ── ASR + 当前简历 + 简历深挖 ──> 真实面试复盘
 
 #### 第一次运行前需要准备
 
-- 已安装九个 OfferLoop Skill，并重新开启 Agent 会话。
+- 已安装十个 OfferLoop Skill，并重新开启 Agent 会话。
 - Python 3.10 或更高版本。
-- 不需要提前记住 Skill 名称。首次运行会先介绍九个 Skill，再让你从 `collection`、`reminder`、`workspace`、`coaching` 或 `full` 中选择一项；不确定时可以让它解释后再选择。
+- 不需要提前记住 Skill 名称。首次运行会先介绍十个 Skill，再让你从 `collection`、`reminder`、`workspace`、`coaching`、`workbench` 或 `full` 中选择；任何选择都检查核心知识库，只有 `workbench` / `full` 部署工作台。
 - 不必提前准备飞书密钥或邮箱授权码；缺少 `lark-cli`、外部 Lark Skill、profile 或资源定位时，预检会给出解决动作。
 
 #### 第一次运行流程
 
-1. 首次使用时，按基础能力和训练能力完整介绍九个 Skill、使用示例、常用闭环和隐私边界。
+1. 首次使用时，完整介绍十个 Skill、使用示例、常用闭环和隐私边界。
 2. 询问本次要启用的能力，未选择的能力标记为 `not_selected`。
-3. 运行只读离线预检，检查 Python、`lark-cli`、九个 OfferLoop Skill、所选能力的外部 Lark Skill、本地配置和文件权限。
+3. 运行只读离线预检，检查 Python、`lark-cli`、所选 OfferLoop Skill、外部 Lark Skill、本地配置和文件权限。
 4. 用 `ready`、`needs_action`、`blocked`、`unverified` 汇报状态，并给出下一步。
-5. 经用户确认后，保存 profile、Base URL、知识库和工作台地址等非敏感定位信息。
+5. 经用户确认后，保存 profile、三张 Base、知识库首页与核心数据目录等非敏感定位；工作台验收后才登记其地址。
 6. 用户要求完整部署时，先展示将创建或接管的资源及影响范围，再等待确认；线上权限另做只读验收。
 
 #### 第一次运行后的输出
@@ -154,18 +157,18 @@ talk-review ── ASR + 当前简历 + 简历深挖 ──> 真实面试复盘
 - 先用 `offerloop-setup` 对 `collection` 做预检。
 - 可用的 `lark-cli >= 1.0.73`、bot profile，以及来源 Base 的查看权限和目标 Base 的编辑权限。
 - 至少一个支持的信息源链接：飞书/Lark Base 或腾讯 Smartsheet。
-- 如果已有个人求职 Base，准备它的 URL；如果没有，允许 Skill 在展示结构后创建。
+- 先由 `offerloop-setup` 创建或接管核心空间中的企业清单、求职进展和笔面试中心三张 Base。
 - 准备回答缺失的求职偏好：毕业年份、目标城市、目标及排除行业、目标及排除公司、不需要的招聘类型。已有“用户偏好”会优先读取，不重复询问。
-- “求职进展”Base、工作台和飞书结果通知都是可选项；未登记 `progress_base_url` 时会跳过求职进展对账，不会因此阻塞企业信息同步。
+- 工作台和飞书结果通知是可选项；不部署工作台不会阻塞企业信息同步或求职进展对账。
 
 #### 第一次运行流程
 
-1. 判断是接管已有 Base 还是新建 Base；已有 Base 先做只读结构审计，不按名称猜测资源。
+1. 解析核心空间中已登记的企业清单与求职进展 Base，并先做只读结构审计，不按名称猜测资源。
 2. 读取已有用户偏好，只逐项询问缺失且当前同步必需的内容，不一次抛出长表单。
 3. 登记每个信息源及其独立游标。
-4. 新建时，经确认创建“企业清单”、5 张企业性质子表、“用户偏好”和“信息源登记”，以及状态视图和双向 workflow；接管时只补缺项。
+4. 初始化企业清单业务结构时，经确认创建 5 张企业性质子表、“用户偏好”和“信息源登记”，以及状态视图和双向 workflow；接管时只补缺项。
 5. 首次完整扫描来源，执行批次拆分、偏好筛选和跨来源去重。
-6. 写入主表与唯一分类子表，验收字段、映射、视图和 workflow；已配置“求职进展”时再做幂等对账。
+6. 写入主表与唯一分类子表，验收字段、映射、视图和 workflow，再对核心空间中的求职进展做幂等对账。
 
 #### 第一次运行后的输出
 
@@ -244,42 +247,79 @@ talk-review ── ASR + 当前简历 + 简历深挖 ──> 真实面试复盘
 
 ---
 
-### `offerloop-workspace`：管理私有求职空间与统一入口
+### `offerloop-workspace`：维护必需的私有求职知识库
 
 #### 作用
 
-把工作台、求职企业清单、求职进展、笔面试中心和个人材料组织到一个固定、默认私有的飞书知识库入口。它只维护目录、使用指南和资源链接，不抓招聘信息、不读邮箱，也不把业务记录复制到知识库文档。
+创建或接管一个固定、默认私有的飞书知识库，把企业清单、求职进展、笔面试中心三张 Base
+作为唯一对象纳入核心数据目录，并保存当前简历和每次训练产生的 Markdown 飞书文档。它不抓
+招聘信息、不读邮箱，也不负责搭建工作台。
 
 #### 第一次运行前需要准备
 
 - 先用 `offerloop-setup` 对 `workspace` 做预检。
-- 登记三张业务 Base、知识库空间、知识库首页和工作台 HTTPS 地址。
+- 登记三张业务 Base、知识库空间、知识库首页和核心数据目录。
 - 安装或启用 `lark-base`、`lark-doc`、`lark-wiki`，并具备对应资源的查看或编辑权限。
 - 如果资源尚不存在，先让 `offerloop-setup` 展示创建或接管计划；任何创建、移动、分享或权限变更都需要用户确认。
 
 #### 第一次运行流程
 
 1. 只读检查公共配置中的资源定位，不按标题猜测知识库或 Base。
-2. 展示拟创建或整理的固定目录，以及将登记的工作台和三张 Base 入口。
-3. 用户确认后创建或接管私有知识库首页，整理固定目录，并注册已有资源链接；旧资源只归档、不删除。
-4. 验证首页、工作台入口、三张 Base 和目录是否完整，并报告未完成项。
+2. 展示拟创建或整理的固定目录，以及三张 Base 将被纳入的位置。
+3. 用户确认后创建或接管知识库，把既有 Base 移入/登记为 Wiki 节点；不复制数据。
+4. 验证首页、核心数据目录、三张 Base 和训练目录是否完整。
 
 #### 第一次运行后的输出
 
 - 一个默认私有的“OfferLoop 求职空间”。
-- 固定的使用指南、工作台入口、三张业务 Base 入口，以及当前简历、面试准备、ASR、复盘和
+- 固定的使用指南、三张业务 Base 节点，以及当前简历、面试准备、ASR、复盘和
   训练目录。
-- 一份结构完整性报告；业务数据仍以工作台和三张 Base 为唯一来源。
+- 一份结构完整性报告；三张业务 Base 始终是唯一业务真源。
 
 #### 后续每次运行带来的增量
 
-后续运行只检查并补充新登记的资源入口、缺失目录和允许修复的结构漂移；不会重复创建第二套知识库，也不会把每日招聘或邮件数据复制到首页。招聘记录和笔面试事件会通过工作台读取最新 Base 数据自然更新，因此业务数据变化通常不需要改写知识库首页。
+后续运行只检查并补充缺失节点、保存训练产物和修复用户允许的结构漂移；不会重复创建第二套
+知识库或 Base，也不会把每日业务数据复制到首页。工作台存在与否不改变知识库职责。
 
 #### 案例
 
 ![OfferLoop 求职空间目录](docs/images/workbench/wiki-directory.png)
 
 ![固定的使用指南与资源入口](docs/images/workbench/wiki-guide.png)
+
+---
+
+### `offerloop-workbench`：按需搭建飞书可视化工作台
+
+#### 作用
+
+只有用户明确选择时，创建或接管妙搭应用，铺设工作台模板，配置 OAuth、发布并完成浏览器验收。
+工作台只聚合读取三张既有 Base 和日历，不拥有任何核心数据。
+
+#### 第一次运行前需要准备
+
+- OfferLoop 知识库与三张 Base 已完成初始化。
+- 用户具备妙搭应用创建、环境配置、发布和飞书应用 OAuth 配置权限。
+
+#### 第一次运行流程
+
+1. 只读核验知识库和三张 Base locator。
+2. 创建或接管妙搭应用，先 dry-run 预览模板覆盖范围。
+3. 经确认铺设模板，配置 OAuth 与环境变量并发布。
+4. 完成首屏、三张 Base、日历授权和刷新后的浏览器验收。
+
+#### 第一次运行后的输出
+
+- 一个可选的招聘数据与日历聚合界面。
+- 经验证的 HTTPS 工作台入口。
+- 未部署、停用或部署失败时，其他 Skill 和知识库继续正常运行。
+
+#### 后续每次运行带来的增量
+
+后续运行只升级已登记应用、检查 OAuth 和页面性能，不创建第二套 Base，也不改变知识库或业务
+数据所有权。
+
+#### 案例
 
 ![招聘工作台概览](docs/images/workbench/dashboard-overview.png)
 
@@ -454,7 +494,7 @@ talk-review ── ASR + 当前简历 + 简历深挖 ──> 真实面试复盘
 
 #### 第一次运行前需要准备
 
-- 上传到飞书“04｜面试复盘 / ASR待复盘”的转写文档，或直接粘贴 ASR。
+- 上传到飞书“05｜面试复盘 / ASR 待复盘”的转写文档，或直接粘贴 ASR。
 - 选择本次使用的当前简历版本；Skill 会读取同版本简历深挖文档。
 - 允许 Skill 保存最终 Markdown 复盘。
 
@@ -500,11 +540,11 @@ talk-review ── ASR + 当前简历 + 简历深挖 ──> 真实面试复盘
   cp -a ~/.local/state/offerloop ~/.local/state/offerloop.backup-$(date +%Y%m%d)
   ```
 
-### 更新九个 Skill
+### 更新十个 Skill
 
 ```bash
 npx skills update offerloop-setup job-collection recruiting-reminder \
-  offerloop-workspace resume-deepthink interview-prep mock-lab \
+  offerloop-workspace offerloop-workbench resume-deepthink interview-prep mock-lab \
   talk-review pm-sense -g -y
 ```
 
@@ -513,11 +553,12 @@ npx skills update offerloop-setup job-collection recruiting-reminder \
 更新后重新开启 Agent 会话，然后发送：
 
 ```text
-请调用 offerloop-setup。我是旧版 OfferLoop 用户，已经升级到九个 Skill。
+请调用 offerloop-setup。我是旧版 OfferLoop 用户，已经升级到十个 Skill。
 请只读检查我的旧配置和现有飞书 Base，给出迁移计划；不要创建、修改或删除任何资源。
 ```
 
-看清迁移计划后，再逐项授权创建或接管求职进展、统一笔面试中心、知识库和工作台。旧双 Base、旧配置和迁移前备份应永久保留为回滚入口。详细兼容原则见[迁移指南](MIGRATION.md)。
+看清迁移计划后，再授权创建或接管三张 Base 和必需知识库；工作台单独选择。旧双 Base、旧配置
+和迁移前备份应永久保留为回滚入口。详细兼容原则见[迁移指南](MIGRATION.md)。
 
 ## 5. 其他说明
 
@@ -538,7 +579,8 @@ npx skills add larksuite/cli -g -y
 | 笔面试提醒 | `lark-calendar`；启用通知时还需要 `lark-im` |
 | 求职空间 | `lark-base`、`lark-doc`、`lark-wiki` |
 | 求职训练 | `lark-base`、`lark-doc`、`lark-wiki` |
-| 完整部署 | 组合使用上述 Skill，并需要 `lark-shared`、`lark-apps` |
+| 可选工作台 | `lark-shared`、`lark-apps` |
+| 完整部署 | 组合使用上述 Skill |
 
 缺少依赖时先让 `offerloop-setup` 只读预检，并按它给出的动作安装或启用；安装后重新开启 Agent 会话。
 
@@ -567,10 +609,11 @@ npx skills add larksuite/cli -g -y
                               ↑ recruiting-reminder 关联并推进阶段
 IMAP 邮箱 ── recruiting-reminder ──> 笔面试中心 ──> 个人日历
 
-工作台读取三张 Base 与日历的实时数据
 知识库固定保存于：
-00｜OfferLoop 使用指南、01｜当前简历、02｜简历深挖、03｜面试准备文档、
-04｜面试复盘、05｜产品 Sense、06｜模拟面试
+00｜OfferLoop 使用指南、01｜核心求职数据（三张 Base）、02｜当前简历、03｜简历深挖、
+04｜面试准备、05｜面试复盘、06｜产品 Sense、07｜模拟面试
+
+可选工作台只读取三张 Base 与日历的实时数据
 
 求职进展（JD + 投递简历版本）──> interview-prep
 当前简历 + 同版本简历深挖 ─────> mock-lab
@@ -581,8 +624,9 @@ ASR + 当前简历 + 同版本简历深挖 ─> talk-review
 
 - `job-collection` 只同步用户提供的飞书 Base 或腾讯 Smartsheet，不主动搜索公开招聘渠道。
 - `recruiting-reminder` 只处理招聘笔试、测评和面试通知，不读取无关邮件；一次运行完成一次扫描，不在后台轮询。
-- `offerloop-workspace` 不复制业务 Base 数据；五个产出型 Skill 只在固定目录写各自的
+- `offerloop-workspace` 把三张既有 Base 纳入知识库但不复制数据；五个产出型 Skill 只在固定目录写各自的
   Markdown 产物。
+- `offerloop-workbench` 只在用户明确选择时部署；缺失或故障不影响其他 Skill。
 - 结构化/半结构化央国企面试专项不在当前范围；不得仅根据企业类型猜测简历版本或面试形式。
 - 飞书应用 scope、版本发布、租户安装、Base/知识库共享、IMAP 连通性、日历授权和工作台 OAuth 必须在真实账号下另行核验。离线 `ready` 不代表线上已经可用。
 
@@ -597,7 +641,7 @@ npm --prefix services/job-progress-sync test
 python3 skills/job-collection/scripts/validate_skill.py
 ```
 
-GitHub CI 会执行多系统冷安装、仓库契约测试和两份应用模板的安装、测试、类型检查与构建。合成端到端用例见[验收用例](docs/cases/end-to-end-acceptance.md)，当前版本说明见[0.1.0-alpha.6](docs/releases/0.1.0-alpha.6.md)，最近一次真实旧版运行结论见[运行时认证](docs/cases/runtime-certification-2026-07-22.md)。
+GitHub CI 会执行多系统冷安装、仓库契约测试和两份应用模板的安装、测试、类型检查与构建。合成端到端用例见[验收用例](docs/cases/end-to-end-acceptance.md)，当前版本说明见[0.1.0-alpha.7](docs/releases/0.1.0-alpha.7.md)，最近一次真实旧版运行结论见[运行时认证](docs/cases/runtime-certification-2026-07-22.md)。
 
 ## License
 

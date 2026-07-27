@@ -21,6 +21,7 @@ STATUS_MODEL_PATH = Path(__file__).with_name("status_model.py")
 BUNDLED_SKILLS = (
     "offerloop-setup",
     "offerloop-workspace",
+    "offerloop-workbench",
     "job-collection",
     "recruiting-reminder",
     "resume-deepthink",
@@ -29,11 +30,36 @@ BUNDLED_SKILLS = (
     "talk-review",
     "pm-sense",
 )
+REQUIRED_BUNDLED_BY_CAPABILITY = {
+    "workspace": {"offerloop-setup", "offerloop-workspace"},
+    "collection": {"offerloop-setup", "offerloop-workspace", "job-collection"},
+    "reminder": {
+        "offerloop-setup",
+        "offerloop-workspace",
+        "recruiting-reminder",
+    },
+    "coaching": {
+        "offerloop-setup",
+        "offerloop-workspace",
+        "resume-deepthink",
+        "interview-prep",
+        "mock-lab",
+        "talk-review",
+        "pm-sense",
+    },
+    "workbench": {
+        "offerloop-setup",
+        "offerloop-workspace",
+        "offerloop-workbench",
+    },
+    "integration": {"offerloop-setup", "offerloop-workspace", "job-collection"},
+}
 EXTERNAL_SKILLS_BY_CAPABILITY = {
     "collection": (),
     "reminder": ("lark-calendar",),
     "workspace": ("lark-base", "lark-doc", "lark-wiki"),
     "coaching": ("lark-base", "lark-doc", "lark-wiki"),
+    "workbench": ("lark-apps", "lark-shared"),
     "integration": ("lark-shared", "lark-apps"),
 }
 LARK_CLI_RECOVERY = (
@@ -85,7 +111,7 @@ WORKSPACE_LOCATORS = (
     "reminder_base_url",
     "wiki_space_id",
     "workspace_home_node_token",
-    "workbench_url",
+    "workspace_core_data_node_token",
     "schema_version",
 )
 IMAP_REQUIRED_KEYS = {
@@ -607,6 +633,10 @@ def _capability_report(source, capability, skills_roots=None):
     )
 
     for selected_capability in sorted(selected):
+        required_bundled = REQUIRED_BUNDLED_BY_CAPABILITY[selected_capability]
+        selected_skills_ready = all(
+            bundled_skills[name] for name in required_bundled
+        )
         checks.extend(
             [
                 _check(
@@ -628,12 +658,12 @@ def _capability_report(source, capability, skills_roots=None):
                 _check(
                     "local.skills",
                     selected_capability,
-                    "ready" if all(bundled_skills.values()) else "blocked",
-                    "OfferLoop 九个 Skill 已安装"
-                    if all(bundled_skills.values())
-                    else "OfferLoop Skill 安装不完整",
-                    "重新安装缺失的 OfferLoop Skill"
-                    if not all(bundled_skills.values())
+                    "ready" if selected_skills_ready else "blocked",
+                    "所选能力需要的 OfferLoop Skill 已安装"
+                    if selected_skills_ready
+                    else "所选能力需要的 OfferLoop Skill 安装不完整",
+                    "重新安装所选能力缺失的 OfferLoop Skill"
+                    if not selected_skills_ready
                     else "",
                 ),
                 _check(
@@ -685,9 +715,9 @@ def _capability_report(source, capability, skills_roots=None):
                 _check(
                     "local.progress_locator",
                     "collection",
-                    "unverified",
-                    "未登记求职进展（可选，跨 Base 对账未启用）",
-                    "如需跨 Base 对账，再登记求职进展地址",
+                    "needs_action",
+                    "核心空间尚未登记求职进展",
+                    "创建或接管核心知识库中的求职进展 Base",
                 )
             )
         else:
@@ -696,7 +726,7 @@ def _capability_report(source, capability, skills_roots=None):
                     "local.progress_locator",
                     "collection",
                     "ready",
-                    "已登记求职进展（可选）",
+                    "核心空间已登记求职进展",
                 )
             )
         checks.append(_notification_check(config, "collection"))
@@ -750,7 +780,7 @@ def _capability_report(source, capability, skills_roots=None):
             "reminder_base_url",
             "wiki_space_id",
             "workspace_home_node_token",
-            "workbench_url",
+            "workspace_core_data_node_token",
         )
         missing = [name for name in required if config.get(name) in (None, "")]
         checks.append(
@@ -758,10 +788,26 @@ def _capability_report(source, capability, skills_roots=None):
                 "local.workspace_locators",
                 "workspace",
                 "ready" if not missing else "needs_action",
-                "工作台与知识库定位已登记"
+                "必需知识库、三张 Base 与核心数据目录已登记"
                 if not missing
-                else "工作台或知识库定位不完整",
-                "登记三张 Base、知识库首页和工作台地址" if missing else "",
+                else "必需知识库或三张 Base 定位不完整",
+                "创建或接管知识库、核心数据目录和三张 Base" if missing else "",
+            )
+        )
+
+    if "workbench" in selected:
+        workbench_url = config.get("workbench_url")
+        checks.append(
+            _check(
+                "local.workbench_locator",
+                "workbench",
+                "ready" if workbench_url not in (None, "") else "needs_action",
+                "可选工作台入口已登记"
+                if workbench_url not in (None, "")
+                else "可选工作台尚未部署或登记",
+                "运行 offerloop-workbench 创建、发布并验收工作台"
+                if workbench_url in (None, "")
+                else "",
             )
         )
 
@@ -844,6 +890,7 @@ def main():
             "reminder",
             "workspace",
             "coaching",
+            "workbench",
             "full",
         ),
         help="run a capability-specific offline preflight",

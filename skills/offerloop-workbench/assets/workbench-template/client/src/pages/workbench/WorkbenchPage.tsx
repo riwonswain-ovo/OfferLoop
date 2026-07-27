@@ -75,14 +75,14 @@ const SKILL_GROUPS = [
         name: 'offerloop-setup',
         title: '安装与配置',
         description: '首次配置、环境检查、飞书授权和完整部署',
-        prompt: '介绍 OfferLoop 的九个 Skill，并帮我完成第一次使用。',
+        prompt: '介绍 OfferLoop 的十个 Skill，并帮我完成第一次使用。',
         icon: Settings,
       },
       {
         name: 'offerloop-workspace',
         title: '求职空间',
-        description: '管理飞书知识库、招聘工作台和材料目录',
-        prompt: '检查我的 OfferLoop 求职空间是否完整。',
+        description: '管理必需的飞书知识库、三张 Base 和训练产物',
+        prompt: '检查我的 OfferLoop 知识库是否完整。',
         icon: FolderKanban,
       },
       {
@@ -98,6 +98,13 @@ const SKILL_GROUPS = [
         description: '从招聘邮件识别安排并同步笔面试中心和日历',
         prompt: '检查最近 7 天的笔试面试邮件，先不要写入。',
         icon: BellRing,
+      },
+      {
+        name: 'offerloop-workbench',
+        title: '可选工作台',
+        description: '按需部署和维护飞书可视化工作台',
+        prompt: '为我的 OfferLoop 搭建飞书工作台。',
+        icon: ExternalLink,
       },
     ],
   },
@@ -152,7 +159,7 @@ const SkillMapCard: React.FC = () => (
         OfferLoop 能力地图
       </CardTitle>
       <CardDescription>
-        展开查看 9 个 Skill；无需记名称，直接对 Agent 描述目标即可
+        展开查看 10 个 Skill；无需记名称，直接对 Agent 描述目标即可
       </CardDescription>
     </CardHeader>
     <CardContent className="space-y-3">

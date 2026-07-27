@@ -23,6 +23,7 @@ PUBLIC_LOCATOR_KEYS = {
     "reminder_base_url",
     "wiki_space_id",
     "workspace_home_node_token",
+    "workspace_core_data_node_token",
     "workbench_url",
     "schema_version",
 }
@@ -242,6 +243,10 @@ def main():
     parser.add_argument("--reminder-base-url", help="OfferLoop interview center Base URL")
     parser.add_argument("--wiki-space-id", help="OfferLoop Wiki space ID")
     parser.add_argument("--workspace-home-node-token", help="OfferLoop homepage Wiki node")
+    parser.add_argument(
+        "--workspace-core-data-node-token",
+        help="OfferLoop core business data Wiki folder",
+    )
     parser.add_argument("--workbench-url", help="published OfferLoop workbench HTTPS URL")
     parser.add_argument("--schema-version", type=int, help="OfferLoop schema version")
     parser.add_argument("--progress-sync-app-id", help="published sync app ID")
@@ -290,6 +295,7 @@ def main():
         "reminder_base_url": args.reminder_base_url,
         "wiki_space_id": args.wiki_space_id,
         "workspace_home_node_token": args.workspace_home_node_token,
+        "workspace_core_data_node_token": args.workspace_core_data_node_token,
         "workbench_url": args.workbench_url,
         "schema_version": args.schema_version,
     }

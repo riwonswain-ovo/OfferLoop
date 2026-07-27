@@ -15,7 +15,6 @@ import shutil
 
 
 TEMPLATES = {
-    "workbench": "workbench-template",
     "progress-sync": "progress-sync-template",
 }
 CONTROL_FILE = "template.json"

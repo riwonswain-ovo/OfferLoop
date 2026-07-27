@@ -10,6 +10,7 @@ VALID_CAPABILITIES = {
     "reminder",
     "workspace",
     "coaching",
+    "workbench",
     "integration",
 }
 VALID_STATUSES = {
@@ -33,7 +34,7 @@ def expand_selection(capability):
     if capability == "full":
         return set(VALID_CAPABILITIES)
     if capability in VALID_CAPABILITIES - {"integration"}:
-        return {capability}
+        return {"workspace", capability}
     raise ValueError(f"unknown capability: {capability}")
 
 

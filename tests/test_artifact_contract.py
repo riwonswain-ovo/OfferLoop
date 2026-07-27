@@ -31,13 +31,13 @@ class ArtifactContractTest(unittest.TestCase):
             contract.describe_layout(),
             {
                 "folders": {
-                    "current_resumes": ["01｜当前简历"],
-                    "resume_deepthink": ["02｜简历深挖"],
-                    "interview_prep": ["03｜面试准备文档"],
-                    "interview_review": ["04｜面试复盘", "已完成复盘"],
-                    "interview_asr": ["04｜面试复盘", "ASR待复盘"],
-                    "pm_sense": ["05｜产品 Sense"],
-                    "mock_lab": ["06｜模拟面试"],
+                    "current_resumes": ["02｜当前简历"],
+                    "resume_deepthink": ["03｜简历深挖"],
+                    "interview_prep": ["04｜面试准备"],
+                    "interview_review": ["05｜面试复盘", "已完成复盘"],
+                    "interview_asr": ["05｜面试复盘", "ASR 待复盘"],
+                    "pm_sense": ["06｜产品 Sense"],
+                    "mock_lab": ["07｜模拟面试"],
                 },
             },
         )
@@ -62,7 +62,7 @@ class ArtifactContractTest(unittest.TestCase):
         contract = load_module()
         now = datetime(2026, 7, 24, 12, 30, 45, tzinfo=timezone.utc)
         cases = {
-            "resume-deepthink": "简历深挖｜互联网产品经理岗 - 简历｜推荐系统实习｜2026-07-24｜",
+            "resume-deepthink": "简历深挖｜互联网产品经理岗 - 简历｜推荐系统实习｜产品经理｜2026-07-24｜",
             "interview-prep": "示例公司｜产品经理｜一面准备｜2026-07-24｜",
             "mock-lab": "示例公司产品面｜模拟面试｜2026-07-24｜",
             "talk-review": "示例公司｜产品经理｜一面复盘｜2026-07-24｜",
@@ -84,12 +84,45 @@ class ArtifactContractTest(unittest.TestCase):
                         else "AI 搜索设计"
                     ),
                     resume_version="互联网产品经理岗 - 简历",
+                    target_direction="产品经理",
                     company="示例公司",
                     position="产品经理",
                     stage="一面",
                 )
                 self.assertTrue(title.startswith(prefix))
                 self.assertTrue(title.endswith(run_id))
+
+    def test_resume_deepthink_titles_differ_by_target_direction(self):
+        contract = load_module()
+        run_id_product = contract.new_run_id(
+            "resume-deepthink",
+            now=datetime(2026, 7, 24, 12, 30, 45, tzinfo=timezone.utc),
+            suffix="a1b2c3d4",
+        )
+        run_id_operations = contract.new_run_id(
+            "resume-deepthink",
+            now=datetime(2026, 7, 24, 12, 30, 46, tzinfo=timezone.utc),
+            suffix="e5f6g7h8",
+        )
+        shared = {
+            "subject": "推荐系统实习",
+            "resume_version": "互联网产品经理岗 - 简历",
+        }
+        product = contract.build_title(
+            "resume-deepthink",
+            run_id_product,
+            target_direction="产品经理",
+            **shared,
+        )
+        operations = contract.build_title(
+            "resume-deepthink",
+            run_id_operations,
+            target_direction="运营",
+            **shared,
+        )
+        self.assertIn("｜产品经理｜", product)
+        self.assertIn("｜运营｜", operations)
+        self.assertNotEqual(product, operations)
 
     def test_entity_ids_use_stable_schema_prefixes(self):
         contract = load_module()

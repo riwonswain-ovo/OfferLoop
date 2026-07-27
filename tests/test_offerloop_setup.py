@@ -36,6 +36,10 @@ materialize_app_template = load_module(
     "offerloop_materialize_app_template",
     "skills/offerloop-setup/scripts/materialize_app_template.py",
 )
+materialize_workbench = load_module(
+    "offerloop_materialize_workbench",
+    "skills/offerloop-workbench/scripts/materialize_workbench.py",
+)
 
 
 class OfferLoopSetupTest(unittest.TestCase):
@@ -158,6 +162,7 @@ class OfferLoopSetupTest(unittest.TestCase):
                 {
                     "offerloop-setup",
                     "offerloop-workspace",
+                    "offerloop-workbench",
                     "job-collection",
                     "recruiting-reminder",
                     "resume-deepthink",
@@ -260,7 +265,7 @@ class OfferLoopSetupTest(unittest.TestCase):
             self.assertEqual(result["capabilities"]["reminder"]["status"], "not_selected")
             self.assertNotIn("imap_config", {check["id"] for check in result["checks"]})
 
-    def test_collection_without_progress_locator_marks_it_optional(self):
+    def test_collection_without_progress_locator_requires_core_space(self):
         with tempfile.TemporaryDirectory() as directory:
             environment = {"XDG_CONFIG_HOME": directory}
             path = configure.config_file(environment)
@@ -271,10 +276,17 @@ class OfferLoopSetupTest(unittest.TestCase):
                     "target_base_url": "https://example.feishu.cn/base/source",
                 },
             )
-            skill_root = self.make_skill_root(directory)
+            skill_root = self.make_skill_root(
+                directory, "lark-base", "lark-doc", "lark-wiki"
+            )
 
             with mock.patch.object(
-                preflight.shutil, "which", return_value="/usr/local/bin/lark-cli"
+                preflight,
+                "_probe_lark_cli",
+                return_value=(
+                    ("ready", "lark-cli 版本符合要求", ""),
+                    ("ready", "飞书 profile 已登记", ""),
+                ),
             ):
                 report = preflight.run_checks(
                     environment,
@@ -287,9 +299,9 @@ class OfferLoopSetupTest(unittest.TestCase):
                 for check in report["checks"]
             }
             progress = checks[("collection", "local.progress_locator")]
-            self.assertEqual(progress["status"], "unverified")
-            self.assertIn("可选", progress["summary"])
-            self.assertNotEqual(
+            self.assertEqual(progress["status"], "needs_action")
+            self.assertIn("核心空间", progress["summary"])
+            self.assertEqual(
                 report["capabilities"]["collection"]["status"], "needs_action"
             )
 
@@ -329,7 +341,7 @@ class OfferLoopSetupTest(unittest.TestCase):
             }
             self.assertEqual(
                 checks[("collection", "local.progress_locator")]["status"],
-                "unverified",
+                "needs_action",
             )
             self.assertEqual(
                 checks[("reminder", "local.progress_locator")]["status"],
@@ -658,7 +670,7 @@ class OfferLoopSetupTest(unittest.TestCase):
             checks = {check["id"]: check for check in report["checks"]}
             self.assertEqual(checks["local.imap_config"]["status"], "ready")
 
-    def test_workspace_preflight_requires_workbench_without_printing_locator(self):
+    def test_workspace_preflight_does_not_require_optional_workbench(self):
         with tempfile.TemporaryDirectory() as directory:
             path = configure.config_file({"XDG_CONFIG_HOME": directory})
             configure.write_private_json(
@@ -670,6 +682,7 @@ class OfferLoopSetupTest(unittest.TestCase):
                     "reminder_base_url": "https://example.feishu.cn/base/reminder",
                     "wiki_space_id": "space_example",
                     "workspace_home_node_token": "wikcnExample",
+                    "workspace_core_data_node_token": "wikcnCore",
                 },
             )
 
@@ -679,7 +692,7 @@ class OfferLoopSetupTest(unittest.TestCase):
 
             checks = {check["id"]: check for check in result["checks"]}
             self.assertEqual(
-                checks["local.workspace_locators"]["status"], "needs_action"
+                checks["local.workspace_locators"]["status"], "ready"
             )
             self.assertNotIn("space_example", json.dumps(result))
             self.assertNotIn("wikcnExample", json.dumps(result))
@@ -696,6 +709,7 @@ class OfferLoopSetupTest(unittest.TestCase):
                     "reminder_base_url": "https://example.feishu.cn/base/reminder",
                     "wiki_space_id": "space_example",
                     "workspace_home_node_token": "wikcnExample",
+                    "workspace_core_data_node_token": "wikcnCore",
                     "workbench_url": "https://example.feishuapp.com/app/app_example",
                     "progress_sync": {
                         "app_id": "app_sync",
@@ -732,6 +746,7 @@ class OfferLoopSetupTest(unittest.TestCase):
                     "reminder_base_url": "https://example.feishu.cn/base/reminder",
                     "wiki_space_id": "space_example",
                     "workspace_home_node_token": "wikcnExample",
+                    "workspace_core_data_node_token": "wikcnCore",
                     "schema_version": 2,
                 },
             )
@@ -957,7 +972,7 @@ class OfferLoopSetupTest(unittest.TestCase):
                     "reminder_base_url": True,
                     "wiki_space_id": True,
                     "workspace_home_node_token": True,
-                    "workbench_url": False,
+                    "workspace_core_data_node_token": False,
                     "schema_version": True,
                 },
             )
@@ -986,6 +1001,7 @@ class OfferLoopSetupTest(unittest.TestCase):
                 "progress_base",
                 "reminder_base",
                 "wiki_home",
+                "core_data",
                 "workbench",
                 "progress_sync",
             },
@@ -994,21 +1010,21 @@ class OfferLoopSetupTest(unittest.TestCase):
         self.assertTrue(all(status == "pending" for status in statuses.values()))
 
     def test_bundled_app_templates_have_redacted_manifests(self):
-        assets = ROOT / "skills" / "offerloop-setup" / "assets"
         expected = {
-            "workbench-template": "offerloop-workbench",
-            "progress-sync-template": "offerloop-progress-sync",
+            ROOT / "skills" / "offerloop-workbench" / "assets" / "workbench-template":
+                "offerloop-workbench",
+            ROOT / "skills" / "offerloop-setup" / "assets" / "progress-sync-template":
+                "offerloop-progress-sync",
         }
         forbidden = {
             ".git", ".spark", ".spark_project", ".env", ".env.local",
             "node_modules", "dist", "logs",
         }
-        for directory, template_id in expected.items():
-            root = assets / directory
+        for root, template_id in expected.items():
             manifest = json.loads((root / "template.json").read_text(encoding="utf-8"))
             self.assertEqual(manifest["template_id"], template_id)
             self.assertTrue(manifest["required_environment"])
-            if directory == "workbench-template":
+            if template_id == "offerloop-workbench":
                 self.assertNotIn("optional_environment", manifest)
             self.assertFalse(any((root / name).exists() for name in forbidden))
             self.assertEqual(
@@ -1019,7 +1035,7 @@ class OfferLoopSetupTest(unittest.TestCase):
         root = (
             ROOT
             / "skills"
-            / "offerloop-setup"
+            / "offerloop-workbench"
             / "assets"
             / "workbench-template"
         )
@@ -1074,7 +1090,7 @@ class OfferLoopSetupTest(unittest.TestCase):
 
         guide = (
             ROOT
-            / "skills/offerloop-setup/references/workbench-golden-path.md"
+            / "skills/offerloop-workbench/references/golden-path.md"
         ).read_text(encoding="utf-8")
         for required_text in (
             "csrf token not found in header",
@@ -1112,9 +1128,7 @@ class OfferLoopSetupTest(unittest.TestCase):
                 '{"app_id":"app_new_user"}\n', encoding="utf-8"
             )
 
-            result = materialize_app_template.materialize(
-                "workbench", destination, dry_run=True
-            )
+            result = materialize_workbench.materialize(destination, dry_run=True)
 
             self.assertEqual(
                 result["deployment_contract"]["calendar_primary_method"], "POST"
@@ -1126,9 +1140,7 @@ class OfferLoopSetupTest(unittest.TestCase):
     def test_materializer_requires_a_real_miaoda_binding(self):
         with tempfile.TemporaryDirectory() as directory:
             with self.assertRaisesRegex(ValueError, "not bound"):
-                materialize_app_template.materialize(
-                    "workbench", Path(directory), dry_run=True
-                )
+                materialize_workbench.materialize(Path(directory), dry_run=True)
 
     def test_deployment_checkpoint_is_private_and_does_not_include_locators(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -1140,6 +1152,7 @@ class OfferLoopSetupTest(unittest.TestCase):
                     "reminder_base_url": "https://example.feishu.cn/base/private-reminder",
                     "wiki_space_id": "space-private",
                     "workspace_home_node_token": "wiki-private",
+                    "workspace_core_data_node_token": "wiki-core-private",
                     "workbench_url": "https://example.feishuapp.com/app/private",
                     "progress_sync": {
                         "app_id": "app-private",

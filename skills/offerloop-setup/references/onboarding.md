@@ -1,26 +1,27 @@
 # OfferLoop 新用户接入
 
-本接入指南采用渐进配置：只配置用户当前要用的能力。先确认九个 OfferLoop Skill 已安装在
-同一个 Agent 环境，并在安装后新开会话让它们加载；再在 `offerloop-setup` 中选择
-`collection`、`reminder`、`workspace`、`coaching` 或 `full`，并运行对应的离线预检。
+本接入指南采用核心空间优先、业务能力渐进配置。先确认十个 OfferLoop Skill 已安装在同一个
+Agent 环境，并在安装后新开会话；再选择 `collection`、`reminder`、`workspace`、`coaching`、
+`workbench` 或 `full`。任何选择都先检查必需的私有知识库和三张业务 Base。
 
-首次安装、第一次使用或用户要求理解九个 Skill 时，先完整读取 `welcome.md`，展示九项能力、
+首次安装、第一次使用或用户要求理解十个 Skill 时，先完整读取 `welcome.md`，展示十项能力、
 自然语言示例、常用闭环和隐私边界，再让用户选择当前能力。不要要求用户先记技术名称，也不要
 在介绍阶段询问目标岗位或访问线上资源。
 
 这一步是新用户的最小成功：Skill 能被发现并能开始只读本机引导。它不是飞书、邮箱、妙搭或
-工作台已经配置完成的声明。本仓库提供四个求职基础 Skill 和五个求职训练 Skill；运行时、飞书
-身份和外部 Lark Skill 都需要单独准备。
+工作台已经配置完成的声明。本仓库提供四个核心与业务 Skill、一个可选工作台 Skill 和五个求职
+训练 Skill；运行时、飞书身份和外部 Lark Skill 都需要单独准备。
 
 ## 1. 能力与最小配置
 
 | 用户目标 | 必需配置 | 本次不需要 |
 | --- | --- | --- |
-| `collection`：同步招聘信息 | Python 3.10+、lark-cli、可用 bot profile、企业清单 Base、至少一个合法信息源；来源可查看、目标可编辑 | 求职进展 Base（未登记时跳过对账）、IMAP、个人日历、知识库 |
-| `reminder`：整理笔试和面试 | Python 3.10+、lark-cli、IMAP、本地提醒配置、笔面试中心与求职进展定位；建日历时完成 user 日历授权 | 招聘信息源、工作台 |
-| `workspace`：使用固定入口 | Python 3.10+、lark-cli、知识库空间/首页、企业清单/求职进展/笔面试中心定位、工作台 HTTPS 地址 | IMAP、日历、信息源 |
-| `coaching`：训练与面试材料 | Python 3.10+、lark-cli、schema v4、私有知识库、lark-base/lark-doc/lark-wiki；目录可按首次使用懒创建 | IMAP、日历、工作台部署 |
-| `full`：完整闭环 | 上述全部，以及飞书应用、Base workflow、HTTPS 同步端点；部署工作台时还需妙搭创建/发布/环境配置权限与租户安装支持 | 无 |
+| `workspace`：初始化核心空间 | Python 3.10+、lark-cli、私有知识库、核心数据目录、企业清单/求职进展/笔面试中心 | IMAP、日历、工作台 |
+| `collection`：同步招聘信息 | 核心空间、可用 bot profile、至少一个合法信息源 | IMAP、个人日历、工作台 |
+| `reminder`：整理笔试和面试 | 核心空间、IMAP、本地提醒配置；建日历时完成 user 日历授权 | 招聘信息源、工作台 |
+| `coaching`：训练与面试材料 | 核心空间、schema v4、固定训练目录 | IMAP、日历、工作台 |
+| `workbench`：可视化工作台 | 核心空间、妙搭创建/发布/环境配置、OAuth 与租户安装支持 | IMAP、业务写入 |
+| `full`：完整闭环 | 上述全部，以及 Base workflow 和 HTTPS 同步端点 | 无 |
 
 安装整个仓库不代表要完成所有授权。未选能力应显示为 `not_selected`，而非失败。
 
@@ -33,20 +34,19 @@
 - 飞书应用 scope、应用版本发布、租户管理员安装、机器人入群、Base/知识库共享、妙搭应用创建/发布和环境变量权限，都需要用户或管理员在飞书/妙搭中手动完成。不能由 Skill 安装、离线预检或 Agent 自动取得。
 - App Secret、密码、Cookie、token、邮箱授权码只能在用户本机的安全配置流程中填写，绝不发送到聊天。
 
-选择 `collection` 时只要求企业清单定位。未登记 `progress_base_url` 会把可选求职进展定位标为
-`unverified`，并跳过跨 Base 对账；不会因此阻塞企业信息同步。`reminder`、`workspace` 与 `full`
-仍按各自合同要求求职进展定位；不得通过猜测或伪造地址消除提示。
+核心空间要求三张 Base 和知识库 locator 全部存在。单个业务任务可以在其他业务系统暂时失败时
+保留自己的成功结果，但不得把缺少核心空间表述为 OfferLoop 已完成初始化。
 
 ## 2. 先做离线预检
 
 先根据当前 `SKILL.md` 所在位置解析 `offerloop-setup` 根目录，再从该目录运行：
 
 ```bash
-python3 scripts/preflight.py --capability '<collection|reminder|workspace|coaching|full>' --json
+python3 scripts/preflight.py --capability '<collection|reminder|workspace|coaching|workbench|full>' --json
 ```
 
-它不访问飞书、浏览器、工作台或邮箱。它只检查 Python 版本、`lark-cli` 命令、九个 OfferLoop
-Skill、所选能力必需的外部 Lark Skill 目录、本地配置字段及 IMAP 配置文件状态；不验证 Node/npx、
+它不访问飞书、浏览器、工作台或邮箱。它只检查 Python 版本、`lark-cli` 命令、所选能力需要的
+OfferLoop Skill、外部 Lark Skill 目录、本地配置字段及 IMAP 配置文件状态；不验证 Node/npx、
 在线身份、飞书权限、IMAP 连通性或妙搭权限。已登记 profile 的本机状态会通过
 `lark-cli profile list` 和 `lark-cli doctor --offline` 验证。外部 Skill 会跨当前安装目录、
 `~/.agents/skills`、Codex、Claude Code、Hermes 与 WorkBuddy 的全局 Skill 目录、WorkBuddy 飞书连接器目录，以及对应的自定义根目录中查找，但报告不输出本机路径。
@@ -70,8 +70,8 @@ Skill、所选能力必需的外部 Lark Skill 目录、本地配置字段及 IM
 
 ## 4. Base 与联动配置
 
-公共配置保存的是定位信息，而不是业务数据。经用户确认后，将 profile、三个 Base URL、
-知识库和工作台入口保存到 `~/.config/offerloop/config.json`：
+公共配置保存定位信息，不保存业务数据。经用户确认后，将 profile、三张业务 Base、知识库、
+首页和核心数据目录保存到 `~/.config/offerloop/config.json`：
 
 ```bash
 python3 scripts/configure.py --profile '<PROFILE>'
@@ -80,7 +80,7 @@ python3 scripts/configure.py --progress-base-url '<求职进展_BASE_URL>'
 python3 scripts/configure.py --reminder-base-url '<笔面试中心_BASE_URL>'
 python3 scripts/configure.py --wiki-space-id '<SPACE_ID>'
 python3 scripts/configure.py --workspace-home-node-token '<HOME_NODE_TOKEN>'
-python3 scripts/configure.py --workbench-url '<HTTPS_WORKBENCH_URL>'
+python3 scripts/configure.py --workspace-core-data-node-token '<CORE_DATA_NODE_TOKEN>'
 python3 scripts/configure.py --enable-coaching --confirm-schema-v4
 python3 scripts/configure.py \
   --progress-sync-app-id '<APP_ID>' \
@@ -95,6 +95,12 @@ python3 scripts/configure.py \
   --notification-status enabled
 ```
 
+只有 `offerloop-workbench` 发布并验收成功后才登记：
+
+```bash
+python3 scripts/configure.py --workbench-url '<HTTPS_WORKBENCH_URL>'
+```
+
 `collection` 的长期同步通常以 bot 写入企业清单；`reminder` 在确认后写入笔面试中心，
 且仅用 user 身份读写个人日历。
 
@@ -105,8 +111,8 @@ python3 scripts/configure.py \
 `enabled` 只能在线核验成功后写入；endpoint 必须是无用户名、密码和片段的绝对 HTTPS URL。
 
 启用 `coaching` 时，`--enable-coaching --confirm-schema-v4` 保留现有配置并追加
-`artifact_storage`。它不创建或移动飞书节点；对应 Skill 首次运行时先只读检查目录，再展示
-缺失节点并取得确认后懒创建。每次完整运行或明确提前结束后自动保存 Markdown 飞书文档。
+`artifact_storage`。新用户的训练目录随核心知识库初始化创建；旧用户缺失时经确认补齐。
+每次完整运行或明确提前结束后自动保存独立 Markdown 飞书文档。
 
 飞书消息通知可选。启用前必须确认固定接收方、最终摘要内容和发送身份；`user` 目标使用
 `ou_` 开头的 open ID，`chat` 目标使用 `oc_` 开头的 chat ID。该确认可作为后续运行的持续
@@ -199,7 +205,8 @@ user 身份缺权限时，按 lark-cli split-flow 进行最小授权：先用 `-
 4. 用户打开工作台并点击“连接飞书日历”，亲自同意授权；
 5. 工作台只在分片的 HttpOnly 加密 Cookie 中保存 refresh token；每次读取日历时由服务端即时换取 access token，并仅在本次请求的内存中使用，同时轮换 refresh token。Refresh Token 失效后，页面重新显示连接按钮。
 
-工作台部署和验收必须继续完整阅读 `workbench-golden-path.md`；其中包含这条链路的固定 API
+工作台部署和验收必须调用 `offerloop-workbench` 并完整阅读其 `references/golden-path.md`；
+其中包含这条链路的固定 API
 方法、Cookie 迁移方式、首屏性能门禁和失败症状映射。
 
 不得要求用户在聊天中发送 user access token、refresh token 或 Cookie，也不得把静态
@@ -224,15 +231,16 @@ user 身份缺权限时，按 lark-cli split-flow 进行最小授权：先用 `-
 4. 验证新位置可读取；
 5. 保留旧文件作为回滚，除非用户明确要求清理。
 
-## 8. 工作台职责边界
+## 8. 知识库与工作台职责边界
 
-`offerloop-setup` 只登记 profile、三个 Base URL、知识库空间/首页、工作台 URL、schema
-version 和可选的同步定位器。它不创建每日训练题、不刷新未来 7 天模块，也不维护首页个人区。
+`offerloop-setup` 登记 profile、三张业务 Base、知识库空间/首页/核心数据目录、schema version
+和可选同步定位器。工作台 URL 只有 `offerloop-workbench` 验收后才登记。
 
-初始化后的知识库目录、首页模板和受控刷新区由 `offerloop-workspace` 负责；招聘信息同步由
-`job-collection` 负责；邮件识别、事件写入与日历安排由 `recruiting-reminder` 负责。
+知识库目录、Base 节点、首页和训练产物由 `offerloop-workspace` 负责；招聘信息同步由
+`job-collection` 负责；邮件识别、事件写入与日历安排由 `recruiting-reminder` 负责；妙搭、
+OAuth、工作台模板、发布和页面验收仅由 `offerloop-workbench` 负责。
 
 ## 9. 只读在线验收
 
 用户确认后，完整阅读 `verification-matrix.md` 并按其中的命令核验。验收只检查已配置资源是否
-可读取、工作台是否可访问、IMAP 是否可连通，以及工作流是否可见；绝不创建测试记录或日程。
+可读取、IMAP 是否可连通，以及工作流是否可见；只有选择工作台时才额外验收页面和 OAuth。

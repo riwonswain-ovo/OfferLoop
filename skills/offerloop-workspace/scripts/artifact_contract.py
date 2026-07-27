@@ -47,13 +47,13 @@ FOLDER_KEYS = (
 )
 LOCATOR_PATHS = {
     "folders": {
-        "current_resumes": ("01｜当前简历",),
-        "resume_deepthink": ("02｜简历深挖",),
-        "interview_prep": ("03｜面试准备文档",),
-        "interview_review": ("04｜面试复盘", "已完成复盘"),
-        "interview_asr": ("04｜面试复盘", "ASR待复盘"),
-        "pm_sense": ("05｜产品 Sense",),
-        "mock_lab": ("06｜模拟面试",),
+        "current_resumes": ("02｜当前简历",),
+        "resume_deepthink": ("03｜简历深挖",),
+        "interview_prep": ("04｜面试准备",),
+        "interview_review": ("05｜面试复盘", "已完成复盘"),
+        "interview_asr": ("05｜面试复盘", "ASR 待复盘"),
+        "pm_sense": ("06｜产品 Sense",),
+        "mock_lab": ("07｜模拟面试",),
     },
 }
 ROUTES = {
@@ -346,6 +346,7 @@ def build_title(
     date=None,
     subject="",
     resume_version="",
+    target_direction="",
     company="",
     position="",
     stage="",
@@ -364,12 +365,14 @@ def build_title(
         ).strftime("%Y-%m-%d")
     subject = _clean_title_part(subject, "未命名主题")
     resume_version = _clean_title_part(resume_version, "简历版本待确认")
+    target_direction = _clean_title_part(target_direction, "目标岗位待确认")
     company = _clean_title_part(company, "独立任务")
     position = _clean_title_part(position, "岗位待确认")
     stage = _clean_title_part(stage, "环节待确认")
     if skill == "resume-deepthink":
         return (
-            f"简历深挖｜{resume_version}｜{subject}｜{title_date}｜{run_id}"
+            f"简历深挖｜{resume_version}｜{subject}｜{target_direction}｜"
+            f"{title_date}｜{run_id}"
         )
     if skill == "interview-prep":
         return f"{company}｜{position}｜{stage}准备｜{title_date}｜{run_id}"
@@ -489,6 +492,7 @@ def _parser():
     title.add_argument("--date")
     title.add_argument("--subject", default="")
     title.add_argument("--resume-version", default="")
+    title.add_argument("--target-direction", default="")
     title.add_argument("--company", default="")
     title.add_argument("--position", default="")
     title.add_argument("--stage", default="")
@@ -553,6 +557,7 @@ def main():
                     date=args.date,
                     subject=args.subject,
                     resume_version=args.resume_version,
+                    target_direction=args.target_direction,
                     company=args.company,
                     position=args.position,
                     stage=args.stage,
