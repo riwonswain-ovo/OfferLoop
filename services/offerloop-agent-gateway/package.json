@@ -1,11 +1,13 @@
 {
   "name": "offerloop-agent-gateway",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node src/server.mjs",
-    "start:local": "node --env-file=.env.local src/server.mjs",
+    "configure": "node scripts/configure-api-key.mjs",
+    "start": "node src/worker.mjs",
+    "start:gateway": "node src/server.mjs",
+    "start:local": "node --env-file-if-exists=.env.local src/worker.mjs",
     "test": "node --test"
   },
   "engines": {

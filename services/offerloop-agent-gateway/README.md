@@ -1,27 +1,44 @@
-# OfferLoop Agent Gateway
+# OfferLoop Agent Worker
 
-该服务把飞书工作台中的对话任务交给本机或服务器上的 Codex，再由 Codex
-按触发规则加载 OfferLoop Skills。飞书应用只保存会话 ID 和展示结果，不接触
-Codex 登录信息、Skill 文件或本机命令权限。
+该服务让飞书工作台在不购买域名、不开放本机端口的情况下调用 Codex 和
+OfferLoop Skills。
 
-## 本地启动
+工作台把用户消息保存为任务；本机 Worker 主动连接工作台领取任务，调用本机
+Codex，然后把进度和结果回传。整个过程中只有本机主动发起 HTTPS 请求。
 
-1. 复制 `.env.example` 为 `.env.local`。
-2. 将 `OFFERLOOP_WORKSPACE` 改为 OfferLoop 仓库的绝对路径。
-3. 为 `OFFERLOOP_GATEWAY_TOKEN` 设置至少 16 个字符的随机值。
-4. 确认当前用户已经可以运行 `codex --version`。
-5. 运行 `npm run start:local`。
+## 工作方式
 
-服务默认仅监听 `127.0.0.1:4715`。生产环境应放在 HTTPS 反向代理后，仅允许
-飞书应用后端访问，并把同一个 Token 通过飞书应用环境变量
-`OFFERLOOP_AGENT_GATEWAY_TOKEN` 注入。
+1. 用户在 OfferLoop 工作台右侧发送消息。
+2. 工作台将任务写入自身数据库。
+3. 本机 Worker 每 3 秒主动领取一个任务。
+4. Worker 使用本机 Codex 登录与 OfferLoop Skills 执行任务。
+5. 工作台轮询任务状态并展示最终结果。
 
-## API
+飞书群里的 `lark-channel-bridge` 不受影响；两者共用本机已经可用的 Codex
+运行环境与 Skills，但各自维护独立会话。
 
-- `GET /health`：检查 Gateway 和 Codex 运行时。
-- `POST /v1/runs`：创建异步 Agent 任务。
-- `GET /v1/runs/:runId`：轮询任务状态和结果。
-- `DELETE /v1/runs/:runId`：取消任务。
+## macOS 配置
 
-所有请求都需要 `Authorization: Bearer <token>`。任务接口还需要
-`X-OfferLoop-User-Id`，Gateway 会校验任务归属。
+```bash
+npm run configure
+npm run start:local
+```
+
+`npm run configure` 会创建一个仅能访问两个 Agent Worker 路由的妙搭 OpenAPI
+Key，并直接保存在 macOS 钥匙串。原始密钥不会写入仓库或输出到聊天。
+
+默认工作台地址已经内置。只有仓库位置变化时，才需要在 `.env.local` 中设置：
+
+```bash
+OFFERLOOP_WORKSPACE=/absolute/path/to/OfferLoop
+```
+
+## 安全边界
+
+- API Key 只允许领取任务和回传任务状态。
+- 工作台仍按当前飞书用户隔离对话任务。
+- 写入飞书或读取招聘邮件前，工作台会先要求用户确认。
+- Worker 不监听公网端口，也不需要 Cloudflare 或自定义域名。
+
+旧的入站 HTTP Gateway 仍保留为 `npm run start:gateway`，仅用于兼容已有测试和
+迁移，不再是 OfferLoop 工作台的默认连接方式。
