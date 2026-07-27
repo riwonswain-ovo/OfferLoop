@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   buildAgentPrompt,
+  createCodexArchiveArgs,
   createCodexArgs,
   extractCodexEvent,
 } from '../src/codex-runner.mjs';
@@ -17,6 +18,13 @@ test('buildAgentPrompt keeps Skill safety instructions', () => {
   assert.match(prompt, /SKILL[.]md/u);
   assert.match(prompt, /用户尚未额外确认/u);
   assert.match(prompt, /recruiting-reminder/u);
+});
+
+test('createCodexArchiveArgs archives the same Codex session', () => {
+  assert.deepEqual(createCodexArchiveArgs('thread-1'), [
+    'archive',
+    'thread-1',
+  ]);
 });
 
 test('createCodexArgs starts or resumes a session', () => {

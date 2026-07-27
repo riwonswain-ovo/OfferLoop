@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 
+const DETACHED_PROCESS = process.platform !== 'win32';
 const PROGRESS_BY_EVENT = new Map([
   ['thread.started', '已创建 OfferLoop 会话'],
   ['turn.started', '正在理解需求并选择 Skill'],
@@ -84,6 +85,61 @@ function createCodexArgs({ confirmed, message, route, sessionId, workspace }) {
   ];
 }
 
+function createCodexArchiveArgs(sessionId) {
+  return ['archive', sessionId];
+}
+
+function signalCodexProcess(child, signal) {
+  if (!child || typeof child.pid !== 'number') {
+    return false;
+  }
+  try {
+    if (DETACHED_PROCESS) {
+      process.kill(-child.pid, signal);
+    } else {
+      child.kill(signal);
+    }
+    return true;
+  } catch {
+    try {
+      child.kill(signal);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
+function startCodexArchive({ codexBin, onUpdate, sessionId, workspace }) {
+  const child = spawn(codexBin, createCodexArchiveArgs(sessionId), {
+    cwd: workspace,
+    detached: DETACHED_PROCESS,
+    env: process.env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let stderr = '';
+  onUpdate({ progress: '正在归档 Codex 对话' });
+  child.stderr.setEncoding('utf8');
+  child.stderr.on('data', (chunk) => {
+    stderr = `${stderr}${chunk}`.slice(-6_000);
+  });
+  const completion = new Promise((resolve) => {
+    child.on('error', (error) => {
+      resolve({ error: error.message, ok: false });
+    });
+    child.on('close', (code) => {
+      resolve({
+        error:
+          code === 0
+            ? undefined
+            : stderr.trim() || `Codex exited with code ${String(code)}`,
+        ok: code === 0,
+      });
+    });
+  });
+  return { child, completion };
+}
+
 function startCodexRun({
   codexBin,
   confirmed,
@@ -102,6 +158,7 @@ function startCodexRun({
   });
   const child = spawn(codexBin, args, {
     cwd: workspace,
+    detached: DETACHED_PROCESS,
     env: process.env,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -161,7 +218,10 @@ function startCodexRun({
 
 export {
   buildAgentPrompt,
+  createCodexArchiveArgs,
   createCodexArgs,
   extractCodexEvent,
+  signalCodexProcess,
+  startCodexArchive,
   startCodexRun,
 };

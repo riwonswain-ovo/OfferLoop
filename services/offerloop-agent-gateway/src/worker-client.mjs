@@ -53,11 +53,10 @@ function createWorkerClient({ apiKey, baseUrl, fetchImpl = fetch }) {
       return request('/openapi/agent-worker/poll', 'POST', body);
     },
     updateRun(runId, body) {
-      return request(
-        `/openapi/agent-worker/runs/${encodeURIComponent(runId)}`,
-        'PATCH',
-        body,
-      );
+      return request('/openapi/agent-worker/run-update', 'POST', {
+        ...body,
+        runId,
+      });
     },
   };
 }

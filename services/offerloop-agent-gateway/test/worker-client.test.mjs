@@ -49,3 +49,36 @@ test('builds compatible API key headers', () => {
     'X-Api-Key': 'secret-key',
   });
 });
+
+test('uses a fixed result endpoint that API key scopes can authorize', async () => {
+  const calls = [];
+  const client = createWorkerClient({
+    apiKey: 'secret-key',
+    baseUrl: 'https://example.test/app/app_123',
+    fetchImpl: async (url, init) => {
+      calls.push({ init, url });
+      return new Response(JSON.stringify({ accepted: true }), {
+        headers: { 'Content-Type': 'application/json' },
+        status: 200,
+      });
+    },
+  });
+
+  await client.updateRun('run-123', {
+    progress: '正在执行',
+    status: 'running',
+    workerId: 'offerloop-mac',
+  });
+
+  assert.equal(
+    calls[0].url,
+    'https://example.test/app/app_123/openapi/agent-worker/run-update',
+  );
+  assert.equal(calls[0].init.method, 'POST');
+  assert.deepEqual(JSON.parse(calls[0].init.body), {
+    progress: '正在执行',
+    runId: 'run-123',
+    status: 'running',
+    workerId: 'offerloop-mac',
+  });
+});

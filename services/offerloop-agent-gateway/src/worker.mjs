@@ -2,10 +2,16 @@ import { spawnSync } from 'node:child_process';
 import { hostname } from 'node:os';
 import { resolve } from 'node:path';
 
-import { startCodexRun } from './codex-runner.mjs';
+import {
+  signalCodexProcess,
+  startCodexArchive,
+  startCodexRun,
+} from './codex-runner.mjs';
 import { createWorkerClient } from './worker-client.mjs';
 
-const VERSION = '0.2.0';
+const VERSION = '0.5.0';
+const CODEX_ARCHIVE_ROUTE = '__codex_archive__';
+const FORCE_STOP_DELAY_MS = 2_000;
 const DEFAULT_WORKBENCH_URL =
   'https://ccn3d1ndeqey.aiforce.cloud/app/app_17abq8v4k7k';
 const KEYCHAIN_SERVICE = 'OfferLoop Agent Worker';
@@ -24,6 +30,7 @@ const POLL_INTERVAL_MS = Math.max(
 );
 
 let shuttingDown = false;
+let activeChild = null;
 
 function sleep(milliseconds) {
   return new Promise((resolvePromise) => {
@@ -68,64 +75,152 @@ async function executeTask(client, task) {
   let latestProgress = '正在启动 OfferLoop Agent';
   let latestResult = '';
   let latestSessionId = task.sessionId;
+  let cancellationRequested = false;
+  let child = null;
+  let forceStopTimer = null;
+  let communicationFailure = null;
+  const stopChild = () => {
+    if (!child) {
+      return;
+    }
+    signalCodexProcess(child, 'SIGTERM');
+    if (!forceStopTimer) {
+      forceStopTimer = setTimeout(() => {
+        signalCodexProcess(child, 'SIGKILL');
+      }, FORCE_STOP_DELAY_MS);
+      forceStopTimer.unref?.();
+    }
+  };
   const sendProgress = async () => {
-    await client.updateRun(task.runId, {
+    if (cancellationRequested) {
+      return { cancelRequested: true };
+    }
+    const response = await client.updateRun(task.runId, {
       progress: latestProgress,
       sessionId: latestSessionId,
       status: 'running',
       workerId: WORKER_ID,
     });
+    if (response.cancelRequested) {
+      cancellationRequested = true;
+      latestProgress = '正在停止任务';
+      stopChild();
+    }
+    return response;
   };
 
-  const { completion } = startCodexRun({
-    codexBin: CODEX_BIN,
-    confirmed: task.confirmed,
-    message: task.message,
-    onUpdate: (update) => {
-      if (typeof update.progress === 'string') {
-        latestProgress = update.progress;
-      }
-      if (typeof update.result === 'string') {
-        latestResult = update.result;
-      }
-      if (typeof update.sessionId === 'string') {
-        latestSessionId = update.sessionId;
-      }
-    },
-    route: task.route,
-    sessionId: task.sessionId,
-    workspace: WORKSPACE,
-  });
-
+  // Verify that the result channel is writable before starting Codex. If this
+  // request fails, the lease expires and the UI can recover without an orphan.
   await sendProgress();
-  const progressTimer = setInterval(() => {
-    void sendProgress().catch((error) => {
-      process.stderr.write(
-        `Unable to update Agent progress: ${error.message}\n`,
-      );
-    });
-  }, 15_000);
-
-  const outcome = await completion;
-  clearInterval(progressTimer);
-  if (outcome.ok && latestResult) {
+  if (cancellationRequested) {
     await client.updateRun(task.runId, {
-      progress: '已完成',
-      result: latestResult,
+      progress: '任务已停止',
+      result: '任务已停止。',
       sessionId: latestSessionId,
-      status: 'completed',
+      status: 'cancelled',
       workerId: WORKER_ID,
     });
     return;
   }
 
-  await client.updateRun(task.runId, {
+  const onUpdate = (update) => {
+    if (typeof update.progress === 'string') {
+      latestProgress = update.progress;
+    }
+    if (typeof update.result === 'string') {
+      latestResult = update.result;
+    }
+    if (typeof update.sessionId === 'string') {
+      latestSessionId = update.sessionId;
+    }
+  };
+  const archiveTask = task.route === CODEX_ARCHIVE_ROUTE;
+  const execution = archiveTask
+    ? startCodexArchive({
+        codexBin: CODEX_BIN,
+        onUpdate,
+        sessionId: task.sessionId,
+        workspace: WORKSPACE,
+      })
+    : startCodexRun({
+        codexBin: CODEX_BIN,
+        confirmed: task.confirmed,
+        message: task.message,
+        onUpdate,
+        route: task.route,
+        sessionId: task.sessionId,
+        workspace: WORKSPACE,
+      });
+  child = execution.child;
+  activeChild = child;
+
+  const progressTimer = setInterval(() => {
+    void sendProgress().catch((error) => {
+      communicationFailure ??= error;
+      process.stderr.write(
+        `Unable to update Agent progress: ${error.message}\n`,
+      );
+      stopChild();
+    });
+  }, 2_000);
+
+  const outcome = await execution.completion;
+  clearInterval(progressTimer);
+  activeChild = null;
+  if (forceStopTimer) {
+    clearTimeout(forceStopTimer);
+  }
+  if (communicationFailure) {
+    throw new Error(
+      `Agent result channel failed: ${communicationFailure.message}`,
+    );
+  }
+  if (cancellationRequested) {
+    await client.updateRun(task.runId, {
+      progress: '任务已停止',
+      result: '任务已停止。',
+      sessionId: latestSessionId,
+      status: 'cancelled',
+      workerId: WORKER_ID,
+    });
+    return;
+  }
+  if (outcome.ok && (latestResult || archiveTask)) {
+    const response = await client.updateRun(task.runId, {
+      progress: '已完成',
+      result: archiveTask ? '该对话已归档到 Codex。' : latestResult,
+      sessionId: latestSessionId,
+      status: 'completed',
+      workerId: WORKER_ID,
+    });
+    if (response.cancelRequested) {
+      await client.updateRun(task.runId, {
+        progress: '任务已停止',
+        result: '任务已停止。',
+        sessionId: latestSessionId,
+        status: 'cancelled',
+        workerId: WORKER_ID,
+      });
+    }
+    return;
+  }
+
+  const response = await client.updateRun(task.runId, {
     error: outcome.error ?? 'Codex 没有返回最终结果',
     progress: '任务失败',
     sessionId: latestSessionId,
     status: 'failed',
     workerId: WORKER_ID,
   });
+  if (response.cancelRequested) {
+    await client.updateRun(task.runId, {
+      progress: '任务已停止',
+      result: '任务已停止。',
+      sessionId: latestSessionId,
+      status: 'cancelled',
+      workerId: WORKER_ID,
+    });
+  }
 }
 
 async function run() {
@@ -172,6 +267,13 @@ async function run() {
 for (const signal of ['SIGINT', 'SIGTERM']) {
   process.on(signal, () => {
     shuttingDown = true;
+    if (activeChild) {
+      signalCodexProcess(activeChild, 'SIGTERM');
+      const forceStopTimer = setTimeout(() => {
+        signalCodexProcess(activeChild, 'SIGKILL');
+      }, FORCE_STOP_DELAY_MS);
+      forceStopTimer.unref?.();
+    }
   });
 }
 
