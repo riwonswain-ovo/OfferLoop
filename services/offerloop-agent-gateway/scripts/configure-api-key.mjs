@@ -5,7 +5,7 @@ const KEYCHAIN_SERVICE = 'OfferLoop Agent Worker';
 const KEYCHAIN_ACCOUNT = APP_ID;
 const SCOPES = [
   'POST /openapi/agent-worker/poll',
-  'PATCH /openapi/agent-worker/runs/{runId}',
+  'POST /openapi/agent-worker/run-update',
 ];
 
 function hasStoredKey() {
