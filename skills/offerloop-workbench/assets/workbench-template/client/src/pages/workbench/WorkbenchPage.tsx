@@ -76,7 +76,7 @@ const SKILL_GROUPS = [
         name: 'offerloop-setup',
         title: '安装与配置',
         description: '首次配置、环境检查、飞书授权和完整部署',
-        prompt: '介绍 OfferLoop 的十一个 Skill，并帮我完成第一次使用。',
+        prompt: '介绍 OfferLoop 的十二个 Skill，并帮我完成第一次使用。',
         icon: Settings,
       },
       {
@@ -128,6 +128,13 @@ const SKILL_GROUPS = [
         icon: FileSearch,
       },
       {
+        name: 'resume-tailor',
+        title: 'Resume Tailor',
+        description: '按岗位组合用户选定的真实经历，补齐固定信息并生成一页 PDF 简历',
+        prompt: '根据这个岗位和我选的三段经历，制作一页 PDF 简历。',
+        icon: BriefcaseBusiness,
+      },
+      {
         name: 'pm-sense',
         title: '产品思维训练',
         description: '训练产品与场景题，完善口语回答',
@@ -167,7 +174,7 @@ const SkillMapCard: React.FC = () => (
         OfferLoop 能力地图
       </CardTitle>
       <CardDescription>
-        展开查看 11 个 Skill；无需记名称，直接对 Agent 描述目标即可
+        展开查看 12 个 Skill；无需记名称，直接对 Agent 描述目标即可
       </CardDescription>
     </CardHeader>
     <CardContent className="space-y-3">

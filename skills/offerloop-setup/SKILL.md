@@ -1,6 +1,6 @@
 ---
 name: offerloop-setup
-description: 介绍 OfferLoop 的十一个 Skill，并初始化必需的私有飞书知识库、三张业务 Base、飞书身份和公共配置。适用于“安装/初始化 OfferLoop”“第一次使用”“介绍十一个 Skill”“检查环境或配置”“修复任一 OfferLoop Skill”“搭建完整 OfferLoop”；所有能力共享知识库核心空间，飞书工作台按需部署，Codex Agent 仅在已有工作台后可选加装。
+description: 介绍 OfferLoop 的十二个 Skill，并初始化必需的私有飞书知识库、三张业务 Base、飞书身份和公共配置。适用于“安装/初始化 OfferLoop”“第一次使用”“介绍十二个 Skill”“检查环境或配置”“修复任一 OfferLoop Skill”“搭建完整 OfferLoop”；所有能力共享知识库核心空间，飞书工作台按需部署，Codex Agent 仅在已有工作台后可选加装。
 ---
 
 # OfferLoop Setup
@@ -9,8 +9,8 @@ description: 介绍 OfferLoop 的十一个 Skill，并初始化必需的私有�
 
 ## 首次使用欢迎
 
-用户表示刚安装、第一次使用、不了解各 Skill，或明确要求介绍十一个 Skill 时，完整读取
-`references/welcome.md`，先展示十一项能力、两个常用闭环和隐私边界，再询问本次要启用哪项能力。
+用户表示刚安装、第一次使用、不了解各 Skill，或明确要求介绍十二个 Skill 时，完整读取
+`references/welcome.md`，先展示十二项能力、两个常用闭环和隐私边界，再询问本次要启用哪项能力。
 不要在能力介绍前要求目标岗位、读取私人材料或运行线上检查。
 
 非首次使用的配置请求可以直接询问本次要启用哪项能力：
@@ -18,7 +18,7 @@ description: 介绍 OfferLoop 的十一个 Skill，并初始化必需的私有�
 - `collection`：招聘信息收集（`job-collection`）
 - `reminder`：笔试、测评和面试提醒（`recruiting-reminder`）
 - `workspace`：初始化或检查必需的私有求职知识库（`offerloop-workspace`）
-- `coaching`：经历深挖、产品思维、面试准备、模拟面试和真实复盘
+- `coaching`：经历深挖、简历制作、产品思维、面试准备、模拟面试和真实复盘
 - `workbench`：按需部署可选飞书工作台（`offerloop-workbench`）
 - `agent`：在已有工作台里加装 Codex 右侧栏（`offerloop-agent`）
 - `full`：核心知识库、全部业务与训练能力、工作台和即时求职进展联动；不自动安装 Codex Agent
@@ -72,7 +72,7 @@ profile 的本机状态。它不验证在线身份、飞书权限或 token，也
 租户安装、Base/知识库共享、IMAP 连通性、个人日历授权、妙搭部署和工作台 OAuth 均须在用户确认后
 另行只读核验或配置。不要把 `ready` 表述为“已部署”或“已可用”。
 
-本仓库包含四个核心与业务 Skill、一个可选工作台 Skill、一个可选 Agent Skill 和五个求职训练 Skill。任一能力都先
+本仓库包含四个核心与业务 Skill、一个可选工作台 Skill、一个可选 Agent Skill 和六个求职训练 Skill。任一能力都先
 选择 `workspace` 核心并需要 `lark-base`、`lark-doc`、`lark-wiki`；`reminder` 另需
 `lark-calendar`；`workbench`、`agent` 与即时联动需要 `lark-shared`、`lark-apps`。
 只有通知已启用时才检查通知依赖：目标已登记时运行期只需要

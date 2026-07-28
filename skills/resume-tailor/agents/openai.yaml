@@ -1,0 +1,4 @@
+interface:
+  display_name: "Resume Tailor"
+  short_description: "按岗位选配真实经历，生成并校验一页 A4 PDF 简历"
+  default_prompt: "使用 $resume-tailor 根据我的目标岗位和选定经历制作一页 PDF 简历。"

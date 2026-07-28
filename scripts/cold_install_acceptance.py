@@ -21,6 +21,7 @@ SKILL_NAMES = (
     "offerloop-workbench",
     "offerloop-agent",
     "experience-deepthink",
+    "resume-tailor",
     "interview-prep",
     "mock-lab",
     "talk-review",

@@ -27,6 +27,7 @@ SKILL_NAMES = (
     "offerloop-workbench",
     "offerloop-agent",
     "experience-deepthink",
+    "resume-tailor",
     "interview-prep",
     "mock-lab",
     "talk-review",
@@ -59,7 +60,7 @@ MANIFEST_NAME = ".offerloop-install.json"
 WELCOME = {
     "headline": "欢迎使用 OfferLoop",
     "summary": (
-        "OfferLoop 包含 11 个可以独立或组合使用的 Skill。"
+        "OfferLoop 包含 12 个可以独立或组合使用的 Skill。"
         "用户不需要记住名称，只需描述当前想解决的问题。"
     ),
     "groups": [
@@ -114,6 +115,12 @@ WELCOME = {
                     "example": "我想讲一段竞赛经历，用来准备财务分析岗，请开始深挖。",
                 },
                 {
+                    "name": "resume-tailor",
+                    "title": "Resume Tailor",
+                    "purpose": "按目标岗位组合用户选定的真实经历，并生成一页 PDF 简历",
+                    "example": "根据这个岗位和我选的三段经历，制作一页 PDF 简历。",
+                },
+                {
                     "name": "pm-sense",
                     "title": "产品思维训练",
                     "purpose": "训练产品与场景题，完善口语回答并沉淀素材",
@@ -142,10 +149,10 @@ WELCOME = {
     ],
     "workflows": [
         "招聘信息同步 → 真实投递 → 邮件识别 → 笔试面试安排",
-        "经历深挖 / 产品思维 → 面试准备 → 模拟面试 → 真实面试复盘",
+        "经历深挖 → Resume Tailor → 面试准备 → 模拟面试 → 真实面试复盘",
     ],
     "next_prompt": (
-        "我刚安装 OfferLoop。请先介绍 11 个 Skill，"
+        "我刚安装 OfferLoop。请先介绍 12 个 Skill，"
         "再做只读检查并带我完成第一次使用。"
     ),
     "privacy_notice": (
@@ -720,6 +727,7 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
             or any(
                 name in {
                     "experience-deepthink",
+                    "resume-tailor",
                     "interview-prep",
                     "mock-lab",
                     "talk-review",
@@ -863,7 +871,7 @@ def main(argv=None) -> int:
         if not args.dry_run and any(
             report["status"] in completed for report in reports
         ):
-            print("OfferLoop 的 11 个 Skill 已处理完成。")
+            print("OfferLoop 的 12 个 Skill 已处理完成。")
             if show_welcome:
                 _print_welcome()
             else:
