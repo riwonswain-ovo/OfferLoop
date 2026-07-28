@@ -20,8 +20,9 @@ description: 直接在 Chat 中接收用户讲述的一段具体经历和目标�
 
 3. 在用户完成上述输入前，不读取简历、飞书资料、关联 Base、历史经历文档或其他个人材料，
    也不要求用户先上传简历、提供简历版本、完成 OfferLoop 配置或给出 JD。
-4. 用户完成首次讲述并明确岗位方向后，先从 Chat 内容确认文档身份和岗位能力主线，再开始
-   连续追问。JD 和证明材料仅在用户主动提供时作为补充，不得替代用户的首次讲述。
+4. 用户完成首次讲述并明确岗位方向后，完整读取 `references/thinking-and-answer-logic.md`，
+   再从 Chat 内容确认文档身份和岗位能力主线并开始连续追问。JD 和证明材料仅在用户主动提供
+   时作为补充，不得替代用户的首次讲述。
 5. 只有需要接续或保存同一份经历深挖文档时，才从本 Skill 根目录定位兄弟
    `offerloop-workspace`，完整读取 `references/artifact-contract.md`，再读取 `lark-wiki`、
    `lark-doc` 并运行共享 `artifact_contract.py` 检查兼容目录键 `resume_deepthink`。该键仅用于
@@ -55,8 +56,10 @@ description: 直接在 Chat 中接收用户讲述的一段具体经历和目标�
 
 - 产品：`references/role-playbooks/product.md`
 - 运营：`references/role-playbooks/operations.md`
+- 商业化产品、商业化运营、增长变现：`references/role-playbooks/commercialization.md`
 - PMO：`references/role-playbooks/pmo.md`
-- 商业分析：`references/role-playbooks/business-analysis.md`
+- 战略分析、战略运营、战投：`references/role-playbooks/strategy-analysis.md`
+- 商业分析、经营分析：`references/role-playbooks/business-analysis.md`
 - 数据分析：`references/role-playbooks/data-analysis.md`
 
 岗位未命中上述参考时不得停止、要求用户改选或降级为某个相近岗位。直接根据 JD 和用户确认
@@ -70,6 +73,10 @@ description: 直接在 Chat 中接收用户讲述的一段具体经历和目标�
 复合岗位可以按需读取多个明显相关的 playbook，但只加载真正有帮助的最小集合。playbook 与
 JD 冲突时以用户提供的真实 JD 和明确岗位方向为准。
 
+`references/experience-evidence-radar.md` 只在一段高价值线索已经挖到复盘层、用户卡壳需要
+换入口，或成稿前查漏时读取。它是内部证据覆盖雷达，不是问题清单；每次最多选择一个与岗位
+和真实经历高度相关的缺口继续追问，不顺序遍历，不要求用户凑齐全部维度。
+
 ## 执行对话
 
 严格执行 `references/conversation-workflow.md`，使用岗位能力主线和可选 playbook 确认的证据、
@@ -82,7 +89,8 @@ JD 冲突时以用户提供的真实 JD 和明确岗位方向为准。
 
 ## 生成与维护文档
 
-1. 严格套用 `references/output-schema.md`。
+1. 严格套用 `references/output-schema.md`。思考维度和回答逻辑只影响选材、追问顺序和正文
+   表达，不新增、删除或重命名任何输出章节、层级和字段。
 2. 文档保留：
    - 严格按金字塔原理组织的基础 1 分钟和 3 分钟经历口述稿；
    - 背景、目标、方案与行动路径、结果各自独立的 3 分钟金字塔口述稿；
@@ -110,3 +118,12 @@ JD 冲突时以用户提供的真实 JD 和明确岗位方向为准。
 5. 不创建同一 `(经历名称, 完整岗位方向)` 的第二份正式文档，不自动删除旧文档。
 
 普通暂停只说明当前阶段、已确认主题和下次要问的问题。不直接改写用户简历。
+
+## 方法来源与使用边界
+
+“根因—归属—落地—价值—复盘”及钻取/发散机制吸收自
+[Yipper0915/Project-Deep-Dive-Skill](https://github.com/Yipper0915/Project-Deep-Dive-Skill)。
+证据交叉验证、商业化价值链、方法迁移和经历查漏维度由用户提供的《v1.0_27届互联网上岸面试
+文档（神奇柚子）》《商业化50讲：从0到1学习商业化-v1.4》《产品经理面试题库_合并版》抽象
+而来。只保留可迁移方法，不复制课程正文、固定题目、参考答案、时效性行业结论、经验阈值或
+灰色/违规做法。

@@ -16,6 +16,9 @@ exports/
 *.csv
 *.xlsx
 
+# User-provided, personal-use interview materials. Keep local and never publish.
+/skills/pm-sense/references/private-sources/
+
 base_config.json
 processed_emails.json
 

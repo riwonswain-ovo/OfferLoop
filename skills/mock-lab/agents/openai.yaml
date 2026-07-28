@@ -1,4 +1,4 @@
 interface:
   display_name: "模拟面试实验室"
-  short_description: "按岗位、面试模式和可选材料进行一题一答动态追问式模拟面试"
-  default_prompt: "Use $mock-lab to confirm my target role and interview mode, optionally use my JD and materials, then run a one-question-at-a-time mock interview with feedback only at the end."
+  short_description: "覆盖互联网高频题型，支持真实模拟与逐题专业答题训练"
+  default_prompt: "Use $mock-lab to confirm my target role and choose realistic simulation or question-by-question coaching, then dynamically interview me and help strengthen my answers."

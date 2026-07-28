@@ -13,7 +13,9 @@ class RepositoryContractTest(unittest.TestCase):
         expected = {
             "product.md",
             "operations.md",
+            "commercialization.md",
             "pmo.md",
+            "strategy-analysis.md",
             "business-analysis.md",
             "data-analysis.md",
         }
@@ -68,8 +70,82 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertIn("不生成固定题型题库", schema)
         self.assertIn("岗位方向不受预设分类限制", schema)
         self.assertIn("严格按金字塔原理组织", schema)
+        for internal_only_field in (
+            "信息来源可靠性与交叉验证（如适用）：",
+            "可复用方法、适用条件与失效边界：",
+            "短期结果、长期影响与护栏指标（如适用）：",
+            "投入、回收周期、规模与机会成本（如适用）：",
+        ):
+            self.assertNotIn(internal_only_field, template)
 
-    def test_mock_lab_uses_optional_product_playbook_and_question_patterns(self):
+        workflow = (
+            SKILLS
+            / "experience-deepthink"
+            / "references"
+            / "conversation-workflow.md"
+        ).read_text(encoding="utf-8")
+        radar = (
+            SKILLS
+            / "experience-deepthink"
+            / "references"
+            / "experience-evidence-radar.md"
+        ).read_text(encoding="utf-8")
+        commercialization = (
+            SKILLS
+            / "experience-deepthink"
+            / "references"
+            / "role-playbooks"
+            / "commercialization.md"
+        ).read_text(encoding="utf-8")
+        strategy = (
+            SKILLS
+            / "experience-deepthink"
+            / "references"
+            / "role-playbooks"
+            / "strategy-analysis.md"
+        ).read_text(encoding="utf-8")
+        thinking = (
+            SKILLS
+            / "experience-deepthink"
+            / "references"
+            / "thinking-and-answer-logic.md"
+        ).read_text(encoding="utf-8")
+        for expected in (
+            "证据冲突与交叉验证",
+            "方法沉淀与经历查漏",
+            "不向用户展示完整雷达",
+        ):
+            self.assertIn(expected, workflow)
+        for expected in (
+            "不是面试题库",
+            "每次最多选择一个",
+            "不诱导补造故事",
+        ):
+            self.assertIn(expected, radar)
+        for expected in (
+            "不把单一指标自动当成最终结论",
+            "短期收益",
+            "长期影响",
+            "未经授权的逆向",
+        ):
+            self.assertIn(expected, commercialization)
+        for expected in (
+            "战略问题定义",
+            "战略选项",
+            "决策影响",
+            "建议权与决策权边界",
+        ):
+            self.assertIn(expected, strategy)
+        for expected in (
+            "从岗位决定深挖重点",
+            "从考察意图决定回答角度",
+            "先给结论",
+            "选择二至四个支撑角度",
+            "不新增、删除或重命名最终文档",
+        ):
+            self.assertIn(expected, thinking)
+
+    def test_mock_lab_routes_optional_playbooks_patterns_modes_and_contexts(self):
         root = SKILLS / "mock-lab"
         skill = (root / "SKILL.md").read_text(encoding="utf-8")
         protocol = (root / "references" / "interview-protocol.md").read_text(
@@ -83,24 +159,88 @@ class RepositoryContractTest(unittest.TestCase):
             path.name
             for path in (root / "references" / "question-patterns").glob("*.md")
         }
-        self.assertEqual(role_playbooks, {"product.md"})
-        self.assertEqual(question_patterns, {"product.md"})
+        question_archetypes = {
+            path.name
+            for path in (root / "references" / "question-archetypes").glob("*.md")
+        }
+        answer_blueprints = {
+            path.name
+            for path in (root / "references" / "answer-blueprints").glob("*.md")
+        }
+        domain_lenses = {
+            path.name
+            for path in (root / "references" / "domain-lenses").glob("*.md")
+        }
+        interview_modes = {
+            path.name
+            for path in (root / "references" / "interview-modes").glob("*.md")
+        }
+        case_contexts = {
+            path.name
+            for path in (root / "references" / "case-contexts").glob("*.md")
+        }
+        self.assertEqual(
+            role_playbooks,
+            {
+                "product.md",
+                "strategy-business-analysis.md",
+                "management-consulting.md",
+                "data-analysis.md",
+            },
+        )
+        self.assertEqual(
+            question_patterns,
+            {
+                "common-behavioral.md",
+                "product.md",
+                "strategy-business-analysis.md",
+                "management-consulting.md",
+                "data-analysis.md",
+            },
+        )
+        self.assertEqual(question_archetypes, {"internet-interview-map.md"})
+        self.assertEqual(answer_blueprints, {"internet-interview-answers.md"})
+        self.assertEqual(domain_lenses, {"commercialization.md"})
+        self.assertEqual(
+            interview_modes,
+            {"case-interview.md", "group-discussion.md"},
+        )
+        self.assertEqual(case_contexts, {"internet-business.md"})
         for expected in (
             "references/role-playbooks/product.md",
+            "references/role-playbooks/strategy-business-analysis.md",
+            "references/role-playbooks/management-consulting.md",
+            "references/role-playbooks/data-analysis.md",
+            "references/question-archetypes/internet-interview-map.md",
+            "references/question-patterns/common-behavioral.md",
             "references/question-patterns/product.md",
+            "references/question-patterns/strategy-business-analysis.md",
+            "references/question-patterns/management-consulting.md",
+            "references/question-patterns/data-analysis.md",
+            "references/answer-blueprints/internet-interview-answers.md",
+            "references/domain-lenses/commercialization.md",
+            "references/interview-modes/case-interview.md",
+            "references/interview-modes/group-discussion.md",
+            "references/case-contexts/internet-business.md",
             "不是岗位",
             "岗位未命中现有参考时不得停止",
             "目标岗位是启动模拟的唯一必需输入",
             "不机械复述原题",
+            "“管培生”不是统一职能",
+            "真实模拟",
+            "逐题训练",
         ):
             self.assertIn(expected, skill)
         for expected in (
             "通用面试协议",
             "用户选择的面试模式",
             "可选岗位 Playbook",
+            "可选互联网题型、问题模式与领域视角",
             "JD 与用户真实材料",
             "不顺序遍历文件",
             "不得声称改写后的问题是真实公司原题",
+            "interview-modes/case-interview.md",
+            "interview-modes/group-discussion.md",
         ):
             self.assertIn(expected, protocol)
         product_role = (
@@ -122,12 +262,146 @@ class RepositoryContractTest(unittest.TestCase):
             "指标设计、异常诊断与效果归因",
             "B 端、平台与数据产品",
             "AI 产品与技术应用",
-            "估算、发散与表达",
+            "费米估算与 Market Sizing",
+            "发散与表达",
         ):
             self.assertIn(expected, product_patterns)
         combined = product_role + product_patterns
         for forbidden in ("建议全文背诵", "把同龄人卷成春饼"):
             self.assertNotIn(forbidden, combined)
+
+        strategy_role = (
+            root
+            / "references"
+            / "role-playbooks"
+            / "strategy-business-analysis.md"
+        ).read_text(encoding="utf-8")
+        consulting_role = (
+            root / "references" / "role-playbooks" / "management-consulting.md"
+        ).read_text(encoding="utf-8")
+        data_role = (
+            root / "references" / "role-playbooks" / "data-analysis.md"
+        ).read_text(encoding="utf-8")
+        common_patterns = (
+            root / "references" / "question-patterns" / "common-behavioral.md"
+        ).read_text(encoding="utf-8")
+        case_mode = (
+            root / "references" / "interview-modes" / "case-interview.md"
+        ).read_text(encoding="utf-8")
+        group_mode = (
+            root / "references" / "interview-modes" / "group-discussion.md"
+        ).read_text(encoding="utf-8")
+        internet_context = (
+            root / "references" / "case-contexts" / "internet-business.md"
+        ).read_text(encoding="utf-8")
+        archetype_map = (
+            root
+            / "references"
+            / "question-archetypes"
+            / "internet-interview-map.md"
+        ).read_text(encoding="utf-8")
+        answer_blueprint = (
+            root
+            / "references"
+            / "answer-blueprints"
+            / "internet-interview-answers.md"
+        ).read_text(encoding="utf-8")
+        commercialization_lens = (
+            root / "references" / "domain-lenses" / "commercialization.md"
+        ).read_text(encoding="utf-8")
+        for expected in (
+            "行业、公司与竞争研究",
+            "数据、信息源与交叉验证",
+            "战略选择、资源取舍和风险",
+        ):
+            self.assertIn(expected, strategy_role)
+        for expected in (
+            "假设驱动和证据更新",
+            "定量分析、估算和数据解释",
+            "综合判断、建议与风险",
+        ):
+            self.assertIn(expected, consulting_role)
+        for expected in (
+            "指标体系和统计口径",
+            "实验设计、统计推断与因果边界",
+            "SQL、Python 和可复现分析",
+        ):
+            self.assertIn(expected, data_role)
+        for expected in (
+            "领导力与影响力",
+            "冲突与说服",
+            "失败、挑战与复盘",
+        ):
+            self.assertIn(expected, common_patterns)
+        for expected in (
+            "背景与任务",
+            "条件变化或反证",
+            "综合建议",
+        ):
+            self.assertIn(expected, case_mode)
+        for expected in (
+            "每轮最多引入两个",
+            "不按 Leader、Timekeeper、Recorder 等固定角色评分",
+            "单人模拟限制",
+        ):
+            self.assertIn(expected, group_mode)
+        for expected in (
+            "业务模型",
+            "多方角色",
+            "可复用冲突",
+            "不保存公司题库",
+        ):
+            self.assertIn(expected, internet_context)
+        for expected in (
+            "互联网高频母题",
+            "费米估算 / Market Sizing",
+            "概念辨析与方法论",
+            "完整模拟的覆盖规则",
+            "至少把费米估算、现场 Case 或其他定量分析放入候选集",
+        ):
+            self.assertIn(expected, archetype_map)
+        for expected in (
+            "通用口语结构",
+            "费米估算",
+            "指标异动与数据分析",
+            "商业化与商业模式",
+            "概念辨析与方法论",
+            "用户原回答已有内容",
+            "建议补充内容",
+        ):
+            self.assertIn(expected, answer_blueprint)
+        for expected in (
+            "跨岗位领域视角",
+            "稳定业务结构",
+            "岗位化追问",
+            "单位经济",
+        ):
+            self.assertIn(expected, commercialization_lens)
+        for playbook in (product_role, strategy_role, consulting_role, data_role):
+            self.assertIn("question-archetypes/internet-interview-map.md", playbook)
+            self.assertIn("answer-blueprints/internet-interview-answers.md", playbook)
+
+        distilled = "\n".join(
+            path.read_text(encoding="utf-8")
+            for directory in (
+                "role-playbooks",
+                "question-archetypes",
+                "question-patterns",
+                "answer-blueprints",
+                "domain-lenses",
+                "interview-modes",
+                "case-contexts",
+            )
+            for path in (root / "references" / directory).glob("*.md")
+        )
+        for forbidden in (
+            "神奇柚子",
+            "帝华集团",
+            "沃东集团",
+            "百度网盘",
+            "提取码",
+        ):
+            self.assertNotIn(forbidden, distilled)
 
     def test_expected_skills_are_discoverable(self):
         expected = {

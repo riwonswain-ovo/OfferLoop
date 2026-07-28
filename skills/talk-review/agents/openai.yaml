@@ -1,4 +1,4 @@
 interface:
   display_name: "真实面试复盘"
-  short_description: "读取飞书ASR、当前简历和经历深挖文档，保存真实面试复盘"
-  default_prompt: "Use $talk-review to read my Feishu ASR, selected resume, and matching deep-dive documents, then save an evidence-based review."
+  short_description: "解析真实面试ASR，生成求职者复盘和招聘者视角评估"
+  default_prompt: "Use $talk-review to parse my interview ASR faithfully, confirm uncertain passages, and generate an evidence-based candidate review plus recruiter-perspective assessment."
