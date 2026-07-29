@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path';
 import { createCodexAppServerClient } from './codex-app-server-client.mjs';
 import { createWorkerClient } from './worker-client.mjs';
 
-const VERSION = '0.8.3';
+const VERSION = '0.9.0';
 const CODEX_ARCHIVE_ROUTE = '__codex_archive__';
 const CODEX_NEW_THREAD_ROUTE = '__codex_new_thread__';
 const KEYCHAIN_SERVICE = 'OfferLoop Agent Worker';
@@ -80,6 +80,7 @@ async function executeTask(client, codexClient, task) {
   let latestProgress = '正在启动 OfferLoop Agent';
   let latestResult = '';
   let latestSessionId = task.sessionId;
+  let recoveredFromSessionId;
   let cancellationRequested = false;
   let communicationFailure = null;
   const stopTurn = async () => {
@@ -99,6 +100,7 @@ async function executeTask(client, codexClient, task) {
     const response = await client.updateRun(task.runId, {
       progress: latestProgress,
       result: latestResult || undefined,
+      recoveredFromSessionId,
       sessionId: latestSessionId,
       status: 'running',
       workerId: WORKER_ID,
@@ -163,6 +165,10 @@ async function executeTask(client, codexClient, task) {
         sessionId: task.sessionId,
       });
       latestSessionId = execution.threadId;
+      recoveredFromSessionId = execution.recoveredFromSessionId;
+      if (recoveredFromSessionId) {
+        latestProgress = '旧对话已归档，正在新对话中继续任务';
+      }
       completion = execution.completion;
     }
   } catch (error) {
@@ -200,6 +206,7 @@ async function executeTask(client, codexClient, task) {
     const response = await client.updateRun(task.runId, {
       progress: '已完成',
       result: archiveTask ? '该对话已归档到 Codex。' : latestResult,
+      recoveredFromSessionId,
       sessionId: latestSessionId,
       status: 'completed',
       workerId: WORKER_ID,
@@ -219,6 +226,7 @@ async function executeTask(client, codexClient, task) {
   const response = await client.updateRun(task.runId, {
     error: outcome.error ?? 'Codex 没有返回最终结果',
     progress: '任务失败',
+    recoveredFromSessionId,
     sessionId: latestSessionId,
     status: 'failed',
     workerId: WORKER_ID,

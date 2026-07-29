@@ -161,6 +161,7 @@ export interface AgentWorkerRunUpdateRequest {
   result?: string;
   error?: string;
   sessionId?: string;
+  recoveredFromSessionId?: string;
 }
 
 export interface AgentWorkerRunUpdatePayload extends AgentWorkerRunUpdateRequest {

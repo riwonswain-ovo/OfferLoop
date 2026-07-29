@@ -6,10 +6,11 @@ import assert from 'node:assert/strict';
 import {
   createAppServerArgs,
   createCodexAppServerClient,
+  isArchivedThreadError,
   normalizeThreadTitle,
 } from '../src/codex-app-server-client.mjs';
 
-function createFakeCodexProcess() {
+function createFakeCodexProcess({ archivedThreadId } = {}) {
   const child = new EventEmitter();
   child.stdout = new PassThrough();
   child.stderr = new PassThrough();
@@ -40,7 +41,19 @@ function createFakeCodexProcess() {
       } else if (request.method === 'thread/start') {
         send({
           id: request.id,
-          result: { thread: { id: '019fa268-8999-79b1-bef7-d2a43bfc81a6' } },
+          result: {
+            thread: {
+              id:
+                archivedThreadId &&
+                requests.some(
+                  (item) =>
+                    item.method === 'thread/resume' &&
+                    item.params.threadId === archivedThreadId,
+                )
+                  ? '019fa268-8999-79b1-bef7-d2a43bfc81a7'
+                  : '019fa268-8999-79b1-bef7-d2a43bfc81a6',
+            },
+          },
         });
       } else if (request.method === 'thread/name/set') {
         send({ id: request.id, result: {} });
@@ -91,6 +104,18 @@ function createFakeCodexProcess() {
         request.method === 'thread/archive' ||
         request.method === 'thread/resume'
       ) {
+        if (
+          request.method === 'thread/resume' &&
+          request.params.threadId === archivedThreadId
+        ) {
+          send({
+            error: {
+              message: `session ${archivedThreadId} is archived`,
+            },
+            id: request.id,
+          });
+          continue;
+        }
         send({
           id: request.id,
           result:
@@ -218,4 +243,55 @@ test('app-server args preserve the Feishu-only permission profile', () => {
   assert.ok(args.includes('default_permissions="offerloop-feishu"'));
   assert.ok(args.some((arg) => arg.includes('**.feishu.cn')));
   assert.equal(normalizeThreadTitle('a'.repeat(60)), `${'a'.repeat(36)}…`);
+});
+
+test('recognizes archived Codex thread errors', () => {
+  assert.equal(
+    isArchivedThreadError(
+      new Error(
+        'session 019fa268-8999-79b1-bef7-d2a43bfc81a6 is archived',
+      ),
+    ),
+    true,
+  );
+  assert.equal(isArchivedThreadError(new Error('network unavailable')), false);
+});
+
+test('creates a replacement thread and retries when the saved thread is archived', async () => {
+  const archivedThreadId = '019fa268-8999-79b1-bef7-d2a43bfc81a6';
+  const fake = createFakeCodexProcess({ archivedThreadId });
+  const updates = [];
+  const client = createCodexAppServerClient({
+    codexBin: 'codex',
+    runtimeWorkspace: '/tmp/offerloop-runtime',
+    sourceRoot: '/workspace/OfferLoop',
+    spawnProcess: () => fake.child,
+  });
+
+  const execution = await client.runTurn({
+    confirmed: false,
+    message: '继续检查笔面试安排',
+    onUpdate: (update) => updates.push(update),
+    route: 'recruiting-reminder',
+    sessionId: archivedThreadId,
+  });
+  const outcome = await execution.completion;
+
+  assert.equal(execution.recoveredFromSessionId, archivedThreadId);
+  assert.equal(
+    execution.threadId,
+    '019fa268-8999-79b1-bef7-d2a43bfc81a7',
+  );
+  assert.equal(outcome.ok, true);
+  assert.equal(
+    fake.requests.filter((request) => request.method === 'turn/start').length,
+    1,
+  );
+  assert.ok(
+    updates.some(
+      (update) =>
+        update.sessionId === '019fa268-8999-79b1-bef7-d2a43bfc81a7',
+    ),
+  );
+  client.close();
 });

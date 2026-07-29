@@ -33,6 +33,10 @@ import {
   type RunUpdateResult,
   type StoredConversationRun,
 } from './agent-chat.repository';
+import {
+  CODEX_ARCHIVE_ROUTE,
+  CODEX_NEW_THREAD_ROUTE,
+} from './agent-chat.constants';
 
 interface SkillDefinition extends OfferLoopSkillSummary {
   keywords: string[];
@@ -130,8 +134,6 @@ const OFFERLOOP_SKILLS: SkillDefinition[] = [
 const RUN_ID_PATTERN: RegExp = /^[0-9a-f-]{36}$/u;
 const SESSION_ID_PATTERN: RegExp = /^[0-9a-f-]{36}$/u;
 const WORKER_ID_PATTERN: RegExp = /^[a-zA-Z0-9._-]{3,128}$/u;
-const CODEX_ARCHIVE_ROUTE: string = '__codex_archive__';
-const CODEX_NEW_THREAD_ROUTE: string = '__codex_new_thread__';
 const HEARTBEAT_TTL_MS: number = 35_000;
 const RUN_LEASE_MS: number = 15_000;
 const INSTANT_GREETING_PATTERN: RegExp =
@@ -527,6 +529,16 @@ export class AgentChatService {
     if (request.status === 'failed' && !request.error?.trim()) {
       throw new BadRequestException('失败的任务必须包含错误信息');
     }
+    if (request.recoveredFromSessionId) {
+      this.assertSessionId(request.recoveredFromSessionId);
+      if (
+        !request.sessionId ||
+        request.sessionId === request.recoveredFromSessionId
+      ) {
+        throw new BadRequestException('恢复后的新对话 ID 无效');
+      }
+      this.assertSessionId(request.sessionId);
+    }
 
     const leaseExpiresAt: Date = new Date(Date.now() + RUN_LEASE_MS);
     const updateResult: RunUpdateResult = await this.repository.updateRun(
@@ -537,6 +549,12 @@ export class AgentChatService {
     );
     if (updateResult === 'missing') {
       throw new NotFoundException('任务不存在或不属于当前 Worker');
+    }
+    if (request.recoveredFromSessionId) {
+      await this.repository.markConversationRecovered(
+        request.ownerId,
+        request.recoveredFromSessionId,
+      );
     }
     return {
       accepted: updateResult === 'updated',

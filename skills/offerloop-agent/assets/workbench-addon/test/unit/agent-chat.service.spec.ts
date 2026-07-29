@@ -19,6 +19,7 @@ const createStore = (): jest.Mocked<AgentChatStore> =>
     heartbeatWorker: jest.fn(),
     listConversationRuns: jest.fn().mockResolvedValue([]),
     listConversationRunsBySession: jest.fn().mockResolvedValue([]),
+    markConversationRecovered: jest.fn(),
     recoverExpiredRuns: jest.fn(),
     requestRunCancellation: jest.fn(),
     updateRun: jest.fn(),
@@ -146,5 +147,43 @@ describe('AgentChatService owner isolation', () => {
       }),
       expect.any(Date),
     );
+  });
+
+  it('marks the old conversation archived after Codex creates a replacement thread', async () => {
+    const store = createStore();
+    store.updateRun.mockResolvedValue('updated');
+    const service = new AgentChatService(store);
+    const recoveredFromSessionId: string =
+      '019fa268-8999-79b1-bef7-d2a43bfc81a6';
+    const replacementSessionId: string =
+      '019fa268-8999-79b1-bef7-d2a43bfc81a7';
+
+    await service.updateWorkerRun('019fa268-a999-7777-bef7-d2a43bfc81a6', {
+      ownerId: '100000000000003',
+      progress: '旧对话已归档，正在新对话中继续任务',
+      recoveredFromSessionId,
+      sessionId: replacementSessionId,
+      status: 'running',
+      workerId: 'offerloop-100000000000003-mac',
+    });
+
+    expect(store.markConversationRecovered).toHaveBeenCalledWith(
+      '100000000000003',
+      recoveredFromSessionId,
+    );
+  });
+
+  it('rejects recovery updates that do not include a distinct new session', async () => {
+    const service = new AgentChatService(createStore());
+
+    await expect(
+      service.updateWorkerRun('019fa268-a999-7777-bef7-d2a43bfc81a6', {
+        ownerId: '100000000000003',
+        recoveredFromSessionId: SESSION_ID,
+        sessionId: SESSION_ID,
+        status: 'running',
+        workerId: 'offerloop-100000000000003-mac',
+      }),
+    ).rejects.toThrow('恢复后的新对话 ID 无效');
   });
 });

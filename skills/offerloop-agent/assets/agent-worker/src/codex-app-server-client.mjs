@@ -9,6 +9,8 @@ import {
 
 const REQUEST_TIMEOUT_MS = 30_000;
 const TURN_TIMEOUT_MS = 30 * 60_000;
+const ARCHIVED_THREAD_ERROR_PATTERN =
+  /(?:session|thread).+is archived|archived.+(?:session|thread)/iu;
 
 function createAppServerArgs({ runtimeWorkspace }) {
   return [
@@ -33,6 +35,12 @@ function createAppServerArgs({ runtimeWorkspace }) {
 function normalizeThreadTitle(message) {
   const title = message.replace(/\s+/gu, ' ').trim();
   return title.length > 36 ? `${title.slice(0, 36)}…` : title;
+}
+
+function isArchivedThreadError(error) {
+  return (
+    error instanceof Error && ARCHIVED_THREAD_ERROR_PATTERN.test(error.message)
+  );
 }
 
 class CodexAppServerClient {
@@ -353,11 +361,26 @@ class CodexAppServerClient {
       route,
       sourceRoot: this.sourceRoot,
     });
-    const threadId = await this.ensureThread(
-      sessionId,
-      message,
-      developerInstructions,
-    );
+    let threadId;
+    try {
+      threadId = await this.ensureThread(
+        sessionId,
+        message,
+        developerInstructions,
+      );
+    } catch (error) {
+      if (sessionId && isArchivedThreadError(error)) {
+        this.resumedThreads.delete(sessionId);
+        const recovered = await this.runTurn({
+          confirmed,
+          message,
+          onUpdate,
+          route,
+        });
+        return { ...recovered, recoveredFromSessionId: sessionId };
+      }
+      throw error;
+    }
     if (this.threadsAwaitingFirstMessage.has(threadId)) {
       await this.request('thread/name/set', {
         name: normalizeThreadTitle(message),
@@ -399,6 +422,16 @@ class CodexAppServerClient {
       if (this.activeTurn?.threadId === threadId) {
         this.activeTurn.resolve({ error: error.message, ok: false });
         this.finishActiveTurn();
+      }
+      if (sessionId && isArchivedThreadError(error)) {
+        this.resumedThreads.delete(sessionId);
+        const recovered = await this.runTurn({
+          confirmed,
+          message,
+          onUpdate,
+          route,
+        });
+        return { ...recovered, recoveredFromSessionId: sessionId };
       }
     }
     return { completion, threadId };
@@ -454,5 +487,6 @@ export {
   CodexAppServerClient,
   createAppServerArgs,
   createCodexAppServerClient,
+  isArchivedThreadError,
   normalizeThreadTitle,
 };

@@ -80,12 +80,12 @@ const AgentConversationNavigator: React.FC<
   }, [conversations, knowledgeNodes]);
 
   return (
-    <div className="absolute inset-0 z-30 flex flex-col bg-background">
+    <div className="absolute inset-0 z-30 flex min-w-0 flex-col overflow-hidden bg-background">
       <header className="flex items-center gap-3 border-b px-4 py-3.5">
         <div className="min-w-0 flex-1">
           <h2 className="font-semibold">对话任务</h2>
           <p className="text-xs text-muted-foreground">
-            按飞书知识库分类，历史对话可继续使用
+            按飞书知识库分类，可查看、续聊或归档
           </p>
         </div>
         <Button
@@ -109,8 +109,8 @@ const AgentConversationNavigator: React.FC<
         </Button>
       </header>
 
-      <ScrollArea className="min-h-0 flex-1">
-        <div className="space-y-6 p-3">
+      <ScrollArea className="min-h-0 min-w-0 flex-1 overflow-hidden">
+        <div className="w-full max-w-full space-y-6 overflow-hidden p-3">
           {groups.length === 0 ? (
             <div className="rounded-xl border border-dashed p-6 text-center">
               <MessageSquare className="mx-auto mb-2 size-6 text-muted-foreground" />
@@ -132,13 +132,13 @@ const AgentConversationNavigator: React.FC<
                   {group.conversations.length}
                 </Badge>
               </div>
-              <div className="space-y-1">
+              <div className="w-full min-w-0 space-y-1">
                 {group.conversations.map(
                   (conversation: AgentConversationSummary) => (
                     <div
                       key={conversation.sessionId}
                       className={cn(
-                        'group flex items-center gap-1 rounded-xl border px-1 py-1 transition-colors',
+                        'group flex w-full min-w-0 items-center gap-1 overflow-hidden rounded-xl border px-1 py-1 transition-colors',
                         activeSessionId === conversation.sessionId
                           ? 'border-primary/30 bg-primary/10'
                           : 'border-transparent hover:bg-muted',
@@ -165,9 +165,11 @@ const AgentConversationNavigator: React.FC<
                           size="icon"
                           variant="ghost"
                           aria-label={`归档对话：${conversation.title}`}
+                          className="shrink-0 text-muted-foreground hover:text-foreground"
                           disabled={
                             disabled || conversation.state === 'archiving'
                           }
+                          title="归档对话"
                           onClick={(): void => onArchive(conversation)}
                         >
                           {conversation.state === 'archiving' ? (

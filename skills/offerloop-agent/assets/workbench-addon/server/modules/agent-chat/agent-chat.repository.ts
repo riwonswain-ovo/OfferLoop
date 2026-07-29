@@ -13,6 +13,7 @@ import type {
 } from '@shared/agent-chat.interface';
 
 import { agentRunTable, agentWorkerTable } from './agent-chat.schema';
+import { CODEX_ARCHIVE_ROUTE } from './agent-chat.constants';
 
 export interface CreateStoredRunInput {
   owner: string;
@@ -79,6 +80,10 @@ export interface AgentChatStore {
     request: AgentWorkerRunUpdateRequest,
     leaseExpiresAt: Date,
   ): Promise<RunUpdateResult>;
+  markConversationRecovered(
+    owner: string,
+    sessionId: string,
+  ): Promise<void>;
 }
 
 export const AGENT_CHAT_STORE: unique symbol = Symbol('AGENT_CHAT_STORE');
@@ -452,6 +457,41 @@ export class AgentChatRepository implements AgentChatStore {
       )
       .returning({ id: agentRunTable.id });
     return rows.length === 1 ? 'updated' : 'missing';
+  }
+
+  async markConversationRecovered(
+    owner: string,
+    sessionId: string,
+  ): Promise<void> {
+    const existingRows: Array<{ id: string }> = await this.db
+      .select({ id: agentRunTable.id })
+      .from(agentRunTable)
+      .where(
+        and(
+          eq(agentRunTable.owner, owner),
+          eq(agentRunTable.sessionId, sessionId),
+          eq(agentRunTable.route, CODEX_ARCHIVE_ROUTE),
+          eq(agentRunTable.status, 'completed'),
+        ),
+      )
+      .limit(1);
+    if (existingRows.length > 0) {
+      return;
+    }
+
+    const now: Date = new Date();
+    await this.db.insert(agentRunTable).values({
+      completedAt: now,
+      confirmed: true,
+      message: 'Codex 对话已在外部归档',
+      owner,
+      progress: '已归档',
+      result: '旧对话已归档，后续消息已自动迁移到新的 Codex 对话。',
+      route: CODEX_ARCHIVE_ROUTE,
+      sessionId,
+      status: 'completed',
+      updatedAt: now,
+    });
   }
 
   private normalizeRunStatus(status: string): AgentChatRunResponse['status'] {

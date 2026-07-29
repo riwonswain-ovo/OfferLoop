@@ -578,6 +578,18 @@ const AgentChatPanel: React.FC<AgentChatPanelProps> = ({ onClose }) => {
         await loadConversation(conversation.sessionId);
       } catch (error: unknown) {
         logger.error('归档 Agent 对话失败', error);
+        setMessages(
+          (current: AgentConversationMessage[]): AgentConversationMessage[] => [
+            ...current,
+            createMessage(
+              'assistant',
+              error instanceof Error
+                ? `对话没有归档成功：${error.message}`
+                : '对话没有归档成功，请稍后重试。',
+              '归档对话',
+            ),
+          ],
+        );
       }
     };
     void archive();
