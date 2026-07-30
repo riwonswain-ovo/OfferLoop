@@ -12,7 +12,10 @@
 
 </div>
 
-> 当前版本：0.1.0-alpha.8。旧用户请直接阅读[如何升级](#4-旧用户如何升级)。
+> 当前版本：0.1.0-alpha.8（开发版）。本仓库尚未与公开仓库同步；能访问本开发仓库的测试用户
+> 请使用下方开发版安装命令。公开用户应以
+> [OfferLoop 公开仓库](https://github.com/riwonswain-ovo/OfferLoop) 自己的版本号和 README 为准，
+> 不要用公开旧版本配合本页的十一项 Skill 清单。旧用户请直接阅读[如何升级](#4-旧用户如何升级)。
 
 OfferLoop 包含 11 个标准 Agent Skill。完成线上初始化后一定会有一个默认私有的飞书知识库，
 其中组织三张业务 Base、当前简历和每次训练 Markdown 产物；飞书工作台是可选项，未部署不影响
@@ -42,7 +45,7 @@ OfferLoop 遵循标准 `SKILL.md` 目录结构。只要 Agent 能加载标准 Ag
 
 ```text
 请帮我安装这个 GitHub 仓库中的 OfferLoop：
-https://github.com/riwonswain-ovo/OfferLoop
+https://github.com/riwonswain-ovo/OfferLoop-development
 
 请安装仓库 skills/ 下的 11 个 Skill，并使用你自己的标准 Skills 目录。
 先预览安装目标和冲突；确认安全后再安装。不要覆盖来源不明的同名 Skill。
@@ -53,10 +56,10 @@ Agent 可能会请求访问 GitHub 或写入 Skills 目录的权限。确认目�
 
 ### 方式二：在终端安装
 
+macOS、Linux 与 PowerShell 都可以复制下面这一整行：
+
 ```bash
-npx skills add riwonswain-ovo/OfferLoop -g \
-  -s offerloop-setup job-collection recruiting-reminder offerloop-workspace \
-  offerloop-workbench experience-deepthink resume-tailor interview-prep mock-lab talk-review pm-sense -y
+npx skills add riwonswain-ovo/OfferLoop-development -g -s offerloop-setup job-collection recruiting-reminder offerloop-workspace offerloop-workbench experience-deepthink resume-tailor interview-prep mock-lab talk-review pm-sense -y
 ```
 
 安装工具若发现同名但内容不同的旧副本，应先报告冲突，不应直接覆盖。确认属于旧版 OfferLoop 后，先把旧副本备份到 Skills 发现范围之外，再安装新版。
@@ -66,12 +69,25 @@ npx skills add riwonswain-ovo/OfferLoop -g \
 Agent 通常只在会话开始时发现 Skill。安装完成后结束当前会话并新开会话，然后发送：
 
 ```text
-我刚安装 OfferLoop。请调用 offerloop-setup，先介绍 11 个 Skill，再做只读检查并带我完成第一次使用；不要创建或修改飞书资源。
+我刚安装 OfferLoop。请调用 offerloop-setup，先用“找岗位、管笔面试、做求职训练”三个入口帮我选择；如果我要求，再展开介绍 11 个 Skill。先做只读检查，不要创建或修改飞书资源。
 ```
 
-首次安装欢迎会按“4 个核心与业务能力 + 1 个可选工作台 + 6 个求职训练能力”介绍十一个 Skill，并给出两条常用
-闭环和一条可直接复制的首次使用指令。重复安装不会反复显示完整欢迎；Skill 能被发现仍需重新
-开启 Agent 会话。
+首次安装欢迎会先给出三个自然语言入口，只介绍当前目标相关的 Skill 和隐私边界；用户明确要求时，
+再按“4 个核心与业务能力 + 1 个可选工作台 + 6 个求职训练能力”展开完整地图。
+重复安装不会反复显示完整欢迎；Skill 能被发现仍需重新开启 Agent 会话。
+
+### 最快获得第一次结果
+
+如果只想体验求职训练，新开会话后可以直接发送下面这条指令，不需要先配置飞书、邮箱、
+`lark-cli`、知识库或三张 Base：
+
+```text
+请调用 experience-deepthink。我先在 Chat 中讲一段真实经历和目标岗位；暂时不要保存到飞书。
+```
+
+只有招聘同步、笔面试管理、飞书保存、工作台或完整部署需要继续调用 `offerloop-setup`。准备启用
+这些能力时，可以先让 Agent 一次性预览 OfferLoop 与所需 Lark 依赖，确认后批量安装，最后只
+重新开启一次会话。
 
 ## 3. 认识十一个 Skill
 
@@ -79,7 +95,8 @@ Agent 通常只在会话开始时发现 Skill。安装完成后结束当前会�
 
 ```text
 offerloop-setup
-  ├─ 必然初始化 offerloop-workspace 的私有知识库和三张 Base
+  ├─ 业务与飞书保存按需初始化 offerloop-workspace 的私有知识库和三张 Base
+  ├─ 纯 Chat 求职训练可直接开始
   ├─ 为 job-collection 做首次预检与配置
   ├─ 为 recruiting-reminder 做首次预检与配置
   └─ 为六个求职训练 Skill 做统一存储预检与配置
@@ -107,14 +124,14 @@ talk-review ── ASR + 当前简历 + 经历深挖 ──> 真实面试复盘
 
 - 已安装十一个 OfferLoop Skill，并重新开启 Agent 会话。
 - Python 3.10 或更高版本。
-- 不需要提前记住 Skill 名称。首次运行会先介绍十一个 Skill，再让你从 `collection`、`reminder`、`workspace`、`coaching`、`workbench` 或 `full` 中选择；任何选择都检查核心知识库，只有 `workbench` / `full` 涉及工作台。
+- 不需要提前记住 Skill 名称。首次运行先让你从“找岗位”“管笔面试”“做求职训练”三个入口选择，再介绍相关 Skill；单独使用 `coaching` 可先在 Chat 中开始，其他能力以及训练产物保存再检查核心知识库。只有 `workbench` / `full` 涉及工作台。
 - 不必提前准备飞书密钥或邮箱授权码；缺少 `lark-cli`、外部 Lark Skill、profile 或资源定位时，预检会给出解决动作。
 
 #### 第一次运行流程
 
-1. 首次使用时，完整介绍十一个 Skill、使用示例、常用闭环和隐私边界。
+1. 首次使用时先展示三个自然语言入口和隐私边界；只有用户明确要求时，才完整介绍十一个 Skill、使用示例和常用闭环。
 2. 询问本次要启用的能力，未选择的能力标记为 `not_selected`。
-3. 运行只读离线预检，检查 Python、`lark-cli`、所选 OfferLoop Skill、外部 Lark Skill、本地配置和文件权限。
+3. 运行只读离线预检；纯 Chat 求职训练只检查对应 OfferLoop Skill，其他所选能力再检查 Python、`lark-cli`、外部 Lark Skill、本地配置和文件权限。
 4. 用 `ready`、`needs_action`、`blocked`、`unverified` 汇报状态，并给出下一步。
 5. 经用户确认后，保存 profile、三张 Base、知识库首页与核心数据目录等非敏感定位；工作台验收后才登记其地址。
 6. 用户要求完整部署时，先展示将创建或接管的资源及影响范围，再等待确认；线上权限另做只读验收。
@@ -638,7 +655,7 @@ npx skills add larksuite/cli -g -y
 | 招聘信息同步 | 核心流程直接使用 `lark-cli`；启用通知时需要 `lark-im`，首次按姓名登记通知对象时还需要 `lark-contact` |
 | 笔面试提醒 | `lark-calendar`；启用通知时还需要 `lark-im` |
 | 求职空间 | `lark-base`、`lark-doc`、`lark-wiki` |
-| 求职训练 | `lark-base`、`lark-doc`、`lark-wiki` |
+| 求职训练 | 纯 Chat 体验不需要外部 Lark Skill；保存到飞书时需要 `lark-base`、`lark-doc`、`lark-wiki` |
 | 可选工作台 | `lark-shared`、`lark-apps` |
 | 完整部署 | 组合使用上述 Skill |
 

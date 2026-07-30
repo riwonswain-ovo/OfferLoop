@@ -195,7 +195,7 @@ class OfferLoopSetupTest(unittest.TestCase):
                 migrated["artifact_storage"]["status"], "needs_setup"
             )
 
-    def test_coaching_preflight_requires_v4_storage_and_reports_readiness(self):
+    def test_coaching_preflight_is_chat_first_and_storage_is_optional(self):
         with tempfile.TemporaryDirectory() as directory:
             skill_root = self.make_skill_root(
                 directory, "lark-base", "lark-doc", "lark-wiki"
@@ -221,8 +221,12 @@ class OfferLoopSetupTest(unittest.TestCase):
                 )
             checks = {item["id"]: item for item in report["checks"]}
             self.assertEqual(
-                checks["local.coaching_storage"]["status"], "needs_action"
+                checks["local.coaching_storage"]["status"], "ready"
             )
+            self.assertEqual(report["selected"], ["coaching"])
+            self.assertIn("纯 Chat", checks["local.lark_cli"]["summary"])
+            self.assertIn("纯 Chat", checks["local.profile_locator"]["summary"])
+            self.assertIn("不访问飞书", checks["online.permissions"]["summary"])
             configure.enable_coaching(path, confirmed=True)
             config = configure.load_config(path)
             for key in config["artifact_storage"]["readiness"]:
@@ -362,7 +366,7 @@ class OfferLoopSetupTest(unittest.TestCase):
             "collection": set(),
             "reminder": {"lark-calendar"},
             "workspace": {"lark-base", "lark-doc", "lark-wiki"},
-            "coaching": {"lark-base", "lark-doc", "lark-wiki"},
+            "coaching": set(),
             "full": {
                 "lark-apps",
                 "lark-base",

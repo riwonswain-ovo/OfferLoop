@@ -38,6 +38,8 @@ jobs:
           node-version: "20"
       - name: Test repository contracts
         run: python -m unittest discover -s tests -v
+      - name: Validate documented development install path
+        run: python scripts/readme_install_contract.py
       - name: Check shared AgentSkills compatibility
         run: python scripts/check_skill_compatibility.py
       - name: Test job collection helpers

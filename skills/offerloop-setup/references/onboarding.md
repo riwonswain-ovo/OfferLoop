@@ -1,12 +1,14 @@
 # OfferLoop 新用户接入
 
-本接入指南采用核心空间优先、业务能力渐进配置。先确认十一个 OfferLoop Skill 已安装在同一个
+本接入指南采用即时体验优先、业务能力渐进配置。先确认十一个 OfferLoop Skill 已安装在同一个
 Agent 环境，并在安装后新开会话；再选择 `collection`、`reminder`、`workspace`、`coaching`、
-`workbench` 或 `full`。任何选择都先检查必需的私有知识库和三张业务 Base。
+`workbench` 或 `full`。单独选择 `coaching` 时可以先在 Chat 中使用；其他能力以及
+训练产物的飞书保存再检查私有知识库和三张业务 Base。
 
-首次安装、第一次使用或用户要求理解十一个 Skill 时，先完整读取 `welcome.md`，展示十一项能力、
-自然语言示例、常用闭环和隐私边界，再让用户选择当前能力。不要要求用户先记技术名称，也不要
-在介绍阶段询问目标岗位或访问线上资源。
+首次安装或第一次使用时，先完整读取 `welcome.md`，展示三个自然语言入口和隐私边界，再让用户
+选择当前能力；只介绍与当前目标相关的 Skill。用户明确要求理解十一个 Skill 时，才展示完整能力
+地图、自然语言示例和常用闭环。不要要求用户先记技术名称，也不要在介绍阶段询问目标岗位或访问
+线上资源。
 
 这一步是新用户的最小成功：Skill 能被发现并能开始只读本机引导。它不是飞书、邮箱、妙搭或
 工作台已经配置完成的声明。本仓库提供四个核心与业务 Skill、一个可选工作台 Skill 和六个求职
@@ -19,7 +21,7 @@ Agent 环境，并在安装后新开会话；再选择 `collection`、`reminder`
 | `workspace`：初始化核心空间 | Python 3.10+、lark-cli、私有知识库、核心数据目录、企业清单/求职进展/笔面试中心 | IMAP、日历、工作台 |
 | `collection`：同步招聘信息 | 核心空间、可用 bot profile、至少一个合法信息源 | IMAP、个人日历、工作台 |
 | `reminder`：整理笔试和面试 | 核心空间、IMAP、本地提醒配置；建日历时完成 user 日历授权 | 招聘信息源、工作台 |
-| `coaching`：训练与面试材料 | 核心空间、schema v4、固定训练目录 | IMAP、日历、工作台 |
+| `coaching`：训练与面试材料 | 纯 Chat 体验只需对应 OfferLoop Skill；保存到飞书时再需要核心空间、schema v4、固定训练目录 | IMAP、日历、工作台 |
 | `workbench`：可视化工作台 | 核心空间、妙搭创建/发布/环境配置、OAuth 与租户安装支持 | IMAP、业务写入 |
 | `full`：完整闭环 | 上述全部，以及 Base workflow 和 HTTPS 同步端点 | 无 |
 
@@ -28,13 +30,14 @@ Agent 环境，并在安装后新开会话；再选择 `collection`、`reminder`
 ### 运行时和外部 Skill 依赖
 
 - 安装 OfferLoop 本身只需要 Python 3.10+；Node.js（含 `npx`）只用于安装 `lark-cli` 和外部 Lark Skills，不是离线预检项目。
-- 所有业务能力需要 Python 3.10+ 与 `lark-cli >= 1.0.73`。如果 Agent 的默认 `python3` 指向较旧的系统 Python，预检会在当前 PATH 中自动选择可用的 Python 3.10+ 后重新执行；找不到合格解释器时才报告 `blocked`。预检会用 `profile list` 和 `doctor --offline` 确认已登记 profile 的本机状态，但不能证明应用已发布或有在线资源权限。
+- 除纯 Chat `coaching` 外，业务与飞书能力需要 Python 3.10+ 与 `lark-cli >= 1.0.73`。如果 Agent 的默认 `python3` 指向较旧的系统 Python，预检会在当前 PATH 中自动选择可用的 Python 3.10+ 后重新执行；找不到合格解释器时才报告 `blocked`。预检会用 `profile list` 和 `doctor --offline` 确认已登记 profile 的本机状态，但不能证明应用已发布或有在线资源权限。
 - 知识库创建/整理需要 `lark-base`、`lark-doc`、`lark-wiki`；个人日历读写需要 `lark-calendar`；完整部署还需要 `lark-shared`、`lark-apps`。只有消息通知已启用时才需要 `lark-im`；首次按用户姓名登记目标时才需要 `lark-contact`，目标 ID 已登记后的运行期不需要它。这些均为外部 Lark Skill，**不随 OfferLoop 打包**，必须在当前 Agent 环境中另行安装/启用并新开会话加载。
 - 推荐从 [Lark 官方 CLI](https://github.com/larksuite/cli) 安装命令行工具及其配套 Skill：先运行 `npx @larksuite/cli@latest install`；Codex、Claude Code、Hermes 再按当前 Agent 运行 `npx skills add larksuite/cli -g -a codex -y`、`-a claude-code` 或 `-a hermes-agent`。WorkBuddy 则在“专家·技能·连接器”中启用飞书连接器，不使用未受支持的 `-a workbuddy` 参数。随后仍须由用户或管理员按本指南配置应用、profile 与资源权限。
 - 飞书应用 scope、应用版本发布、租户管理员安装、机器人入群、Base/知识库共享、妙搭应用创建/发布和环境变量权限，都需要用户或管理员在飞书/妙搭中手动完成。不能由 Skill 安装、离线预检或 Agent 自动取得。
 - App Secret、密码、Cookie、token、邮箱授权码只能在用户本机的安全配置流程中填写，绝不发送到聊天。
 
-核心空间要求三张 Base 和知识库 locator 全部存在。单个业务任务可以在其他业务系统暂时失败时
+核心空间要求三张 Base 和知识库 locator 全部存在。纯 Chat 训练不宣称核心空间已初始化，也不
+因此阻塞对话；用户要求保存训练产物时再进入核心空间配置。单个业务任务可以在其他业务系统暂时失败时
 保留自己的成功结果，但不得把缺少核心空间表述为 OfferLoop 已完成初始化。
 
 ## 2. 先做离线预检
@@ -42,8 +45,11 @@ Agent 环境，并在安装后新开会话；再选择 `collection`、`reminder`
 先根据当前 `SKILL.md` 所在位置解析 `offerloop-setup` 根目录，再从该目录运行：
 
 ```bash
-python3 scripts/preflight.py --capability '<collection|reminder|workspace|coaching|workbench|agent|full>' --json
+python3 scripts/preflight.py --capability '<collection|reminder|workspace|coaching|workbench|full>' --json
 ```
+
+Windows 若没有 `python3`，使用 `py -3 scripts/preflight.py ...`；Agent 应复用当前已确认符合
+Python 3.10+ 的解释器执行本指南后续脚本。
 
 它不访问飞书、浏览器、工作台或邮箱。它只检查 Python 版本、`lark-cli` 命令、所选能力需要的
 OfferLoop Skill、外部 Lark Skill 目录、本地配置字段及 IMAP 配置文件状态；不验证 Node/npx、
@@ -110,8 +116,9 @@ python3 scripts/configure.py --workbench-url '<HTTPS_WORKBENCH_URL>'
 目标，也不得另建一套同步应用。
 `enabled` 只能在线核验成功后写入；endpoint 必须是无用户名、密码和片段的绝对 HTTPS URL。
 
-启用 `coaching` 时，`--enable-coaching --confirm-schema-v4` 保留现有配置并追加
-`artifact_storage`。新用户的训练目录随核心知识库初始化创建；旧用户缺失时经确认补齐。
+用户明确要求将 `coaching` 产物保存到飞书时，`--enable-coaching --confirm-schema-v4` 保留
+现有配置并追加 `artifact_storage`。纯 Chat 体验不运行此命令。新用户的训练目录随核心知识库
+初始化创建；旧用户缺失时经确认补齐。
 经历深挖按“经历 + 岗位方向”持续维护同一份 Markdown；其他训练在完整运行或明确提前结束后
 保存独立 Markdown 飞书文档。
 

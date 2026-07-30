@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise the documented multi-Agent install path in an isolated home."""
+"""Exercise the bundled copy installer in isolated Agent homes."""
 
 from __future__ import annotations
 

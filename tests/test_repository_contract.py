@@ -512,7 +512,7 @@ class RepositoryContractTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("references/welcome.md", setup)
         self.assertIn("all eleven OfferLoop skills", metadata)
-        self.assertIn("不要在能力介绍前要求目标岗位", setup)
+        self.assertIn("不要在入口介绍前要求目标岗位", setup)
         self.assertIn("安装只添加了 Skill", welcome)
         for name in (
             "offerloop-setup",
@@ -548,7 +548,7 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertIn("不要替其他 Skill 读取来源、邮箱", workspace)
         self.assertIn("不负责搭建可选的飞书工作台", workspace)
 
-    def test_readme_and_migration_describe_the_ten_skill_workspace(self):
+    def test_readme_and_migration_describe_the_current_workspace(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         migration = (ROOT / "MIGRATION.md").read_text(encoding="utf-8")
         self.assertNotIn("Skills-3", readme)
@@ -565,7 +565,10 @@ class RepositoryContractTest(unittest.TestCase):
 
     def test_readme_has_safe_agent_neutral_install_and_upgrade_paths(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertIn("npx skills add riwonswain-ovo/OfferLoop -g", readme)
+        self.assertIn(
+            "npx skills add riwonswain-ovo/OfferLoop-development -g",
+            readme,
+        )
         self.assertIn("npx skills update offerloop-setup", readme)
         self.assertIn("标准 `SKILL.md`", readme)
         self.assertIn("可恢复备份", readme)
@@ -576,6 +579,22 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertIn("打开 Agent 新任务并预填 Prompt", readme)
         self.assertIn("~/.config/offerloop/", readme)
         self.assertIn("~/.local/state/offerloop/", readme)
+        self.assertIn("macOS、Linux 与 PowerShell", readme)
+        self.assertIn("尚未与公开仓库同步", readme)
+
+    def test_workbench_task_links_do_not_require_the_private_repository(self):
+        task_link = (
+            SKILLS
+            / "offerloop-workbench"
+            / "assets"
+            / "workbench-template"
+            / "client"
+            / "src"
+            / "lib"
+            / "codex-task.ts"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("OfferLoop-development", task_link)
+        self.assertIn("originUrl?: string", task_link)
 
     def test_readme_follows_the_new_user_journey(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
@@ -768,7 +787,7 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertIn("表格视图 · 每页最多 15 条", applications)
         self.assertIn("每页最多 9 条", applications)
         self.assertIn("prompt", codex_task)
-        self.assertIn("OfferLoop-development", codex_task)
+        self.assertNotIn("OfferLoop-development", codex_task)
         source_text = "\n".join(
             path.read_text(encoding="utf-8")
             for path in (root / "client/src").rglob("*.ts*")
@@ -859,6 +878,7 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertIn("install_offerloop.py", acceptance)
         self.assertIn("already_installed", acceptance)
         self.assertIn("cold_install_acceptance.py", workflow)
+        self.assertIn("readme_install_contract.py", workflow)
         for operating_system in ("ubuntu-latest", "macos-latest", "windows-latest"):
             self.assertIn(operating_system, workflow)
         self.assertIn("untrusted_external", security)

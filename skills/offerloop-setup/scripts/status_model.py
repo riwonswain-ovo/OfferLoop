@@ -33,6 +33,8 @@ def expand_selection(capability):
     """Return internal capabilities selected by one user-facing choice."""
     if capability == "full":
         return set(VALID_CAPABILITIES)
+    if capability == "coaching":
+        return {"coaching"}
     if capability in VALID_CAPABILITIES - {"integration"}:
         return {"workspace", capability}
     raise ValueError(f"unknown capability: {capability}")

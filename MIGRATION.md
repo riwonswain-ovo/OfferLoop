@@ -23,7 +23,7 @@
 ## 2. 安装十一个 Skill
 
 ```bash
-npx skills add riwonswain-ovo/OfferLoop -g
+npx skills add riwonswain-ovo/OfferLoop-development -g
 ```
 
 应能发现：
@@ -33,8 +33,8 @@ npx skills add riwonswain-ovo/OfferLoop -g
 - `recruiting-reminder`
 - `offerloop-workspace`
 - `offerloop-workbench`
-- `offerloop-agent`
 - `experience-deepthink`
+- `resume-tailor`
 - `interview-prep`
 - `mock-lab`
 - `talk-review`

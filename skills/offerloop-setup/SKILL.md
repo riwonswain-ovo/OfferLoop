@@ -1,6 +1,6 @@
 ---
 name: offerloop-setup
-description: 介绍 OfferLoop 的十一个 Skill，并初始化必需的私有飞书知识库、三张业务 Base、飞书身份和公共配置。适用于“安装/初始化 OfferLoop”“第一次使用”“介绍十一个 Skill”“检查环境或配置”“修复任一 OfferLoop Skill”“搭建完整 OfferLoop”；所有能力共享知识库核心空间，飞书工作台按需部署。
+description: 介绍 OfferLoop 的十一个 Skill，并按需初始化私有飞书知识库、三张业务 Base、飞书身份和公共配置。适用于“安装/初始化 OfferLoop”“第一次使用”“介绍十一个 Skill”“检查环境或配置”“修复任一 OfferLoop Skill”“搭建完整 OfferLoop”；求职训练可先在 Chat 中体验，保存时再接入核心空间，飞书工作台按需部署。
 ---
 
 # OfferLoop Setup
@@ -9,21 +9,23 @@ description: 介绍 OfferLoop 的十一个 Skill，并初始化必需的私有�
 
 ## 首次使用欢迎
 
-用户表示刚安装、第一次使用、不了解各 Skill，或明确要求介绍十一个 Skill 时，完整读取
-`references/welcome.md`，先展示十一项能力、两个常用闭环和隐私边界，再询问本次要启用哪项能力。
-不要在能力介绍前要求目标岗位、读取私人材料或运行线上检查。
+用户表示刚安装、第一次使用或不了解各 Skill 时，完整读取 `references/welcome.md`，先用“找岗位、
+管笔面试、做求职训练”三个自然语言入口和隐私边界帮助其选择，再介绍本次相关 Skill。用户明确
+要求介绍十一个 Skill 时，才展示完整能力地图和两个常用闭环。不要在入口介绍前要求目标岗位、
+读取私人材料或运行线上检查。
 
 非首次使用的配置请求可以直接询问本次要启用哪项能力：
 
 - `collection`：招聘信息收集（`job-collection`）
 - `reminder`：笔试、测评和面试提醒（`recruiting-reminder`）
 - `workspace`：初始化或检查必需的私有求职知识库（`offerloop-workspace`）
-- `coaching`：经历深挖、简历制作、产品思维、面试准备、模拟面试和真实复盘
+- `coaching`：先在 Chat 中进行经历深挖、简历制作、产品思维、面试准备、模拟面试和真实复盘；保存到飞书时再配置核心空间
 - `workbench`：按需部署可选飞书工作台（`offerloop-workbench`）
 - `full`：核心知识库、全部业务与训练能力、工作台和即时求职进展联动
 
-用户未指定时，不要猜测；请其从以上六项中选择。无论选择哪项，知识库和三张 Base 都属于
-核心初始化；工作台只有选择 `workbench` 或 `full` 时才部署。
+用户未指定时，不要猜测；请其从以上六项中选择。`collection`、`reminder`、`workspace`、
+`workbench` 和 `full` 使用知识库与三张 Base；单独选择 `coaching` 时先允许纯 Chat 体验，
+不把飞书保存配置作为开始训练的前置条件。工作台只有选择 `workbench` 或 `full` 时才部署。
 
 ## 安全边界
 
@@ -43,6 +45,10 @@ description: 介绍 OfferLoop 的十一个 Skill，并初始化必需的私有�
 ```bash
 python3 scripts/preflight.py --capability '<collection|reminder|workspace|coaching|workbench|full>' --json
 ```
+
+Windows 若没有 `python3` 命令，使用 `py -3 scripts/preflight.py ...`。Agent 必须复用当前已确认
+为 Python 3.10+ 的解释器，不要在 Windows 上机械执行不存在的 `python3`。后续所有 Python
+脚本调用遵循同一规则。
 
 本 Skill 后续所有 `scripts/...` 和兄弟 Skill 脚本调用都遵循同一解析规则，不假设 Agent 的当前工作目录。
 
@@ -70,9 +76,11 @@ profile 的本机状态。它不验证在线身份、飞书权限或 token，也
 租户安装、Base/知识库共享、IMAP 连通性、个人日历授权、妙搭部署和工作台 OAuth 均须在用户确认后
 另行只读核验或配置。不要把 `ready` 表述为“已部署”或“已可用”。
 
-本仓库包含四个核心与业务 Skill、一个可选工作台 Skill、一个可选 Agent Skill 和六个求职训练 Skill。任一能力都先
-选择 `workspace` 核心并需要 `lark-base`、`lark-doc`、`lark-wiki`；`reminder` 另需
-`lark-calendar`；`workbench`、`agent` 与即时联动需要 `lark-shared`、`lark-apps`。
+本仓库包含四个核心与业务 Skill、一个可选工作台 Skill 和六个求职训练 Skill。业务与工作台
+能力先选择 `workspace` 核心并需要 `lark-base`、`lark-doc`、
+`lark-wiki`；纯 Chat `coaching` 不需要这些依赖，只有用户要求保存或复用飞书产物时才配置；
+`reminder` 另需
+`lark-calendar`；`workbench` 与即时联动需要 `lark-shared`、`lark-apps`。
 只有通知已启用时才检查通知依赖：目标已登记时运行期只需要
 `lark-im`，仅在启用的用户目标仍需按姓名解析时才需要 `lark-contact`。这些外部 Skill 不随
 OfferLoop 安装；缺失时按预检给出的动作安装或启用，并新开 Agent 会话。WorkBuddy 使用
@@ -117,8 +125,9 @@ python3 scripts/configure.py --workbench-url '<HTTPS_WORKBENCH_URL>'
 
 配置文件是 `~/.config/offerloop/config.json`（遵循 `XDG_CONFIG_HOME`），权限为 `0600`。其中不得保存密码、Cookie、App Secret、授权码或访问令牌。`workbench_url` 必须是没有用户名、密码或片段的 HTTPS 地址。
 
-`--enable-coaching` 保留既有公共配置和兼容 locator，追加或迁移 `artifact_storage` 并升级为
-schema v4。核心初始化已创建训练目录；旧用户缺少目录时由 `offerloop-workspace` 经确认补齐。
+用户要求把训练产物保存到飞书时，`--enable-coaching` 保留既有公共配置和兼容 locator，追加或
+迁移 `artifact_storage` 并升级为 schema v4。仅在 Chat 中训练时不要运行这条配置命令。核心
+初始化已创建训练目录；旧用户缺少目录时由 `offerloop-workspace` 经确认补齐。
 
 飞书消息通知是可选能力。启用前必须让用户明确确认接收人或群、摘要模板和发送身份；保存
 `enabled` 即表示对 `job-collection` 与 `recruiting-reminder` 后续运行的一条最终摘要给予持续

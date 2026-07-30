@@ -24,10 +24,12 @@ If a credential is exposed, revoke or rotate it immediately and remove it from G
 
 ## Release acceptance
 
-The release gate uses `skills@1.5.19` to install the ten Skills into a temporary, project-scoped Codex
-workspace with copy mode. It verifies all ten manifests, both app templates, a collection-only preflight,
-exact missing-dependency recovery, and report redaction. The CLI version is deliberately pinned; update it
-in the acceptance script through a reviewed pull request after testing the new installer contract.
+The bundled-installer gate copies all eleven Skills into isolated Codex, Claude Code, Hermes, and WorkBuddy
+homes on Linux, macOS, and Windows. It verifies all manifests, both app templates, a collection-only
+preflight, exact missing-dependency recovery, and report redaction. A separate README contract verifies that
+the documented repository and Skill selection match the development catalog. Before a public release, run
+the exact pinned `skills` CLI command against the promoted public tag in an isolated environment; the local
+copy-installer gate is not evidence that the public GitHub installation path works.
 
 Security scanner disposition for the 2026-07-21 release review:
 

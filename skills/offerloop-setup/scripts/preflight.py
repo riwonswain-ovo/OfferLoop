@@ -41,7 +41,6 @@ REQUIRED_BUNDLED_BY_CAPABILITY = {
     },
     "coaching": {
         "offerloop-setup",
-        "offerloop-workspace",
         "experience-deepthink",
         "resume-tailor",
         "interview-prep",
@@ -60,7 +59,7 @@ EXTERNAL_SKILLS_BY_CAPABILITY = {
     "collection": (),
     "reminder": ("lark-calendar",),
     "workspace": ("lark-base", "lark-doc", "lark-wiki"),
-    "coaching": ("lark-base", "lark-doc", "lark-wiki"),
+    "coaching": (),
     "workbench": ("lark-apps", "lark-shared"),
     "integration": ("lark-shared", "lark-apps"),
 }
@@ -228,11 +227,16 @@ def _required_external_skills(capability, config):
 def _external_skills_check(config, capability, roots):
     required = _required_external_skills(capability, config)
     if not required:
+        summary = (
+            "纯 Chat 求职训练不需要外部 Lark Skill"
+            if capability == "coaching"
+            else "此能力核心流程直接使用 lark-cli，无额外 Lark Skill 依赖"
+        )
         return _check(
             "local.external_skills",
             capability,
             "ready",
-            "此能力核心流程直接使用 lark-cli，无额外 Lark Skill 依赖",
+            summary,
         )
 
     missing = tuple(name for name in required if not _skill_is_installed(name, roots))
@@ -630,14 +634,46 @@ def _capability_report(source, capability, skills_roots=None):
         name: _skill_is_installed(name, roots)
         for name in BUNDLED_SKILLS
     }
-    lark_check, profile_check = _probe_lark_cli(
-        source, config.get("lark_profile")
-    )
+    if any(item != "coaching" for item in selected):
+        lark_check, profile_check = _probe_lark_cli(
+            source, config.get("lark_profile")
+        )
+    else:
+        lark_check = (
+            "ready",
+            "纯 Chat 求职训练不需要 lark-cli",
+            "",
+        )
+        profile_check = (
+            "ready",
+            "纯 Chat 求职训练不需要飞书 profile",
+            "",
+        )
 
     for selected_capability in sorted(selected):
+        chat_first_coaching = selected_capability == "coaching"
         required_bundled = REQUIRED_BUNDLED_BY_CAPABILITY[selected_capability]
         selected_skills_ready = all(
             bundled_skills[name] for name in required_bundled
+        )
+        selected_config_check = (
+            (
+                "ready",
+                "纯 Chat 求职训练不需要 OfferLoop 公共定位",
+                "",
+            )
+            if chat_first_coaching
+            else (common_status, common_summary, common_action)
+        )
+        selected_online_check = (
+            _check(
+                "online.permissions",
+                selected_capability,
+                "ready",
+                "纯 Chat 求职训练不访问飞书或其他线上资源",
+            )
+            if chat_first_coaching
+            else _online_permissions_check(selected_capability)
         )
         checks.extend(
             [
@@ -671,16 +707,14 @@ def _capability_report(source, capability, skills_roots=None):
                 _check(
                     "local.config",
                     selected_capability,
-                    common_status,
-                    common_summary,
-                    common_action,
+                    *selected_config_check,
                 ),
                 _external_skills_check(
                     config,
                     selected_capability,
                     roots,
                 ),
-                _online_permissions_check(selected_capability),
+                selected_online_check,
             ]
         )
         if profile_check is None:
@@ -834,17 +868,27 @@ def _capability_report(source, capability, skills_roots=None):
             and all(isinstance(readiness.get(name), bool) for name in expected)
         )
         all_ready = storage_valid and all(readiness[name] for name in expected)
+        storage_configured = isinstance(storage, dict)
+        storage_required = capability == "full"
+        if all_ready:
+            storage_status = "ready"
+            storage_summary = "五项训练能力的飞书材料均已登记"
+            storage_action = ""
+        elif storage_required or storage_configured:
+            storage_status = "needs_action"
+            storage_summary = "Chat 训练可用，但飞书产物配置仍有目录待启用"
+            storage_action = "确认升级 schema v4，并按需创建和登记训练目录"
+        else:
+            storage_status = "ready"
+            storage_summary = "Chat 训练可直接开始；飞书保存尚未启用（可选）"
+            storage_action = ""
         checks.append(
             _check(
                 "local.coaching_storage",
                 "coaching",
-                "ready" if all_ready else "needs_action",
-                "五项训练能力的飞书材料均已登记"
-                if all_ready
-                else "训练产物配置尚未升级或仍有目录待首次启用",
-                "确认升级 schema v4，并按需创建和登记训练目录"
-                if not all_ready
-                else "",
+                storage_status,
+                storage_summary,
+                storage_action,
             )
         )
 

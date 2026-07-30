@@ -258,7 +258,8 @@ class OfferLoopInstallerTest(unittest.TestCase):
                 self.assertIn(name, rendered)
             self.assertIn("安装只添加 Skill", rendered)
             self.assertIn("结束当前 Agent 会话并新开会话", rendered)
-            self.assertIn("请先介绍 11 个 Skill", rendered)
+            self.assertIn("三个入口帮我选择", rendered)
+            self.assertIn("如果我要求，再展开介绍 11 个 Skill", rendered)
 
     def test_json_install_returns_structured_welcome_only_on_first_install(self):
         with tempfile.TemporaryDirectory() as directory:

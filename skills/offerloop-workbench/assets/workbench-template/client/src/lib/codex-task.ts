@@ -1,6 +1,3 @@
-const OFFERLOOP_ORIGIN_URL =
-  'https://github.com/riwonswain-ovo/OfferLoop-development.git';
-
 const buildOfferLoopPrompt = (
   skillName: string,
   instruction: string,
@@ -9,14 +6,16 @@ const buildOfferLoopPrompt = (
 
 const buildCodexTaskUrl = (
   prompt: string,
-  originUrl: string = OFFERLOOP_ORIGIN_URL,
-): string =>
-  'codex://threads/new'
-  + `?prompt=${encodeURIComponent(prompt)}`
-  + `&originUrl=${encodeURIComponent(originUrl)}`;
+  originUrl?: string,
+): string => {
+  const taskUrl = 'codex://threads/new'
+    + `?prompt=${encodeURIComponent(prompt)}`;
+  return originUrl
+    ? taskUrl + `&originUrl=${encodeURIComponent(originUrl)}`
+    : taskUrl;
+};
 
 export {
-  OFFERLOOP_ORIGIN_URL,
   buildCodexTaskUrl,
   buildOfferLoopPrompt,
 };
