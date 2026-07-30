@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
-"""Validate the documented development install path without network access."""
+"""Validate the documented bundled-installer path without network access."""
 
 from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
-import re
-import shlex
 import subprocess
 
 
@@ -26,6 +24,7 @@ WORKBENCH_TASK = (
     / "codex-task.ts"
 )
 DEVELOPMENT_REPOSITORY = "riwonswain-ovo/OfferLoop-development"
+INSTALL_SCRIPT = "scripts/install_offerloop.py"
 
 
 def load_installer():
@@ -39,48 +38,12 @@ def load_installer():
     return module
 
 
-def documented_command(readme: str) -> str:
-    matches = re.findall(
-        r"```(?:bash|powershell)\n(npx skills add [^\n]+)\n```",
-        readme,
-    )
-    if len(matches) != 1:
-        raise AssertionError(
-            "README must contain exactly one single-line npx skills add command"
-        )
-    return matches[0]
-
-
-def selected_skills(command: str) -> tuple[str, ...]:
-    tokens = shlex.split(command)
-    if tokens[:3] != ["npx", "skills", "add"]:
-        raise AssertionError("README install command must start with npx skills add")
-    if tokens[3] != DEVELOPMENT_REPOSITORY:
-        raise AssertionError(
-            "development README must install from the development repository"
-        )
-    try:
-        start = tokens.index("-s") + 1
-    except ValueError as exc:
-        raise AssertionError("README install command must select explicit Skills") from exc
-    end = next(
-        (index for index in range(start, len(tokens)) if tokens[index].startswith("-")),
-        len(tokens),
-    )
-    selected = tuple(tokens[start:end])
-    if len(selected) != len(set(selected)):
-        raise AssertionError("README install command contains duplicate Skill names")
-    return selected
-
-
 def main() -> None:
     installer = load_installer()
     readme = README.read_text(encoding="utf-8")
     migration = MIGRATION.read_text(encoding="utf-8")
     workbench_task = WORKBENCH_TASK.read_text(encoding="utf-8")
 
-    command = documented_command(readme)
-    documented = selected_skills(command)
     packaged = tuple(installer.SKILL_NAMES)
     tracked_skill_files = subprocess.check_output(
         ["git", "ls-files", "skills/*/SKILL.md"],
@@ -91,25 +54,52 @@ def main() -> None:
         sorted(Path(path).parent.name for path in tracked_skill_files)
     )
 
-    if documented != packaged:
+    if set(packaged) != set(discovered):
         raise AssertionError(
-            f"README Skill order differs from installer: {documented!r} != {packaged!r}"
+            "installer must include every packaged OfferLoop Skill exactly once"
         )
-    if set(documented) != set(discovered):
-        raise AssertionError(
-            "README and installer must include every packaged OfferLoop Skill exactly once"
-        )
-    for name in documented:
+    for name in packaged:
+        if f"`{name}`" not in readme:
+            raise AssertionError(f"README.md is missing Skill: {name}")
         if f"`{name}`" not in migration:
             raise AssertionError(f"MIGRATION.md is missing Skill: {name}")
+
+    required_readme_commands = (
+        "gh auth status -h github.com",
+        f"gh repo view {DEVELOPMENT_REPOSITORY}",
+        f"gh repo clone {DEVELOPMENT_REPOSITORY}",
+        f"python3 {INSTALL_SCRIPT} --agent codex --dry-run",
+        f"python3 {INSTALL_SCRIPT} --agent codex",
+        f"python3 {INSTALL_SCRIPT} --agent codex --verify",
+        f"py -3 {INSTALL_SCRIPT} --agent codex --dry-run",
+        f"py -3 {INSTALL_SCRIPT} --agent codex",
+        f"py -3 {INSTALL_SCRIPT} --agent codex --verify",
+    )
+    for command in required_readme_commands:
+        if command not in readme:
+            raise AssertionError(
+                f"README is missing the documented onboarding command: {command}"
+            )
+    for agent in installer.ALL_AGENTS:
+        if f"`{agent}`" not in readme:
+            raise AssertionError(f"README is missing installer target: {agent}")
+    if f"npx skills add {DEVELOPMENT_REPOSITORY}" in readme:
+        raise AssertionError(
+            "README must not document a second OfferLoop terminal installer"
+        )
+    if "scripts/install_offerloop.py" not in migration or "--verify" not in migration:
+        raise AssertionError(
+            "MIGRATION.md must use the bundled installer and post-install verification"
+        )
     if "（开发版）" not in readme or "尚未与公开仓库同步" not in readme:
         raise AssertionError("development README must disclose its release status")
     if "OfferLoop-development" in workbench_task:
         raise AssertionError("shipped workbench must not require the private repository")
 
     print(
-        "README install contract accepted: development source, "
-        f"{len(documented)} Skills, cross-platform command, no private workbench origin"
+        "README install contract accepted: GitHub authentication, explicit Agent "
+        f"target, bundled installer, {len(packaged)} Skills, post-install verification, "
+        "and no private workbench origin"
     )
 
 

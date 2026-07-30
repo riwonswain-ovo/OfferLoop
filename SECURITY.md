@@ -26,10 +26,10 @@ If a credential is exposed, revoke or rotate it immediately and remove it from G
 
 The bundled-installer gate copies all eleven Skills into isolated Codex, Claude Code, Hermes, and WorkBuddy
 homes on Linux, macOS, and Windows. It verifies all manifests, both app templates, a collection-only
-preflight, exact missing-dependency recovery, and report redaction. A separate README contract verifies that
-the documented repository and Skill selection match the development catalog. Before a public release, run
-the exact pinned `skills` CLI command against the promoted public tag in an isolated environment; the local
-copy-installer gate is not evidence that the public GitHub installation path works.
+preflight, exact missing-dependency recovery, post-install verification, and report redaction. The README
+contract verifies that the documented authentication check, explicit Agent target, preview, installation,
+and verification all use this same bundled installer. GitHub account and private-repository authorization
+remain external prerequisites and must be checked by each tester before cloning.
 
 Security scanner disposition for the 2026-07-21 release review:
 

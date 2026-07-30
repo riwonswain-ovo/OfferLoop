@@ -261,6 +261,92 @@ class OfferLoopInstallerTest(unittest.TestCase):
             self.assertIn("三个入口帮我选择", rendered)
             self.assertIn("如果我要求，再展开介绍 11 个 Skill", rendered)
 
+    def test_verify_is_read_only_and_requires_a_complete_install(self):
+        with tempfile.TemporaryDirectory() as directory:
+            environment = {"HOME": directory, "PATH": ""}
+            missing_output = io.StringIO()
+            with mock.patch.dict(
+                self.installer.os.environ,
+                environment,
+                clear=True,
+            ), contextlib.redirect_stdout(missing_output):
+                missing_exit = self.installer.main(
+                    ["--agent", "codex", "--verify"]
+                )
+
+            self.assertEqual(missing_exit, 1)
+            self.assertIn("安装核验未通过", missing_output.getvalue())
+            self.assertFalse((Path(directory) / ".codex").exists())
+
+            self.installer.install_agent("codex", environ=environment)
+            installed_root = Path(directory) / ".codex" / "skills"
+            manifest_before = (
+                installed_root / self.installer.MANIFEST_NAME
+            ).read_text(encoding="utf-8")
+            verified_output = io.StringIO()
+            with mock.patch.dict(
+                self.installer.os.environ,
+                environment,
+                clear=True,
+            ), contextlib.redirect_stdout(verified_output):
+                verified_exit = self.installer.main(
+                    ["--agent", "codex", "--verify"]
+                )
+
+            self.assertEqual(verified_exit, 0)
+            self.assertIn("安装核验通过", verified_output.getvalue())
+            self.assertEqual(
+                (
+                    installed_root / self.installer.MANIFEST_NAME
+                ).read_text(encoding="utf-8"),
+                manifest_before,
+            )
+
+    def test_json_verify_reports_manifest_and_skill_integrity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            environment = {"HOME": directory, "PATH": ""}
+            self.installer.install_agent("codex", environ=environment)
+            output = io.StringIO()
+            with mock.patch.dict(
+                self.installer.os.environ,
+                environment,
+                clear=True,
+            ), contextlib.redirect_stdout(output):
+                exit_code = self.installer.main(
+                    ["--agent", "codex", "--verify", "--json"]
+                )
+
+            payload = json.loads(output.getvalue())
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(payload["mode"], "verify")
+            self.assertTrue(payload["verified"])
+            self.assertTrue(payload["results"][0]["verified"])
+            self.assertEqual(payload["results"][0]["manifest"], "ready")
+            self.assertNotIn("welcome", payload)
+
+    def test_verify_rejects_a_stale_manifest_without_rewriting_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            environment = {"HOME": directory, "PATH": ""}
+            self.installer.install_agent("codex", environ=environment)
+            manifest = (
+                Path(directory)
+                / ".codex"
+                / "skills"
+                / self.installer.MANIFEST_NAME
+            )
+            payload = json.loads(manifest.read_text(encoding="utf-8"))
+            payload["offerloop_version"] = "stale"
+            stale = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+            manifest.write_text(stale, encoding="utf-8")
+
+            report = self.installer.verify_agent(
+                "codex", environ=environment
+            )
+
+            self.assertFalse(report["verified"])
+            self.assertEqual(report["manifest"], "mismatch")
+            self.assertEqual(manifest.read_text(encoding="utf-8"), stale)
+
     def test_json_install_returns_structured_welcome_only_on_first_install(self):
         with tempfile.TemporaryDirectory() as directory:
             with mock.patch.dict(

@@ -528,7 +528,7 @@ class OfferLoopSetupTest(unittest.TestCase):
                 "npx @larksuite/cli@latest install", lark_cli["next_action"]
             )
             self.assertIn(
-                "npx skills add larksuite/cli -g -a codex -y",
+                "npx skills add larksuite/cli -g -a codex",
                 lark_cli["next_action"],
             )
             self.assertIn("新开 Agent 会话", lark_cli["next_action"])

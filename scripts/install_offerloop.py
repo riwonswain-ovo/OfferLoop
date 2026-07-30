@@ -259,7 +259,7 @@ def validate_sources() -> None:
     discovered = {
         path.parent.name for path in SKILLS_SOURCE.glob("*/SKILL.md") if path.is_file()
     }
-    if discovered != set(SKILL_NAMES):
+    if not set(SKILL_NAMES).issubset(discovered):
         raise ValueError(
             "repository must contain exactly the eleven supported OfferLoop Skills"
         )
@@ -736,6 +736,63 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
     return result
 
 
+def verify_agent(agent: str, *, environ=None) -> dict:
+    """Verify one Agent installation without writing files."""
+    source = dict(os.environ if environ is None else environ)
+    root = agent_root(agent, source)
+    assert root is not None
+    report = install_agent(agent, environ=source, dry_run=True)
+    source_digests = {
+        name: tree_digest(SKILLS_SOURCE / name) for name in SKILL_NAMES
+    }
+    manifest_status = "missing"
+    manifest_path = root / MANIFEST_NAME
+    if manifest_path.is_file():
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            manifest_status = "invalid"
+        else:
+            expected_skills = {
+                name: {"sha256": source_digests[name]} for name in SKILL_NAMES
+            }
+            if (
+                manifest.get("schema_version") == 1
+                and manifest.get("installer_version") == INSTALLER_VERSION
+                and manifest.get("offerloop_version") == offerloop_version()
+                and manifest.get("agent") == agent
+                and manifest.get("skills") == expected_skills
+            ):
+                manifest_status = "ready"
+            else:
+                manifest_status = "mismatch"
+
+    verified = (
+        report["status"] == "already_installed"
+        and all(
+            item["status"] == "already_installed"
+            for item in report.get("skills", ())
+        )
+        and manifest_status == "ready"
+    )
+    next_action = ""
+    if not verified:
+        next_action = report.get("next_action", "")
+        if not next_action:
+            next_action = (
+                "先运行带 --dry-run 的安装预览；确认目标和冲突后，"
+                "运行安装器完成安装，再重新核验"
+            )
+    return {
+        "agent": agent,
+        "target": agent_target_label(agent, source),
+        "verified": verified,
+        "manifest": manifest_status,
+        "skills": report.get("skills", []),
+        "next_action": next_action,
+    }
+
+
 def _expand_agents(values: list[str]) -> list[str]:
     expanded = []
     for value in values:
@@ -779,6 +836,11 @@ def main(argv=None) -> int:
     )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--upgrade", action="store_true")
+    parser.add_argument(
+        "--verify",
+        action="store_true",
+        help="verify installed files and manifest without writing",
+    )
     parser.add_argument("--json", action="store_true", dest="as_json")
     parser.add_argument("--version", action="store_true")
     args = parser.parse_args(argv)
@@ -803,19 +865,24 @@ def main(argv=None) -> int:
         return 0
     if not args.agent:
         parser.error("at least one --agent is required")
+    if args.verify and (args.dry_run or args.upgrade):
+        parser.error("--verify cannot be combined with --dry-run or --upgrade")
 
     current_agent = None
     try:
         validate_sources()
         reports = []
         for current_agent in _expand_agents(args.agent):
-            reports.append(
-                install_agent(
-                    current_agent,
-                    dry_run=args.dry_run,
-                    upgrade=args.upgrade,
+            if args.verify:
+                reports.append(verify_agent(current_agent))
+            else:
+                reports.append(
+                    install_agent(
+                        current_agent,
+                        dry_run=args.dry_run,
+                        upgrade=args.upgrade,
+                    )
                 )
-            )
     except (OSError, ValueError, RuntimeError) as exc:
         if args.as_json:
             print(
@@ -835,14 +902,32 @@ def main(argv=None) -> int:
         "offerloop_version": offerloop_version(),
         "results": reports,
     }
+    if args.verify:
+        payload["mode"] = "verify"
+        payload["verified"] = all(report["verified"] for report in reports)
     show_welcome = not args.dry_run and any(
-        report.get("show_welcome") and report["status"] != "conflict"
+        report.get("show_welcome") and report.get("status") != "conflict"
         for report in reports
     )
-    if show_welcome:
+    if show_welcome and not args.verify:
         payload["welcome"] = WELCOME
     if args.as_json:
         print(json.dumps(payload, ensure_ascii=True, indent=2))
+    elif args.verify:
+        for report in reports:
+            if report["verified"]:
+                print(
+                    f"{report['agent']}: 安装核验通过 "
+                    f"(target: {report['target']})"
+                )
+            else:
+                print(
+                    f"{report['agent']}: 安装核验未通过 "
+                    f"(target: {report['target']}, "
+                    f"manifest: {report['manifest']})"
+                )
+                if report.get("next_action"):
+                    print(f"  {report['next_action']}")
     else:
         if args.dry_run:
             print("DRY RUN：仅预览，未写入任何 Skill 文件。")
@@ -873,6 +958,8 @@ def main(argv=None) -> int:
                     "下一步：结束当前 Agent 会话并新开会话，然后调用 "
                     "offerloop-setup 运行只读预检。"
                 )
+    if args.verify:
+        return 0 if payload["verified"] else 1
     return 1 if any(report["status"] == "conflict" for report in reports) else 0
 
 

@@ -65,13 +65,13 @@ EXTERNAL_SKILLS_BY_CAPABILITY = {
 }
 LARK_CLI_RECOVERY = (
     "运行 `npx @larksuite/cli@latest install` 安装 lark-cli；再运行 "
-    "Agent 对应的 `npx skills add larksuite/cli -g -a codex -y`、"
+    "Agent 对应的 `npx skills add larksuite/cli -g -a codex`、"
     "`-a claude-code` 或 `-a hermes-agent` 安装官方 Lark Skills，"
     "然后新开 Agent 会话。WorkBuddy 请在“专家·技能·连接器”中启用飞书连接器，"
     "再新建任务"
 )
 LARK_SKILLS_RECOVERY = (
-    "运行 Agent 对应的 `npx skills add larksuite/cli -g -a codex -y`、"
+    "运行 Agent 对应的 `npx skills add larksuite/cli -g -a codex`、"
     "`-a claude-code` 或 `-a hermes-agent` "
     "安装官方 Lark Skills，然后新开 Agent 会话；WorkBuddy 请在"
     "“专家·技能·连接器”中启用飞书连接器，再新建任务"

@@ -29,40 +29,90 @@ OfferLoop 包含 11 个标准 Agent Skill。完成线上初始化后一定会有
 | 检查项 | 如何检查 | 如果没有 |
 |---|---|---|
 | 当前 Agent 支持标准 Agent Skill | 确认它能加载包含 `SKILL.md` 的 Skill 目录 | 使用 Agent 自带的 Skill 安装功能，或允许它把 Skill 写入自己的标准 Skills 目录 |
-| 可以访问 GitHub | 在浏览器或 Agent 中打开本仓库链接 | 检查网络；私有网络环境可下载 Release 源码包后让 Agent 从本地目录安装 |
+| GitHub 私库权限已进入终端 | `gh auth status -h github.com`，再运行 `gh repo view riwonswain-ovo/OfferLoop-development` | 请维护者添加测试权限；运行 `gh auth login -h github.com` 后重新检查 |
 | Python 3.10 或更高版本 | `python3 --version`；Windows 可用 `py -3 --version` | 从 [Python 官网](https://www.python.org/downloads/) 安装，重新打开终端后再次检查 |
-| Node.js 与 `npx`（仅终端安装需要） | `node --version` 和 `npx --version` | 从 [Node.js 官网](https://nodejs.org/) 安装；若把 GitHub 链接直接交给 Agent，可由 Agent 使用自己的安装方式 |
 
 安装 Skill 文件时不需要 App Secret、密码、Cookie、token、邮箱授权码，也不会访问飞书、邮箱或日历。
 
 ## 2. 如何安装
 
-OfferLoop 遵循标准 `SKILL.md` 目录结构。只要 Agent 能加载标准 Agent Skill，就可以安装和使用，无需针对不同 Agent 学习不同流程。
+OfferLoop 遵循标准 `SKILL.md` 目录结构。开发版统一使用仓库自带的
+`scripts/install_offerloop.py` 安装器；README、GitHub CI 和多系统冷安装验收测试的是同一条
+路径。安装器会明确展示目标目录，默认遇到同名但内容不同的 Skill 就停止，只有用户确认其属于
+旧版 OfferLoop 并显式使用 `--upgrade` 时才先备份再替换。以下流程覆盖 macOS、Linux 与 PowerShell。
 
-### 方式一：把 GitHub 链接交给 Agent
+### 第一步：认证并下载开发仓库
 
-把下面这段话复制给当前 Agent：
-
-```text
-请帮我安装这个 GitHub 仓库中的 OfferLoop：
-https://github.com/riwonswain-ovo/OfferLoop-development
-
-请安装仓库 skills/ 下的 11 个 Skill，并使用你自己的标准 Skills 目录。
-先预览安装目标和冲突；确认安全后再安装。不要覆盖来源不明的同名 Skill。
-安装完成后介绍这 11 个 Skill 的用途和一句使用示例，说明隐私边界，并提醒我重新开启会话。
-```
-
-Agent 可能会请求访问 GitHub 或写入 Skills 目录的权限。确认目标是本仓库的十一个 Skill 后再授权。
-
-### 方式二：在终端安装
-
-macOS、Linux 与 PowerShell 都可以复制下面这一整行：
+浏览器已经登录 GitHub 不代表终端能够读取私有仓库。先在终端运行：
 
 ```bash
-npx skills add riwonswain-ovo/OfferLoop-development -g -s offerloop-setup job-collection recruiting-reminder offerloop-workspace offerloop-workbench experience-deepthink resume-tailor interview-prep mock-lab talk-review pm-sense -y
+gh auth status -h github.com
+gh repo view riwonswain-ovo/OfferLoop-development
+gh repo clone riwonswain-ovo/OfferLoop-development
+cd OfferLoop-development
 ```
 
-安装工具若发现同名但内容不同的旧副本，应先报告冲突，不应直接覆盖。确认属于旧版 OfferLoop 后，先把旧副本备份到 Skills 发现范围之外，再安装新版。
+前两条任一失败时不要继续安装。确认自己已获得测试权限，再运行
+`gh auth login -h github.com`，然后重新执行认证检查。
+
+### 第二步：选择安装目标并预览
+
+安装器不会猜测目标 Agent。选择当前实际使用的一个或多个参数：
+
+| Agent | `--agent` 参数 | 默认目标 |
+|---|---|---|
+| Codex | `codex` | `~/.codex/skills` 或 `$CODEX_HOME/skills` |
+| Claude Code | `claude-code` | `~/.claude/skills` 或 `$CLAUDE_CONFIG_DIR/skills` |
+| Hermes | `hermes-agent` | `~/.hermes/skills` 或 `$HERMES_HOME/skills` |
+| WorkBuddy | `workbuddy` | `~/.workbuddy/skills` |
+
+macOS 或 Linux 以 Codex 为例，先运行只读预览：
+
+```bash
+python3 scripts/install_offerloop.py --agent codex --dry-run
+```
+
+Windows PowerShell 使用：
+
+```powershell
+py -3 scripts/install_offerloop.py --agent codex --dry-run
+```
+
+预览必须显示正确 Agent、正确目标目录和十一个 Skill。若返回 `conflict`，检查同名目录来源；
+来源不明就停止。只有确认属于旧版 OfferLoop 时，才在预览和安装命令中增加 `--upgrade`。
+
+### 第三步：安装并核验
+
+确认预览无误后，在 macOS 或 Linux 运行：
+
+```bash
+python3 scripts/install_offerloop.py --agent codex
+python3 scripts/install_offerloop.py --agent codex --verify
+```
+
+Windows PowerShell 使用：
+
+```powershell
+py -3 scripts/install_offerloop.py --agent codex
+py -3 scripts/install_offerloop.py --agent codex --verify
+```
+
+只有出现 `codex: 安装核验通过` 才表示十一个 Skill、内容摘要和安装清单都位于目标目录。
+为多个 Agent 安装时重复 `--agent`，例如：
+
+```bash
+python3 scripts/install_offerloop.py --agent codex --agent claude-code --dry-run
+```
+
+如果希望由 Agent 代为安装，把下面这段话和开发仓库链接交给它。Agent 仍须使用同一个仓库安装器，
+不得改用会跳过冲突确认的其他安装命令：
+
+```text
+请先确认终端可以读取 https://github.com/riwonswain-ovo/OfferLoop-development，
+再克隆仓库。识别你对应的 codex、claude-code、hermes-agent 或 workbuddy 参数，
+运行 scripts/install_offerloop.py --agent <参数> --dry-run 并向我展示目标和冲突。
+得到我确认后再安装，最后运行同一安装器的 --verify；不要覆盖来源不明的同名 Skill。
+```
 
 ### 安装后必须重新开启会话
 
@@ -619,13 +669,19 @@ talk-review ── ASR + 当前简历 + 经历深挖 ──> 真实面试复盘
 
 ### 更新十一个 Skill
 
+先在开发仓库中更新代码，然后用与首次安装相同的安装器预览升级。以下以 Codex 为例：
+
 ```bash
-npx skills update offerloop-setup job-collection recruiting-reminder \
-  offerloop-workspace offerloop-workbench experience-deepthink resume-tailor interview-prep mock-lab \
-  talk-review pm-sense -g -y
+git pull --ff-only
+python3 scripts/install_offerloop.py --agent codex --upgrade --dry-run
+python3 scripts/install_offerloop.py --agent codex --upgrade
+python3 scripts/install_offerloop.py --agent codex --verify
 ```
 
-如果当前 Agent 使用其他安装工具，把 GitHub 链接再次交给它并明确要求升级。出现同名但内容不同的 Skill 时，先移到 Skills 发现范围之外的可恢复备份，再安装新版；不要覆盖未知来源文件。必须保留 `~/.config/offerloop/` 和 `~/.local/state/offerloop/`。
+Windows 将 `python3` 替换为 `py -3`；其他 Agent 替换 `--agent` 参数。`--upgrade` 会把旧 Skill
+副本移动到 Skills 发现范围之外的可恢复备份，再安装新版；它只用于已确认来源的旧版 OfferLoop，
+不要用来覆盖未知来源文件。必须保留 `~/.config/offerloop/` 和
+`~/.local/state/offerloop/`。
 
 更新后重新开启 Agent 会话，然后发送：
 
@@ -645,8 +701,11 @@ OfferLoop 的飞书业务能力需要 `lark-cli >= 1.0.73`。如果尚未安装�
 
 ```bash
 npx @larksuite/cli@latest install
-npx skills add larksuite/cli -g -y
+npx skills add larksuite/cli -g -a codex
 ```
+
+将 `codex` 替换为当前 Agent 对应的 `claude-code` 或 `hermes-agent`，先查看同名覆盖提示再确认；
+WorkBuddy 请在“专家·技能·连接器”中启用飞书连接器。
 
 外部 Lark Skill 不随 OfferLoop 打包：
 

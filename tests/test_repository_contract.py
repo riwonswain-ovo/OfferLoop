@@ -563,18 +563,35 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertIn("旧双 Base", migration)
         self.assertIn("永久保留", migration)
 
-    def test_readme_has_safe_agent_neutral_install_and_upgrade_paths(self):
+    def test_readme_has_safe_explicit_install_and_upgrade_paths(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertIn(
-            "npx skills add riwonswain-ovo/OfferLoop-development -g",
+        self.assertNotIn(
+            "npx skills add riwonswain-ovo/OfferLoop-development",
             readme,
         )
-        self.assertIn("npx skills update offerloop-setup", readme)
+        self.assertIn("gh auth status -h github.com", readme)
+        self.assertIn(
+            "gh repo view riwonswain-ovo/OfferLoop-development",
+            readme,
+        )
+        self.assertIn(
+            "python3 scripts/install_offerloop.py --agent codex --dry-run",
+            readme,
+        )
+        self.assertIn(
+            "python3 scripts/install_offerloop.py --agent codex --verify",
+            readme,
+        )
+        self.assertIn(
+            "py -3 scripts/install_offerloop.py --agent codex --verify",
+            readme,
+        )
         self.assertIn("标准 `SKILL.md`", readme)
         self.assertIn("可恢复备份", readme)
-        self.assertNotIn("--agent", readme)
+        for agent in ("codex", "claude-code", "hermes-agent", "workbuddy"):
+            self.assertIn(f"`{agent}`", readme)
         for product_name in ("Claude Code", "Hermes", "WorkBuddy"):
-            self.assertNotIn(product_name, readme)
+            self.assertIn(product_name, readme)
         self.assertIn("不在工作台内部嵌入 Agent", readme)
         self.assertIn("打开 Agent 新任务并预填 Prompt", readme)
         self.assertIn("~/.config/offerloop/", readme)
@@ -659,7 +676,8 @@ class RepositoryContractTest(unittest.TestCase):
             self.assertIn("lark-apps", text)
         for text in (readme, onboarding):
             self.assertIn("npx @larksuite/cli@latest install", text)
-        self.assertIn("npx skills add larksuite/cli -g -y", readme)
+        self.assertIn("npx skills add larksuite/cli -g -a codex", readme)
+        self.assertNotIn("npx skills add larksuite/cli -g -a codex -y", readme)
         self.assertIn("npx skills add larksuite/cli -g -a", onboarding)
         self.assertIn("目标已登记时运行期只需要", setup)
         self.assertIn("线上条件一律保持 `unverified`", setup)
@@ -877,6 +895,8 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertNotIn("版本升级为 3", end_to_end)
         self.assertIn("install_offerloop.py", acceptance)
         self.assertIn("already_installed", acceptance)
+        self.assertIn("--verify", acceptance)
+        self.assertIn("post-install verification", acceptance)
         self.assertIn("cold_install_acceptance.py", workflow)
         self.assertIn("readme_install_contract.py", workflow)
         for operating_system in ("ubuntu-latest", "macos-latest", "windows-latest"):

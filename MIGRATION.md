@@ -20,13 +20,19 @@
 
 文件不存在时跳过。新文件权限设置为 `0600`；确认新位置可读前不要删除旧文件。
 
-## 2. 安装十一个 Skill
+## 2. 升级并核验十一个 Skill
+
+先按 README 完成 GitHub 私库认证并进入最新的开发仓库目录。以下以 Codex 为例：
 
 ```bash
-npx skills add riwonswain-ovo/OfferLoop-development -g
+python3 scripts/install_offerloop.py --agent codex --upgrade --dry-run
+python3 scripts/install_offerloop.py --agent codex --upgrade
+python3 scripts/install_offerloop.py --agent codex --verify
 ```
 
-应能发现：
+Windows 将 `python3` 替换为 `py -3`；其他 Agent 替换 `--agent` 参数。只有确认同名目录属于
+旧版 OfferLoop 后才使用 `--upgrade`，安装器会先把旧副本移出 Skills 发现范围并保留可恢复
+备份。核验应确认以下十一个 Skill：
 
 - `offerloop-setup`
 - `job-collection`

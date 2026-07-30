@@ -34,14 +34,14 @@ AGENT_ROOTS = {
 }
 LARK_CLI_RECOVERY = (
     "运行 `npx @larksuite/cli@latest install` 安装 lark-cli；再运行 "
-    "Agent 对应的 `npx skills add larksuite/cli -g -a codex -y`、"
+    "Agent 对应的 `npx skills add larksuite/cli -g -a codex`、"
     "`-a claude-code` 或 `-a hermes-agent` 安装官方 Lark Skills，"
     "然后新开 Agent 会话。WorkBuddy 请在“专家·技能·连接器”中启用飞书连接器，"
     "再新建任务"
 )
 WORKSPACE_SKILLS_RECOVERY = (
     "缺少：lark-base、lark-doc、lark-wiki。运行 "
-    "Agent 对应的 `npx skills add larksuite/cli -g -a codex -y`、"
+    "Agent 对应的 `npx skills add larksuite/cli -g -a codex`、"
     "`-a claude-code` 或 `-a hermes-agent` "
     "安装官方 Lark Skills，然后新开 Agent 会话；WorkBuddy 请在"
     "“专家·技能·连接器”中启用飞书连接器，再新建任务"
@@ -118,6 +118,23 @@ def install_all_agents(source, project, home, env):
     ):
         raise AssertionError(f"unexpected welcome catalog: {welcome_skills}")
     roots = {agent: assert_installed(home, agent) for agent in AGENT_ROOTS}
+
+    verify_command = [sys.executable, str(installer)]
+    for agent in AGENT_ROOTS:
+        verify_command.extend(("--agent", agent))
+    verify_command.extend(("--verify", "--json"))
+    verified_report = json.loads(
+        run(verify_command, cwd=project, env=env).stdout
+    )
+    if not verified_report.get("verified"):
+        raise AssertionError(
+            f"documented post-install verification failed: {verified_report}"
+        )
+    if {
+        item["agent"]: item["manifest"]
+        for item in verified_report["results"]
+    } != {agent: "ready" for agent in AGENT_ROOTS}:
+        raise AssertionError("post-install manifest verification failed")
 
     repeated = run(command, cwd=project, env=env)
     repeated_report = json.loads(repeated.stdout)
@@ -299,7 +316,7 @@ def main():
         assert_collection_preflight(project, roots["codex"], env)
         print(
             "cold install accepted: four Agents, eleven Skills, idempotency, "
-            "collection preflight, recovery, and redaction"
+            "post-install verification, collection preflight, recovery, and redaction"
         )
 
 
