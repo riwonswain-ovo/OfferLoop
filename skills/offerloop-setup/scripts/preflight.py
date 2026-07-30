@@ -22,7 +22,6 @@ BUNDLED_SKILLS = (
     "offerloop-setup",
     "offerloop-workspace",
     "offerloop-workbench",
-    "offerloop-agent",
     "job-collection",
     "recruiting-reminder",
     "experience-deepthink",
@@ -55,12 +54,6 @@ REQUIRED_BUNDLED_BY_CAPABILITY = {
         "offerloop-workspace",
         "offerloop-workbench",
     },
-    "agent": {
-        "offerloop-setup",
-        "offerloop-workspace",
-        "offerloop-workbench",
-        "offerloop-agent",
-    },
     "integration": {"offerloop-setup", "offerloop-workspace", "job-collection"},
 }
 EXTERNAL_SKILLS_BY_CAPABILITY = {
@@ -69,7 +62,6 @@ EXTERNAL_SKILLS_BY_CAPABILITY = {
     "workspace": ("lark-base", "lark-doc", "lark-wiki"),
     "coaching": ("lark-base", "lark-doc", "lark-wiki"),
     "workbench": ("lark-apps", "lark-shared"),
-    "agent": ("lark-apps", "lark-shared"),
     "integration": ("lark-shared", "lark-apps"),
 }
 LARK_CLI_RECOVERY = (
@@ -821,59 +813,6 @@ def _capability_report(source, capability, skills_roots=None):
             )
         )
 
-    if "agent" in selected:
-        node_executable = shutil.which("node", path=source.get("PATH"))
-        node_result = (
-            _run_local_command(
-                [node_executable, "--version"],
-                environ={**os.environ, **source},
-            )
-            if node_executable
-            else None
-        )
-        node_version = (
-            _version_tuple(node_result.stdout)
-            if node_result and node_result.returncode == 0
-            else None
-        )
-        node_ready = node_version is not None and node_version >= (22, 0, 0)
-        codex_ready = shutil.which("codex", path=source.get("PATH")) is not None
-        checks.extend(
-            [
-                _check(
-                    "local.agent_node",
-                    "agent",
-                    "ready" if node_ready else "blocked",
-                    "已找到本机 Node.js"
-                    if node_ready
-                    else "未找到本机 Node.js",
-                    "安装 Node.js 22 或更高版本" if not node_ready else "",
-                ),
-                _check(
-                    "local.agent_codex",
-                    "agent",
-                    "ready" if codex_ready else "blocked",
-                    "已找到本机 Codex"
-                    if codex_ready
-                    else "未找到本机 Codex",
-                    "安装或登记 Codex 可执行文件" if not codex_ready else "",
-                ),
-                _check(
-                    "local.agent_workbench",
-                    "agent",
-                    "ready"
-                    if config.get("workbench_url") not in (None, "")
-                    else "blocked",
-                    "Agent 将复用已登记的飞书工作台"
-                    if config.get("workbench_url") not in (None, "")
-                    else "OfferLoop Agent 需要先部署飞书工作台",
-                    "先运行 offerloop-workbench；不要为 Agent 新建第二个妙搭应用"
-                    if config.get("workbench_url") in (None, "")
-                    else "",
-                ),
-            ]
-        )
-
     if "coaching" in selected:
         storage = config.get("artifact_storage")
         readiness = (
@@ -954,7 +893,6 @@ def main():
             "workspace",
             "coaching",
             "workbench",
-            "agent",
             "full",
         ),
         help="run a capability-specific offline preflight",

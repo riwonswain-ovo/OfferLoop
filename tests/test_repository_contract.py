@@ -408,7 +408,6 @@ class RepositoryContractTest(unittest.TestCase):
             "offerloop-setup",
             "offerloop-workspace",
             "offerloop-workbench",
-            "offerloop-agent",
             "job-collection",
             "recruiting-reminder",
             "experience-deepthink",
@@ -501,7 +500,7 @@ class RepositoryContractTest(unittest.TestCase):
         ):
             self.assertIn(expected, onboarding)
 
-    def test_setup_first_run_welcome_introduces_all_twelve_skills(self):
+    def test_setup_first_run_welcome_introduces_all_eleven_skills(self):
         setup = (SKILLS / "offerloop-setup" / "SKILL.md").read_text(
             encoding="utf-8"
         )
@@ -512,7 +511,7 @@ class RepositoryContractTest(unittest.TestCase):
             SKILLS / "offerloop-setup" / "references" / "welcome.md"
         ).read_text(encoding="utf-8")
         self.assertIn("references/welcome.md", setup)
-        self.assertIn("all twelve OfferLoop skills", metadata)
+        self.assertIn("all eleven OfferLoop skills", metadata)
         self.assertIn("不要在能力介绍前要求目标岗位", setup)
         self.assertIn("安装只添加了 Skill", welcome)
         for name in (
@@ -573,8 +572,8 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertNotIn("--agent", readme)
         for product_name in ("Claude Code", "Hermes", "WorkBuddy"):
             self.assertNotIn(product_name, readme)
-        self.assertIn("当前只支持 Codex", readme)
-        self.assertIn("不会新建第二个妙搭应用", readme)
+        self.assertIn("不在工作台内部嵌入 Agent", readme)
+        self.assertIn("打开 Agent 新任务并预填 Prompt", readme)
         self.assertIn("~/.config/offerloop/", readme)
         self.assertIn("~/.local/state/offerloop/", readme)
 
@@ -583,7 +582,7 @@ class RepositoryContractTest(unittest.TestCase):
         sections = (
             "## 1. 安装前准备",
             "## 2. 如何安装",
-            "## 3. 认识十二个 Skill",
+            "## 3. 认识十一个 Skill",
             "## 4. 旧用户如何升级",
             "## 5. 其他说明",
         )
@@ -596,7 +595,6 @@ class RepositoryContractTest(unittest.TestCase):
             "### `recruiting-reminder`",
             "### `offerloop-workspace`",
             "### `offerloop-workbench`",
-            "### `offerloop-agent`",
             "### `experience-deepthink`",
             "### `resume-tailor`",
             "### `pm-sense`",
@@ -698,12 +696,11 @@ class RepositoryContractTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("# OfferLoop 使用指南", template)
         self.assertIn("OFFERLOOP:OPTIONAL:WORKBENCH", template)
-        self.assertIn("## OfferLoop 的 12 个 Skill", template)
+        self.assertIn("## OfferLoop 的 11 个 Skill", template)
         for name in (
             "offerloop-setup",
             "offerloop-workspace",
             "offerloop-workbench",
-            "offerloop-agent",
             "job-collection",
             "recruiting-reminder",
             "experience-deepthink",
@@ -745,36 +742,38 @@ class RepositoryContractTest(unittest.TestCase):
             self.assertNotIn("06｜训练与题库", text)
             self.assertNotIn("待学会题库", text)
 
-    def test_workbench_keeps_a_collapsible_twelve_skill_map(self):
-        page = (
+    def test_workbench_keeps_the_confirmed_five_page_and_external_agent_contract(self):
+        root = (
             SKILLS
             / "offerloop-workbench"
             / "assets"
             / "workbench-template"
-            / "client"
-            / "src"
-            / "pages"
-            / "workbench"
-            / "WorkbenchPage.tsx"
+        )
+        top_nav = (
+            root / "client/src/pages/workbench/WorkbenchTopNav.tsx"
         ).read_text(encoding="utf-8")
-        self.assertIn("OfferLoop 能力地图", page)
-        self.assertIn("<details", page)
-        self.assertIn("SKILL_GROUPS", page)
-        for name in (
-            "offerloop-setup",
-            "offerloop-workspace",
-            "offerloop-workbench",
-            "offerloop-agent",
-            "job-collection",
-            "recruiting-reminder",
-            "experience-deepthink",
-            "resume-tailor",
-            "pm-sense",
-            "interview-prep",
-            "mock-lab",
-            "talk-review",
-        ):
-            self.assertIn(f"name: '{name}'", page)
+        home = (
+            root / "client/src/pages/workbench/WorkbenchHomeOverview.tsx"
+        ).read_text(encoding="utf-8")
+        applications = (
+            root / "client/src/pages/workbench/WorkbenchApplicationsPage.tsx"
+        ).read_text(encoding="utf-8")
+        codex_task = (
+            root / "client/src/lib/codex-task.ts"
+        ).read_text(encoding="utf-8")
+
+        for label in ("工作台", "投递管理", "材料中心", "面试与复盘", "PM Sense"):
+            self.assertIn(f"label: '{label}'", top_nav)
+        self.assertIn("OfferLoop 能力", home)
+        self.assertIn("表格视图 · 每页最多 15 条", applications)
+        self.assertIn("每页最多 9 条", applications)
+        self.assertIn("prompt", codex_task)
+        self.assertIn("OfferLoop-development", codex_task)
+        source_text = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in (root / "client/src").rglob("*.ts*")
+        )
+        self.assertNotIn("AgentChatPanel", source_text)
 
     def test_only_offerloop_skills_are_packaged(self):
         discovered = {
@@ -839,12 +838,6 @@ class RepositoryContractTest(unittest.TestCase):
                 source / "components" / "business-ui" / "user-profile"
             )
             self.assertFalse(any(profile_scaffold.glob("*")))
-            source_text = "\n".join(
-                path.read_text(encoding="utf-8")
-                for path in source.rglob("*.ts*")
-            )
-            self.assertNotIn("jsAPITicket", source_text)
-            self.assertNotIn("redirectURLRef", source_text)
 
     def test_release_gate_covers_multi_agent_installer_and_residual_risk(self):
         acceptance = (ROOT / "scripts" / "cold_install_acceptance.py").read_text(

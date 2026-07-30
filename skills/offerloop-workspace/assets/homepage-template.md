@@ -30,7 +30,7 @@ OfferLoop 把招聘信息、真实投递、笔试面试、当前简历和训练�
 4. 面试前运行准备或模拟训练，面试后导入 ASR 复盘。
 5. 回到知识库固定目录复用每次训练生成的 Markdown 材料。
 
-## OfferLoop 的 12 个 Skill
+## OfferLoop 的 11 个 Skill
 
 ### 核心与业务能力
 
@@ -41,7 +41,6 @@ OfferLoop 把招聘信息、真实投递、笔试面试、当前简历和训练�
 | `job-collection`｜招聘信息同步 | 从指定信息源收集岗位并整理到企业清单 | “同步我的招聘信息源。” |
 | `recruiting-reminder`｜笔试面试提醒 | 从邮件识别安排，并在确认后同步笔面试中心和日历 | “检查最近 7 天的笔试面试邮件，先不要写入。” |
 | `offerloop-workbench`｜可选工作台 | 按需部署可视化工作台和 OAuth | “为我的 OfferLoop 搭建飞书工作台。” |
-| `offerloop-agent`｜可选 Codex Agent | 在已有工作台中加装本机 Codex 右侧栏 | “把 Codex 接入我现有的 OfferLoop 工作台。” |
 
 ### 求职训练能力
 
@@ -62,7 +61,6 @@ OfferLoop 把招聘信息、真实投递、笔试面试、当前简历和训练�
 | 求职进展 | {{progress_base_url}} | 维护真实申请、岗位 JD、简历版本和当前阶段 |
 | 笔面试中心 | {{reminder_base_url}} | 管理笔试、群面和各轮面试 |
 | 飞书工作台 | 可选 | 聚合查看三张 Base；未部署不影响核心能力 |
-| OfferLoop Agent | 可选 | 复用同一工作台右侧栏连接本机 Codex；未安装不影响核心能力 |
 
 ## 知识库目录
 
@@ -86,7 +84,7 @@ OfferLoop 把招聘信息、真实投递、笔试面试、当前简历和训练�
 - “调用 interview-prep，为下一场面试生成准备文档。”
 - “调用 talk-review，根据我粘贴的 ASR 复盘刚结束的面试。”
 - “调用 offerloop-workbench，为我的 OfferLoop 搭建可视化工作台。”
-- “调用 offerloop-agent，把 Codex 接入我现有的 OfferLoop 工作台。”
+- “从工作台点击能力按钮，打开 Agent 新任务并使用自动填入的 Prompt。”
 
 ## 常见问题
 

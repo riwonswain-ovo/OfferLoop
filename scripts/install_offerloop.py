@@ -25,7 +25,6 @@ SKILL_NAMES = (
     "recruiting-reminder",
     "offerloop-workspace",
     "offerloop-workbench",
-    "offerloop-agent",
     "experience-deepthink",
     "resume-tailor",
     "interview-prep",
@@ -60,7 +59,7 @@ MANIFEST_NAME = ".offerloop-install.json"
 WELCOME = {
     "headline": "欢迎使用 OfferLoop",
     "summary": (
-        "OfferLoop 包含 12 个可以独立或组合使用的 Skill。"
+        "OfferLoop 包含 11 个可以独立或组合使用的 Skill。"
         "用户不需要记住名称，只需描述当前想解决的问题。"
     ),
     "groups": [
@@ -96,12 +95,6 @@ WELCOME = {
                     "title": "可选工作台",
                     "purpose": "按需部署妙搭工作台和 OAuth",
                     "example": "为我的 OfferLoop 搭建飞书工作台。",
-                },
-                {
-                    "name": "offerloop-agent",
-                    "title": "可选 Codex Agent",
-                    "purpose": "在已有工作台中加装本机 Codex 智能助手右侧栏",
-                    "example": "把 Codex 接入我现有的 OfferLoop 工作台。",
                 },
             ],
         },
@@ -152,7 +145,7 @@ WELCOME = {
         "经历深挖 → Resume Tailor → 面试准备 → 模拟面试 → 真实面试复盘",
     ],
     "next_prompt": (
-        "我刚安装 OfferLoop。请先介绍 12 个 Skill，"
+        "我刚安装 OfferLoop。请先介绍 11 个 Skill，"
         "再做只读检查并带我完成第一次使用。"
     ),
     "privacy_notice": (
@@ -871,7 +864,7 @@ def main(argv=None) -> int:
         if not args.dry_run and any(
             report["status"] in completed for report in reports
         ):
-            print("OfferLoop 的 12 个 Skill 已处理完成。")
+            print(f"OfferLoop 的 {len(SKILL_NAMES)} 个 Skill 已处理完成。")
             if show_welcome:
                 _print_welcome()
             else:

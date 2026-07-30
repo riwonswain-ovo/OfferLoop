@@ -19,7 +19,7 @@ Claude Code 的真实运行时认证使用 CC Switch 当前启用的第三方模
 
 ## 安装器状态
 
-- `installed`：十二个 Skill 已复制。
+- `installed`：十一个 Skill 已复制。
 - `already_installed`：目标内容与当前版本完全一致。
 - `conflict`：目标目录内容不同，或 Hermes 的 `skills.external_dirs` 中存在会造成运行时歧义的同名副本；未覆盖。
 - `upgraded`：在 Skills 根目录的上级 `.offerloop-backups/` 保留可恢复备份后已替换，避免备份被递归加载。

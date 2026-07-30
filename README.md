@@ -8,15 +8,16 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Skills](https://img.shields.io/badge/Skills-12-7C3AED)](#3-认识十二个-skill)
+[![Skills](https://img.shields.io/badge/Skills-11-7C3AED)](#3-认识十一个-skill)
 
 </div>
 
 > 当前版本：0.1.0-alpha.8。旧用户请直接阅读[如何升级](#4-旧用户如何升级)。
 
-OfferLoop 包含 12 个标准 Agent Skill。完成线上初始化后一定会有一个默认私有的飞书知识库，
+OfferLoop 包含 11 个标准 Agent Skill。完成线上初始化后一定会有一个默认私有的飞书知识库，
 其中组织三张业务 Base、当前简历和每次训练 Markdown 产物；飞书工作台是可选项，未部署不影响
-招聘同步、笔面试提醒或任何训练 Skill；`offerloop-agent` 是工作台之上的 Codex 可选加装项。
+招聘同步、笔面试提醒或任何训练 Skill。工作台中的自动化按钮会打开 Agent 新任务并预填 Prompt，
+不在工作台内部嵌入 Agent。
 
 ## 1. 安装前准备
 
@@ -43,19 +44,19 @@ OfferLoop 遵循标准 `SKILL.md` 目录结构。只要 Agent 能加载标准 Ag
 请帮我安装这个 GitHub 仓库中的 OfferLoop：
 https://github.com/riwonswain-ovo/OfferLoop
 
-请安装仓库 skills/ 下的 12 个 Skill，并使用你自己的标准 Skills 目录。
+请安装仓库 skills/ 下的 11 个 Skill，并使用你自己的标准 Skills 目录。
 先预览安装目标和冲突；确认安全后再安装。不要覆盖来源不明的同名 Skill。
-安装完成后介绍这 12 个 Skill 的用途和一句使用示例，说明隐私边界，并提醒我重新开启会话。
+安装完成后介绍这 11 个 Skill 的用途和一句使用示例，说明隐私边界，并提醒我重新开启会话。
 ```
 
-Agent 可能会请求访问 GitHub 或写入 Skills 目录的权限。确认目标是本仓库的十二个 Skill 后再授权。
+Agent 可能会请求访问 GitHub 或写入 Skills 目录的权限。确认目标是本仓库的十一个 Skill 后再授权。
 
 ### 方式二：在终端安装
 
 ```bash
 npx skills add riwonswain-ovo/OfferLoop -g \
   -s offerloop-setup job-collection recruiting-reminder offerloop-workspace \
-  offerloop-workbench offerloop-agent experience-deepthink resume-tailor interview-prep mock-lab talk-review pm-sense -y
+  offerloop-workbench experience-deepthink resume-tailor interview-prep mock-lab talk-review pm-sense -y
 ```
 
 安装工具若发现同名但内容不同的旧副本，应先报告冲突，不应直接覆盖。确认属于旧版 OfferLoop 后，先把旧副本备份到 Skills 发现范围之外，再安装新版。
@@ -65,16 +66,16 @@ npx skills add riwonswain-ovo/OfferLoop -g \
 Agent 通常只在会话开始时发现 Skill。安装完成后结束当前会话并新开会话，然后发送：
 
 ```text
-我刚安装 OfferLoop。请调用 offerloop-setup，先介绍 12 个 Skill，再做只读检查并带我完成第一次使用；不要创建或修改飞书资源。
+我刚安装 OfferLoop。请调用 offerloop-setup，先介绍 11 个 Skill，再做只读检查并带我完成第一次使用；不要创建或修改飞书资源。
 ```
 
-首次安装欢迎会按“4 个核心与业务能力 + 1 个可选工作台 + 1 个可选 Agent + 6 个求职训练能力”介绍十二个 Skill，并给出两条常用
+首次安装欢迎会按“4 个核心与业务能力 + 1 个可选工作台 + 6 个求职训练能力”介绍十一个 Skill，并给出两条常用
 闭环和一条可直接复制的首次使用指令。重复安装不会反复显示完整欢迎；Skill 能被发现仍需重新
 开启 Agent 会话。
 
-## 3. 认识十二个 Skill
+## 3. 认识十一个 Skill
 
-十二个 Skill 的关系如下：
+十一个 Skill 的关系如下：
 
 ```text
 offerloop-setup
@@ -87,7 +88,6 @@ job-collection ── 已投递记录 ──> 求职进展
 recruiting-reminder ── 笔面试事件 ──> 求职进展 + 个人日历
 offerloop-workspace ── 必需核心空间 ──> 私有知识库 + 三张 Base + 训练产物
 offerloop-workbench ── 可选体验层 ──> 聚合读取三张 Base + 日历
-offerloop-agent ── 可选 Codex 加装 ──> 复用同一工作台右侧栏 + 本机原生 Codex task
 
 experience-deepthink ── 一段真实经历 + 岗位方向 ──> 持续维护的经历深挖文档
 resume-tailor ── 目标岗位 + 用户选定经历 + 固定信息 ──> 一页 PDF 简历
@@ -105,14 +105,14 @@ talk-review ── ASR + 当前简历 + 经历深挖 ──> 真实面试复盘
 
 #### 第一次运行前需要准备
 
-- 已安装十二个 OfferLoop Skill，并重新开启 Agent 会话。
+- 已安装十一个 OfferLoop Skill，并重新开启 Agent 会话。
 - Python 3.10 或更高版本。
-- 不需要提前记住 Skill 名称。首次运行会先介绍十二个 Skill，再让你从 `collection`、`reminder`、`workspace`、`coaching`、`workbench`、`agent` 或 `full` 中选择；任何选择都检查核心知识库，只有 `workbench` / `agent` / `full` 涉及工作台，`agent` 必须复用已有应用。
+- 不需要提前记住 Skill 名称。首次运行会先介绍十一个 Skill，再让你从 `collection`、`reminder`、`workspace`、`coaching`、`workbench` 或 `full` 中选择；任何选择都检查核心知识库，只有 `workbench` / `full` 涉及工作台。
 - 不必提前准备飞书密钥或邮箱授权码；缺少 `lark-cli`、外部 Lark Skill、profile 或资源定位时，预检会给出解决动作。
 
 #### 第一次运行流程
 
-1. 首次使用时，完整介绍十二个 Skill、使用示例、常用闭环和隐私边界。
+1. 首次使用时，完整介绍十一个 Skill、使用示例、常用闭环和隐私边界。
 2. 询问本次要启用的能力，未选择的能力标记为 `not_selected`。
 3. 运行只读离线预检，检查 Python、`lark-cli`、所选 OfferLoop Skill、外部 Lark Skill、本地配置和文件权限。
 4. 用 `ready`、`needs_action`、`blocked`、`unverified` 汇报状态，并给出下一步。
@@ -326,53 +326,6 @@ talk-review ── ASR + 当前简历 + 经历深挖 ──> 真实面试复盘
 ![招聘工作台概览](docs/images/workbench/dashboard-overview.png)
 
 ![工作台中的三张业务 Base](docs/images/workbench/business-data.png)
-
----
-
-### `offerloop-agent`：在已有工作台中加装 Codex
-
-#### 作用
-
-把已经跑通的工作台右侧栏、任务队列和本机 Codex app-server worker 作为可选 add-on
-安装进同一个妙搭应用。工作台新建对话时，本机 Codex 会出现一个原生 task；续聊、停止和归档
-沿用该 task。
-
-#### 第一次运行前需要准备
-
-- 必须先有 `offerloop-workbench`，不会新建第二个妙搭应用。
-- 已知现有工作台 URL、同一妙搭应用的 App ID、本地项目目录和当前飞书用户 ID。
-- 本机已安装 Node.js 22+ 与 Codex。
-
-#### 第一次运行流程
-
-1. 对现有工作台运行 dry-run，预览右侧栏、队列模块和 migration。
-2. 经确认后铺设 add-on，并为同一 App ID 创建仅含两个 worker 路由的 OpenAPI Key。
-3. 把密钥存入本机钥匙串，将 Worker 绑定当前飞书用户 ID，再启动主动轮询。
-4. 构建、发布并验收原工作台；不创建新应用。
-
-#### 第一次运行后的输出
-
-- 原工作台中的可开关右侧智能助手。
-- 一个只主动出站连接工作台的本机 worker。
-- 工作台对话与原生 Codex task 的一一对应。
-
-#### 后续每次运行带来的增量
-
-后续运行幂等升级 Agent 自己拥有的源码和 worker，不覆盖工作台绑定、环境文件、OAuth 配置或
-业务数据。provider 适配仍与工作台主体隔离。
-
-#### 案例
-
-```text
-调用 offerloop-agent，把 Codex 接入我已经部署好的 OfferLoop 工作台。
-先预览变更，不要创建第二个妙搭应用。
-```
-
-#### 边界
-
-- 当前只支持 Codex；工作台本身不绑定具体 Agent provider。
-- 共享同一工作台时，每个 Worker 只领取其绑定飞书用户创建的任务。
-- 不安装或停用时，知识库、三张 Base 和其他 Skill 均不受影响。
 
 ---
 
@@ -647,11 +600,11 @@ talk-review ── ASR + 当前简历 + 经历深挖 ──> 真实面试复盘
   cp -a ~/.local/state/offerloop ~/.local/state/offerloop.backup-$(date +%Y%m%d)
   ```
 
-### 更新十二个 Skill
+### 更新十一个 Skill
 
 ```bash
 npx skills update offerloop-setup job-collection recruiting-reminder \
-  offerloop-workspace offerloop-workbench offerloop-agent experience-deepthink resume-tailor interview-prep mock-lab \
+  offerloop-workspace offerloop-workbench experience-deepthink resume-tailor interview-prep mock-lab \
   talk-review pm-sense -g -y
 ```
 
@@ -660,7 +613,7 @@ npx skills update offerloop-setup job-collection recruiting-reminder \
 更新后重新开启 Agent 会话，然后发送：
 
 ```text
-请调用 offerloop-setup。我是旧版 OfferLoop 用户，已经升级到十二个 Skill。
+请调用 offerloop-setup。我是旧版 OfferLoop 用户，已经升级到十一个 Skill。
 请只读检查我的旧配置和现有飞书 Base，给出迁移计划；不要创建、修改或删除任何资源。
 ```
 
@@ -734,7 +687,7 @@ ASR + 当前简历 + 相关经历深挖 ─────> talk-review
 - `offerloop-workspace` 把三张既有 Base 纳入知识库但不复制数据；五个产出型 Skill 只在固定目录写各自的
   Markdown 产物。
 - `offerloop-workbench` 只在用户明确选择时部署；缺失或故障不影响其他 Skill。
-- `offerloop-agent` 只在已有工作台上可选加装；不创建第二个妙搭应用，当前 provider 为 Codex。
+- 工作台不内嵌 Agent；自动化按钮只打开 Agent 新任务并预填 Prompt。
 - 结构化/半结构化央国企面试专项不在当前范围；不得仅根据企业类型猜测简历版本或面试形式。
 - 飞书应用 scope、版本发布、租户安装、Base/知识库共享、IMAP 连通性、日历授权和工作台 OAuth 必须在真实账号下另行核验。离线 `ready` 不代表线上已经可用。
 

@@ -19,7 +19,6 @@ SKILL_NAMES = (
     "recruiting-reminder",
     "offerloop-workspace",
     "offerloop-workbench",
-    "offerloop-agent",
     "experience-deepthink",
     "resume-tailor",
     "interview-prep",

@@ -1,15 +1,15 @@
 # OfferLoop 新用户接入
 
-本接入指南采用核心空间优先、业务能力渐进配置。先确认十二个 OfferLoop Skill 已安装在同一个
+本接入指南采用核心空间优先、业务能力渐进配置。先确认十一个 OfferLoop Skill 已安装在同一个
 Agent 环境，并在安装后新开会话；再选择 `collection`、`reminder`、`workspace`、`coaching`、
-`workbench`、`agent` 或 `full`。任何选择都先检查必需的私有知识库和三张业务 Base。
+`workbench` 或 `full`。任何选择都先检查必需的私有知识库和三张业务 Base。
 
-首次安装、第一次使用或用户要求理解十二个 Skill 时，先完整读取 `welcome.md`，展示十二项能力、
+首次安装、第一次使用或用户要求理解十一个 Skill 时，先完整读取 `welcome.md`，展示十一项能力、
 自然语言示例、常用闭环和隐私边界，再让用户选择当前能力。不要要求用户先记技术名称，也不要
 在介绍阶段询问目标岗位或访问线上资源。
 
 这一步是新用户的最小成功：Skill 能被发现并能开始只读本机引导。它不是飞书、邮箱、妙搭或
-工作台已经配置完成的声明。本仓库提供四个核心与业务 Skill、一个可选工作台 Skill、一个可选 Agent Skill 和六个求职
+工作台已经配置完成的声明。本仓库提供四个核心与业务 Skill、一个可选工作台 Skill 和六个求职
 训练 Skill；运行时、飞书身份和外部 Lark Skill 都需要单独准备。
 
 ## 1. 能力与最小配置
@@ -21,7 +21,6 @@ Agent 环境，并在安装后新开会话；再选择 `collection`、`reminder`
 | `reminder`：整理笔试和面试 | 核心空间、IMAP、本地提醒配置；建日历时完成 user 日历授权 | 招聘信息源、工作台 |
 | `coaching`：训练与面试材料 | 核心空间、schema v4、固定训练目录 | IMAP、日历、工作台 |
 | `workbench`：可视化工作台 | 核心空间、妙搭创建/发布/环境配置、OAuth 与租户安装支持 | IMAP、业务写入 |
-| `agent`：Codex 右侧栏 | 已验收工作台、同一 App ID、Node.js 22+、本机 Codex | 新建第二个妙搭应用 |
 | `full`：完整闭环 | 上述全部，以及 Base workflow 和 HTTPS 同步端点 | 无 |
 
 安装整个仓库不代表要完成所有授权。未选能力应显示为 `not_selected`，而非失败。

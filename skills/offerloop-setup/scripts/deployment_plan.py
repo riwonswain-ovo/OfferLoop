@@ -21,7 +21,6 @@ CAPABILITIES = {
     "workspace",
     "coaching",
     "workbench",
-    "agent",
     "full",
 }
 RESOURCE_LOCATORS = {
@@ -42,7 +41,6 @@ PHASES = (
     ("workspace", "创建私有知识库、固定目录和使用指南"),
     ("coaching", "登记训练产物目录并启用 Markdown 飞书文档沉淀"),
     ("workbench", "按用户选择发布可选招聘工作台"),
-    ("agent", "在同一工作台中加装右侧栏并绑定本机 Codex worker"),
     ("progress_sync", "发布已投递即时同步服务并创建唯一 Base workflow"),
     ("imap", "创建本地 IMAP 模板，等待用户在本机填写授权码"),
     ("acceptance", "运行只读验收；即时联动演练必须使用并清理临时记录"),
@@ -80,8 +78,6 @@ def load_config(environ=None):
 def expand_capability(capability):
     if capability not in CAPABILITIES:
         raise ValueError(f"unsupported capability: {capability}")
-    if capability == "agent":
-        return {"workspace", "workbench", "agent"}
     return (
         {
             "collection",
@@ -150,12 +146,10 @@ def build_plan(config, capability="full"):
             if (phase_id != "imap" or "reminder" in selected)
             and (phase_id != "coaching" or "coaching" in selected)
             and (phase_id != "workbench" or "workbench" in selected)
-            and (phase_id != "agent" or "agent" in selected)
         ],
         "confirmations": [
             "创建或接管三张 Base、必需知识库和即时同步服务前的一次总确认",
             "选择工作台时，对妙搭应用、OAuth 和发布范围单独确认",
-            "选择 Agent 时，对同一工作台源码、OpenAPI Key 和本机 worker 单独确认",
             "启用通知时确认接收方式、目标名称、发送身份和最终摘要模板",
             "用户填写 IMAP 授权码后的一次仅连通性检查确认",
         ],

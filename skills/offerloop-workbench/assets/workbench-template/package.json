@@ -31,7 +31,6 @@
     "lint": "node ./scripts/lint.js",
     "format": "prettier --write \"{server,client,test}/**/*.{js,ts,tsx,json,md}\"",
     "precommit": "node scripts/hooks/run-precommit.js",
-    "prepare": "chmod +x .githooks/pre-commit 2>/dev/null; git config core.hooksPath .githooks 2>/dev/null || true",
     "postinstall": "fullstack-cli action-plugin init",
     "upgrade": "npx -y @lark-apaas/fullstack-cli@latest sync --disable-gen-openapi"
   },

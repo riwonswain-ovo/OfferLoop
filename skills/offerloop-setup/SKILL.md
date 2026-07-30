@@ -1,6 +1,6 @@
 ---
 name: offerloop-setup
-description: 介绍 OfferLoop 的十二个 Skill，并初始化必需的私有飞书知识库、三张业务 Base、飞书身份和公共配置。适用于“安装/初始化 OfferLoop”“第一次使用”“介绍十二个 Skill”“检查环境或配置”“修复任一 OfferLoop Skill”“搭建完整 OfferLoop”；所有能力共享知识库核心空间，飞书工作台按需部署，Codex Agent 仅在已有工作台后可选加装。
+description: 介绍 OfferLoop 的十一个 Skill，并初始化必需的私有飞书知识库、三张业务 Base、飞书身份和公共配置。适用于“安装/初始化 OfferLoop”“第一次使用”“介绍十一个 Skill”“检查环境或配置”“修复任一 OfferLoop Skill”“搭建完整 OfferLoop”；所有能力共享知识库核心空间，飞书工作台按需部署。
 ---
 
 # OfferLoop Setup
@@ -9,8 +9,8 @@ description: 介绍 OfferLoop 的十二个 Skill，并初始化必需的私有�
 
 ## 首次使用欢迎
 
-用户表示刚安装、第一次使用、不了解各 Skill，或明确要求介绍十二个 Skill 时，完整读取
-`references/welcome.md`，先展示十二项能力、两个常用闭环和隐私边界，再询问本次要启用哪项能力。
+用户表示刚安装、第一次使用、不了解各 Skill，或明确要求介绍十一个 Skill 时，完整读取
+`references/welcome.md`，先展示十一项能力、两个常用闭环和隐私边界，再询问本次要启用哪项能力。
 不要在能力介绍前要求目标岗位、读取私人材料或运行线上检查。
 
 非首次使用的配置请求可以直接询问本次要启用哪项能力：
@@ -20,12 +20,10 @@ description: 介绍 OfferLoop 的十二个 Skill，并初始化必需的私有�
 - `workspace`：初始化或检查必需的私有求职知识库（`offerloop-workspace`）
 - `coaching`：经历深挖、简历制作、产品思维、面试准备、模拟面试和真实复盘
 - `workbench`：按需部署可选飞书工作台（`offerloop-workbench`）
-- `agent`：在已有工作台里加装 Codex 右侧栏（`offerloop-agent`）
-- `full`：核心知识库、全部业务与训练能力、工作台和即时求职进展联动；不自动安装 Codex Agent
+- `full`：核心知识库、全部业务与训练能力、工作台和即时求职进展联动
 
-用户未指定时，不要猜测；请其从以上七项中选择。无论选择哪项，知识库和三张 Base 都属于
-核心初始化；工作台只有选择 `workbench`、`agent` 或 `full` 时才部署，`agent` 必须复用已有
-工作台应用。
+用户未指定时，不要猜测；请其从以上六项中选择。无论选择哪项，知识库和三张 Base 都属于
+核心初始化；工作台只有选择 `workbench` 或 `full` 时才部署。
 
 ## 安全边界
 
@@ -43,7 +41,7 @@ description: 介绍 OfferLoop 的十二个 Skill，并初始化必需的私有�
 先根据当前 `SKILL.md` 的所在位置解析本 Skill 根目录，再从该目录运行所选能力的预检：
 
 ```bash
-python3 scripts/preflight.py --capability '<collection|reminder|workspace|coaching|workbench|agent|full>' --json
+python3 scripts/preflight.py --capability '<collection|reminder|workspace|coaching|workbench|full>' --json
 ```
 
 本 Skill 后续所有 `scripts/...` 和兄弟 Skill 脚本调用都遵循同一解析规则，不假设 Agent 的当前工作目录。

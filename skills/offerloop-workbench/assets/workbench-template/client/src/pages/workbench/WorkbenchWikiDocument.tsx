@@ -24,7 +24,7 @@ import {
   getWorkbenchWikiDocumentPreview,
 } from '@client/src/api';
 import { fetchUserProfile } from '@client/src/components/business-ui/api/user-profiles/service';
-import { useExternalScript } from '@client/src/components/business-ui/user-profile/user-external-script';
+import { useExternalScript } from '@client/src/lib/external-script';
 import {
   Alert,
   AlertDescription,
