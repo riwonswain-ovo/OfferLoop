@@ -31,6 +31,14 @@ describe('WorkbenchCalendarService', () => {
 
   it('completes OAuth and reads only recruiting calendar events', async () => {
     const get = jest.fn((url: string) => {
+      if (url.endsWith('/authen/v1/user_info')) {
+        return of({
+          data: {
+            code: 0,
+            data: { open_id: 'ou_test' },
+          },
+        });
+      }
       if (url.includes('/events/instance_view')) {
         return of({
           data: {
@@ -57,6 +65,17 @@ describe('WorkbenchCalendarService', () => {
       throw new Error(`Unexpected GET ${url}`);
     });
     const post = jest.fn((url: string, body?: { [key: string]: string }) => {
+      if (url.endsWith('/jssdk/ticket/get')) {
+        return of({
+          data: {
+            code: 0,
+            data: {
+              expire_in: 7200,
+              ticket: 'docs-ticket',
+            },
+          },
+        });
+      }
       if (url.endsWith('/calendar/v4/calendars/primary')) {
         return of({
           data: {
@@ -120,6 +139,9 @@ describe('WorkbenchCalendarService', () => {
     expect(authorizationUrl.searchParams.get('scope')).toContain(
       'calendar:calendar:readonly',
     );
+    expect(authorizationUrl.searchParams.get('scope')).toContain(
+      'drive:drive',
+    );
     expect(authorizationUrl.searchParams.get('redirect_uri')).toBe(
       'https://example.com/app/app_test/calendar-oauth-callback',
     );
@@ -129,5 +151,19 @@ describe('WorkbenchCalendarService', () => {
     )).toBe(true);
     expect(response.events).toHaveLength(1);
     expect(response.events[0].eventId).toBe('exam-event');
+
+    const componentAuth = await service.getDocumentComponentAuth(
+      tokenCookieHeader,
+      'miaoda-user',
+      'https://example.com/app/app_test?docsPoc=1&document=wiki-node',
+    );
+    expect(componentAuth.response.connected).toBe(true);
+    expect(componentAuth.response.auth).toMatchObject({
+      openId: 'ou_test',
+      appId: 'cli_test',
+      url: 'https://example.com/app/app_test',
+      jsApiList: ['DocsComponent'],
+    });
+    expect(componentAuth.response.auth?.signature).toMatch(/^[0-9a-f]{40}$/u);
   });
 });

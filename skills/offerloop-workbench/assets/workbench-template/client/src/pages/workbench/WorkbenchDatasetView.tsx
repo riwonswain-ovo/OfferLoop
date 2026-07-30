@@ -186,11 +186,14 @@ const DatasetPager: React.FC<DatasetViewProps> = ({
   loading,
   onPageChange,
 }) => {
-  const pageCount: number = getWorkbenchPageCount(dataset.total);
+  const pageCount: number = getWorkbenchPageCount(
+    dataset.total,
+    dataset.pageSize,
+  );
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
+    <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t bg-background pt-3 text-sm text-muted-foreground">
       <span>
-        共 {dataset.total} 条 · 第 {page} / {pageCount} 页 · 每页 30 条
+        共 {dataset.total} 条 · 第 {page} / {pageCount} 页 · 每页最多 {dataset.pageSize} 条
       </span>
       <div className="flex items-center gap-2">
         <Button
@@ -221,9 +224,10 @@ const WorkbenchTable: React.FC<WorkbenchTableProps> = ({
   loading,
   onPageChange,
 }) => (
-  <div className={`space-y-3 ${loading ? 'opacity-60' : ''}`}>
-    <Table>
-      <TableHeader>
+  <div className={`flex h-full min-h-0 flex-col ${loading ? 'opacity-60' : ''}`}>
+    <div className="min-h-0 flex-1 overflow-auto [&>[data-slot=table-container]]:overflow-visible">
+      <Table className="min-w-[860px]">
+      <TableHeader className="sticky top-0 z-10 bg-background shadow-[0_1px_0_0_hsl(var(--border))]">
         <TableRow>
           {columns.map((column: DatasetColumn) => (
             <TableHead key={column.key} className={column.width}>
@@ -280,7 +284,8 @@ const WorkbenchTable: React.FC<WorkbenchTableProps> = ({
           </TableRow>
         ))}
       </TableBody>
-    </Table>
+      </Table>
+    </div>
     <DatasetPager
       dataset={dataset}
       page={page}
@@ -361,10 +366,13 @@ const ProgressKanban: React.FC<DatasetViewProps> = ({
 
 export {
   COMPANY_COLUMNS,
+  cellToDisplayText,
+  cellToText,
   EVENT_COLUMNS,
   EXAM_COLUMNS,
   INTERVIEW_COLUMNS,
   PROGRESS_COLUMNS,
+  PROGRESS_STAGE_ORDER,
   ProgressKanban,
   WorkbenchTable,
 };

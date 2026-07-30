@@ -1,11 +1,12 @@
-import { Outlet } from "react-router-dom";
+import React from 'react';
+import { Outlet } from 'react-router-dom';
 
-const Layout = () => {
-  return (
-    <div className="w-screen h-screen">
-      <Outlet />
-    </div>
-  );
-};
+export interface AgentPrefill {
+  id: string;
+  message: string;
+  preferredRoute: string;
+}
+
+const Layout: React.FC = () => <Outlet />;
 
 export default Layout;

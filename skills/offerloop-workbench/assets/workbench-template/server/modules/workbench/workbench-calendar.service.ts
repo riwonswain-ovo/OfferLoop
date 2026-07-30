@@ -17,20 +17,22 @@ import { firstValueFrom } from 'rxjs';
 import type {
   WorkbenchCalendarEvent,
   WorkbenchCalendarResponse,
+  WorkbenchWikiComponentAuthResponse,
 } from '@shared/api.interface';
 
 const FEISHU_API_ROOT = 'https://open.feishu.cn/open-apis';
 const FEISHU_AUTHORIZE_URL =
   'https://accounts.feishu.cn/open-apis/authen/v1/authorize';
 const FEISHU_OAUTH_SCOPE =
-  'calendar:calendar:readonly calendar:calendar.event:read offline_access';
+  'calendar:calendar:readonly calendar:calendar.event:read '
+  + 'drive:drive offline_access';
 const TOKEN_COOKIE_NAMES = [
-  'offerloop-calendar-session-v2-0',
-  'offerloop-calendar-session-v2-1',
-  'offerloop-calendar-session-v2-2',
+  'offerloop-calendar-session-v3-0',
+  'offerloop-calendar-session-v3-1',
+  'offerloop-calendar-session-v3-2',
 ];
 const TOKEN_COOKIE_CHUNK_SIZE = 3000;
-const STATE_COOKIE = 'offerloop-calendar-oauth-state';
+const STATE_COOKIE = 'offerloop-calendar-oauth-state-v3';
 const STATE_LIFETIME_MS = 10 * 60 * 1000;
 const RECRUITING_EVENT_PATTERN =
   /(笔试|测评|机试|面试|群面|[一二三四五]面|HR\s*面)/iu;
@@ -78,6 +80,15 @@ interface FeishuOAuthTokenResponse {
   scope?: string;
 }
 
+interface FeishuUserInfo {
+  open_id?: string;
+}
+
+interface FeishuJsApiTicket {
+  expire_in?: number;
+  ticket?: string;
+}
+
 interface CalendarTokenSession {
   userId: string;
   refreshToken: string;
@@ -106,6 +117,14 @@ interface CalendarLoadResult {
 interface CalendarOAuthResult {
   tokenCookieParts: string[];
   tokenCookieMaxAgeMs: number;
+}
+
+interface DocumentComponentAuthLoadResult {
+  response: WorkbenchWikiComponentAuthResponse;
+  stateCookie?: string;
+  tokenCookieParts?: string[];
+  tokenCookieMaxAgeMs?: number;
+  clearTokenCookies?: boolean;
 }
 
 @Injectable()
@@ -207,6 +226,68 @@ export class WorkbenchCalendarService {
     };
   }
 
+  async getDocumentComponentAuth(
+    cookieHeader: string,
+    userId: string,
+    pageUrl: string,
+  ): Promise<DocumentComponentAuthLoadResult> {
+    const encryptedSession: string = this.readTokenCookie(cookieHeader);
+    const session: CalendarTokenSession | null = encryptedSession
+      ? this.decrypt<CalendarTokenSession>(encryptedSession)
+      : null;
+    if (!session || session.userId !== userId) {
+      return this.createDocumentAuthorizationResult(userId);
+    }
+
+    let tokenBundle: CalendarTokenBundle;
+    try {
+      tokenBundle = await this.refreshTokenSession(session);
+    } catch (error: unknown) {
+      this.logger.warn(
+        '飞书文档用户授权已失效，需要重新连接',
+        error instanceof Error ? error.message : undefined,
+      );
+      return {
+        ...this.createDocumentAuthorizationResult(userId),
+        clearTokenCookies: true,
+      };
+    }
+
+    const [openId, ticket]: [string, string] = await Promise.all([
+      this.readUserOpenId(tokenBundle.accessToken),
+      this.readJsApiTicket(tokenBundle.accessToken),
+    ]);
+    const timestamp: number = Date.now();
+    const nonceStr: string = randomBytes(16).toString('base64url');
+    const url: string = this.normalizeComponentUrl(pageUrl);
+    const signatureSource: string =
+      `jsapi_ticket=${ticket}&noncestr=${nonceStr}`
+      + `&timestamp=${timestamp}&url=${url}`;
+    const signature: string = createHash('sha1')
+      .update(signatureSource)
+      .digest('hex');
+
+    return {
+      response: {
+        connected: true,
+        auth: {
+          openId,
+          signature,
+          appId: this.requireEnv('FEISHU_APP_ID'),
+          timestamp,
+          nonceStr,
+          url,
+          jsApiList: ['DocsComponent'],
+        },
+      },
+      tokenCookieParts: this.splitTokenCookie(
+        this.encrypt(tokenBundle.session),
+      ),
+      tokenCookieMaxAgeMs:
+        tokenBundle.session.refreshTokenExpiresAt - Date.now(),
+    };
+  }
+
   getPublicUrl(): string {
     const rawUrl: string = this.requireEnv('WORKBENCH_PUBLIC_URL');
     const parsed: URL = new URL(rawUrl);
@@ -252,6 +333,20 @@ export class WorkbenchCalendarService {
         message: '连接飞书个人日历后，将自动展示未来 7 天笔面试安排。',
       },
       stateCookie: this.encrypt(oauthState),
+    };
+  }
+
+  private createDocumentAuthorizationResult(
+    userId: string,
+  ): DocumentComponentAuthLoadResult {
+    const result: CalendarLoadResult = this.createAuthorizationResult(userId);
+    return {
+      response: {
+        connected: false,
+        authorizationUrl: result.response.authorizationUrl,
+        message: '连接飞书文档后，将使用你的身份加载原生编辑器。',
+      },
+      stateCookie: result.stateCookie,
     };
   }
 
@@ -391,6 +486,64 @@ export class WorkbenchCalendarService {
       );
   }
 
+  private async readUserOpenId(accessToken: string): Promise<string> {
+    const response: AxiosResponse<FeishuEnvelope<FeishuUserInfo>> =
+      await firstValueFrom(
+        this.httpService.get<FeishuEnvelope<FeishuUserInfo>>(
+          `${FEISHU_API_ROOT}/authen/v1/user_info`,
+          {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          },
+        ),
+      );
+    const payload: FeishuEnvelope<FeishuUserInfo> = response.data;
+    const openId: string = String(payload.data?.open_id ?? '');
+    if (payload.code !== 0 || !openId) {
+      throw new ServiceUnavailableException('无法读取飞书用户身份');
+    }
+    return openId;
+  }
+
+  private async readJsApiTicket(accessToken: string): Promise<string> {
+    const response: AxiosResponse<FeishuEnvelope<FeishuJsApiTicket>> =
+      await firstValueFrom(
+        this.httpService.post<FeishuEnvelope<FeishuJsApiTicket>>(
+          `${FEISHU_API_ROOT}/jssdk/ticket/get`,
+          undefined,
+          {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          },
+        ),
+      );
+    const payload: FeishuEnvelope<FeishuJsApiTicket> = response.data;
+    const ticket: string = String(payload.data?.ticket ?? '');
+    if (payload.code !== 0 || !ticket) {
+      throw new ServiceUnavailableException('无法获取飞书文档组件票据');
+    }
+    return ticket;
+  }
+
+  private normalizeComponentUrl(rawUrl: string): string {
+    const parsed: URL = new URL(rawUrl);
+    const publicUrl: URL = new URL(this.getPublicUrl());
+    const allowedHosts: Set<string> = new Set([
+      publicUrl.host,
+      publicUrl.host.replace(/\.feishuapp\.com$/u, '.aiforce.cloud'),
+    ]);
+    if (
+      parsed.protocol !== 'https:'
+      || parsed.username
+      || parsed.password
+      || !allowedHosts.has(parsed.host)
+      || parsed.pathname !== publicUrl.pathname
+    ) {
+      throw new BadRequestException('飞书文档组件页面地址无效');
+    }
+    parsed.search = '';
+    parsed.hash = '';
+    return parsed.toString();
+  }
+
   private eventTimeToIso(value: FeishuEventTime | undefined): string {
     if (value?.timestamp) {
       return new Date(Number(value.timestamp) * 1000).toISOString();
@@ -481,4 +634,8 @@ export class WorkbenchCalendarService {
   }
 }
 
-export type { CalendarLoadResult, CalendarOAuthResult };
+export type {
+  CalendarLoadResult,
+  CalendarOAuthResult,
+  DocumentComponentAuthLoadResult,
+};

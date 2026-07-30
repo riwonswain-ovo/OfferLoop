@@ -12,6 +12,7 @@
     "dev": "./scripts/dev.sh",
     "dev:server": "NODE_ENV=development nest start --watch",
     "dev:client": "NODE_ENV=development vite --config vite.config.ts",
+    "dev:local": "node ./scripts/dev-local.js",
     "gen:db-schema": "npx -y @lark-apaas/db-schema-sync@latest --output server/database/schema.ts --export-custom-types",
     "gen:openapi": "echo 'UNSUPPORTED, SKIP'",
     "build": "./scripts/build.sh",
@@ -30,9 +31,9 @@
     "lint": "node ./scripts/lint.js",
     "format": "prettier --write \"{server,client,test}/**/*.{js,ts,tsx,json,md}\"",
     "precommit": "node scripts/hooks/run-precommit.js",
-    "upgrade": "npx -y @lark-apaas/fullstack-cli@latest sync --disable-gen-openapi",
+    "prepare": "chmod +x .githooks/pre-commit 2>/dev/null; git config core.hooksPath .githooks 2>/dev/null || true",
     "postinstall": "fullstack-cli action-plugin init",
-    "dev:local": "node ./scripts/dev-local.js"
+    "upgrade": "npx -y @lark-apaas/fullstack-cli@latest sync --disable-gen-openapi"
   },
   "dependencies": {
     "@lark-apaas/fullstack-nestjs-core": "^1.1.56",
@@ -198,7 +199,17 @@
     "testMatch": [
       "<rootDir>/server/**/*.spec.ts",
       "<rootDir>/test/unit/**/*.spec.ts"
-    ]
+    ],
+    "transform": {
+      "^.+\\.tsx?$": [
+        "ts-jest",
+        {
+          "tsconfig": {
+            "esModuleInterop": true
+          }
+        }
+      ]
+    }
   },
   "engines": {
     "node": ">=22.0.0",

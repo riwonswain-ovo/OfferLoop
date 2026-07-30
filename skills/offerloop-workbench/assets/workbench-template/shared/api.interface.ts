@@ -39,6 +39,9 @@ export interface WorkbenchDatasetQuery {
   tableId?: string;
   viewId?: string;
   pageToken?: string;
+  pageSize?: number;
+  searchText?: string;
+  filters?: { [fieldName: string]: string };
 }
 
 export interface WorkbenchCalendarEvent {
@@ -57,6 +60,90 @@ export interface WorkbenchCalendarResponse {
   message?: string;
 }
 
+export interface WorkbenchWikiNode {
+  nodeToken: string;
+  objectToken: string;
+  objectType: string;
+  title: string;
+  hasChildren: boolean;
+  wikiUrl: string;
+  documentUrl?: string;
+  children: WorkbenchWikiNode[];
+}
+
+export interface WorkbenchWikiDirectoryResponse {
+  spaceId: string;
+  spaceName: string;
+  generatedAt: string;
+  nodes: WorkbenchWikiNode[];
+}
+
+export interface WorkbenchWikiDocumentPreviewResponse {
+  title: string;
+  content: string;
+  sourceUrl: string;
+  generatedAt: string;
+}
+
+export interface WorkbenchWikiComponentAuth {
+  openId: string;
+  signature: string;
+  appId: string;
+  timestamp: number;
+  nonceStr: string;
+  url: string;
+  jsApiList: string[];
+}
+
+export interface WorkbenchWikiComponentAuthResponse {
+  connected: boolean;
+  authorizationUrl?: string;
+  auth?: WorkbenchWikiComponentAuth;
+  message?: string;
+}
+
+export interface KnowledgeDigestSummary {
+  recordId: string;
+  title: string;
+  sourceName: string;
+  sourceType: string;
+  publishedAt?: string;
+  conclusion: string;
+  keyPoints: string[];
+  value: string;
+  boundary: string;
+  tags: string[];
+  sourceUrl?: string;
+  documentUrl?: string;
+  status: string;
+}
+
+export interface KnowledgeDigestSource {
+  recordId: string;
+  name: string;
+  mode: string;
+  type: string;
+  interests: string[];
+  enabled: boolean;
+  lastSyncedAt?: string;
+  status: string;
+  message: string;
+  totalItems: number;
+  completedItems: number;
+  nextBatch: string;
+  targetDate?: string;
+  planUrl?: string;
+}
+
+export interface KnowledgeDigestResponse {
+  configured: boolean;
+  generatedAt: string;
+  summaries: KnowledgeDigestSummary[];
+  sources: KnowledgeDigestSource[];
+  baseUrl?: string;
+  message?: string;
+}
+
 export interface WorkbenchResponse {
   generatedAt: string;
   calendarSourceUrl: string;
@@ -66,4 +153,144 @@ export interface WorkbenchResponse {
   progressViews: WorkbenchViewMeta[];
   events: WorkbenchDataset;
   eventTables: WorkbenchTableMeta[];
+}
+
+export interface WorkbenchStageCount {
+  stage: string;
+  count: number;
+}
+
+export interface WorkbenchApplicationsResponse {
+  generatedAt: string;
+  calendarSourceUrl: string;
+  progress: WorkbenchDataset;
+  progressView: WorkbenchViewMeta;
+  stageCounts: WorkbenchStageCount[];
+  upcomingEvents: WorkbenchDataset;
+}
+
+export interface WorkbenchInterviewsResponse {
+  generatedAt: string;
+  events: WorkbenchDataset;
+  eventTable: WorkbenchTableMeta;
+  eventView: WorkbenchViewMeta;
+  offerCount: number;
+}
+
+export interface WorkbenchHomeResponse {
+  generatedAt: string;
+  opportunityCount: number;
+  stageCounts: WorkbenchStageCount[];
+  upcomingEvents: WorkbenchDataset;
+  calendarSourceUrl: string;
+}
+
+export interface WorkbenchHomeStageCountsResponse {
+  generatedAt: string;
+  stageCounts: WorkbenchStageCount[];
+}
+
+export type ProductSenseLogicType =
+  | '商业逻辑'
+  | '产品逻辑'
+  | '业务逻辑'
+  | '方法论逻辑';
+
+export type ProductSenseStatus =
+  | 'recommended'
+  | 'answering'
+  | 'coaching'
+  | 'archiving';
+
+export type ProductSenseDislikeReason =
+  | '范围太大'
+  | '前提模糊'
+  | '不感兴趣'
+  | '过于熟悉'
+  | '依赖行业知识'
+  | '其他原因';
+
+export type ProductSenseQuestionScope = '具体功能' | '具体业务' | '整体应用';
+
+export type ProductSenseKnowledgeLevel = '大众认知' | '行业认知';
+
+export type ProductSenseCoachingStage = 'atomize' | 'group' | 'mece';
+
+export interface ProductSenseFollowup {
+  id: string;
+  stage: ProductSenseCoachingStage;
+  title: string;
+  prompt: string;
+  helper: string;
+  minLength: number;
+}
+
+export interface ProductSenseQuestion {
+  id: string;
+  company: string;
+  prompt: string;
+  logicType: ProductSenseLogicType;
+  sector: string;
+  scopeType: ProductSenseQuestionScope;
+  knowledgeLevel: ProductSenseKnowledgeLevel;
+  factAnchor: string;
+  sourceLabel: string;
+  sourceUrl: string;
+  followups: ProductSenseFollowup[];
+}
+
+export interface ProductSensePreferenceSummary {
+  feedbackCount: number;
+  learnedSignals: string[];
+}
+
+export interface ProductSenseFeedbackInput {
+  questionId?: string;
+  reason: ProductSenseDislikeReason;
+  detail?: string;
+}
+
+export interface ProductSenseSelectInput {
+  questionId: string;
+}
+
+export interface ProductSenseSession {
+  question: ProductSenseQuestion;
+  queuedQuestion: ProductSenseQuestion;
+  dailyQuestions: ProductSenseQuestion[];
+  dailyDate: string;
+  canRegenerate: boolean;
+  status: ProductSenseStatus;
+  draft: string;
+  followupAnswers: { [questionId: string]: string };
+  selfSummary: string;
+  completedCount: number;
+  poolSize: number;
+  canSwitch: boolean;
+  progress: number;
+  preference: ProductSensePreferenceSummary;
+  lastArchiveUrl?: string;
+}
+
+export interface ProductSenseDraftInput {
+  draft: string;
+  followupAnswers: { [questionId: string]: string };
+  selfSummary: string;
+  status: 'answering' | 'coaching';
+}
+
+export interface ProductSenseCompleteResponse {
+  session: ProductSenseSession;
+  archiveUrl: string;
+}
+
+export interface ProductSenseAutoCompleteResponse {
+  completed: boolean;
+  session: ProductSenseSession;
+  archiveUrl?: string;
+  message?: string;
+}
+
+export interface ProductSenseExternalCompleteInput {
+  archiveUrl: string;
 }

@@ -1043,13 +1043,15 @@ class OfferLoopSetupTest(unittest.TestCase):
         )
         manifest = json.loads((root / "template.json").read_text(encoding="utf-8"))
         contract = manifest["deployment_contract"]
-        self.assertEqual(contract["workbench_page_size"], 30)
+        self.assertEqual(contract["kanban_page_size"], 9)
+        self.assertEqual(contract["table_page_size"], 15)
         self.assertEqual(contract["oauth_callback_path"], "/calendar-oauth-callback")
         self.assertEqual(
             contract["oauth_scopes"],
             [
                 "calendar:calendar:readonly",
                 "calendar:calendar.event:read",
+                "drive:drive",
                 "offline_access",
             ],
         )
@@ -1072,9 +1074,10 @@ class OfferLoopSetupTest(unittest.TestCase):
         app = (root / "client/src/app.tsx").read_text(encoding="utf-8")
 
         self.assertIn(
-            "calendar:calendar:readonly calendar:calendar.event:read offline_access",
+            "calendar:calendar:readonly calendar:calendar.event:read",
             service,
         )
+        self.assertIn("drive:drive offline_access", service)
         self.assertIn("this.httpService.post<FeishuEnvelope<FeishuPrimaryCalendarData>>", service)
         self.assertIn("/calendar/v4/calendars/primary", service)
         self.assertIn("interface CalendarTokenSession", service)
@@ -1098,7 +1101,8 @@ class OfferLoopSetupTest(unittest.TestCase):
             "csrf token not found in header",
             "授权会话过长",
             "POST /open-apis/calendar/v4/calendars/primary",
-            "每页固定 30 条",
+            "看板视图每页最多",
+            "表格视图的三张表各自每页最多 15 条",
             "再刷新一次",
         ):
             self.assertIn(required_text, guide)
@@ -1136,7 +1140,10 @@ class OfferLoopSetupTest(unittest.TestCase):
                 result["deployment_contract"]["calendar_primary_method"], "POST"
             )
             self.assertEqual(
-                result["deployment_contract"]["workbench_page_size"], 30
+                result["deployment_contract"]["kanban_page_size"], 9
+            )
+            self.assertEqual(
+                result["deployment_contract"]["table_page_size"], 15
             )
 
     def test_materializer_requires_a_real_miaoda_binding(self):

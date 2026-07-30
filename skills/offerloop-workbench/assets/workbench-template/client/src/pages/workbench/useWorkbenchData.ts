@@ -72,7 +72,10 @@ const INITIAL_LOADING: WorkbenchLoadingState = {
   events: false,
 };
 
-const useWorkbenchData = (): WorkbenchDataState => {
+const useWorkbenchData = (
+  loadCalendarOnStart = true,
+  datasetPageSize = 9,
+): WorkbenchDataState => {
   const [data, setData] = useState<WorkbenchResponse | null>(null);
   const [calendar, setCalendar] =
     useState<WorkbenchCalendarResponse | null>(null);
@@ -200,6 +203,7 @@ const useWorkbenchData = (): WorkbenchDataState => {
       const query: WorkbenchDatasetQuery = {
         ...selection,
         pageToken: pageToken || undefined,
+        pageSize: datasetPageSize,
       };
       const dataset: WorkbenchDataset = await getWorkbenchDataset(query);
       cacheDataset(selection, page, dataset);
@@ -232,21 +236,46 @@ const useWorkbenchData = (): WorkbenchDataState => {
       setSelectedProgressView(progressView.viewId);
       setSelectedEventTable(eventTable.tableId);
       setSelectedEventView(eventView.viewId);
-      setCompanyDataset(response.companies);
-      setProgressDataset(response.progress);
-      setEventDataset(response.events);
+      const datasets: [
+        WorkbenchDataset,
+        WorkbenchDataset,
+        WorkbenchDataset,
+      ] = datasetPageSize === response.companies.pageSize
+        ? [response.companies, response.progress, response.events]
+        : await Promise.all([
+          getWorkbenchDataset({
+            source: 'companies',
+            viewId: companyView.viewId,
+            pageSize: datasetPageSize,
+          }),
+          getWorkbenchDataset({
+            source: 'progress',
+            viewId: progressView.viewId,
+            pageSize: datasetPageSize,
+          }),
+          getWorkbenchDataset({
+            source: 'events',
+            tableId: eventTable.tableId,
+            viewId: eventView.viewId,
+            pageSize: datasetPageSize,
+          }),
+        ]);
+      const [companies, progress, events] = datasets;
+      setCompanyDataset(companies);
+      setProgressDataset(progress);
+      setEventDataset(events);
       setCompanyPage(1);
       setProgressPage(1);
       setEventPage(1);
       cacheDataset(
         { source: 'companies', viewId: companyView.viewId },
         1,
-        response.companies,
+        companies,
       );
       cacheDataset(
         { source: 'progress', viewId: progressView.viewId },
         1,
-        response.progress,
+        progress,
       );
       cacheDataset(
         {
@@ -255,7 +284,7 @@ const useWorkbenchData = (): WorkbenchDataState => {
           viewId: eventView.viewId,
         },
         1,
-        response.events,
+        events,
       );
     } catch (_error: unknown) {
       setError('暂时无法读取飞书 Base，请稍后重试或检查应用授权。');
@@ -353,7 +382,11 @@ const useWorkbenchData = (): WorkbenchDataState => {
     }
     initialLoadStartedRef.current = true;
     void loadWorkbench();
-    void completeCalendarOAuth();
+    if (loadCalendarOnStart) {
+      void completeCalendarOAuth();
+    } else {
+      setCalendarLoading(false);
+    }
   }, []);
 
   const selectCompanyView = async (viewId: string): Promise<void> => {

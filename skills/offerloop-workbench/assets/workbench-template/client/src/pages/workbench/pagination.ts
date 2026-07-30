@@ -1,7 +1,9 @@
-const WORKBENCH_PAGE_SIZE = 30;
+const WORKBENCH_PAGE_SIZE = 9;
 
-const getWorkbenchPageCount = (total: number): number =>
-  Math.max(1, Math.ceil(total / WORKBENCH_PAGE_SIZE));
+const getWorkbenchPageCount = (
+  total: number,
+  pageSize = WORKBENCH_PAGE_SIZE,
+): number => Math.max(1, Math.ceil(total / pageSize));
 
 const getWorkbenchDatasetKey = (
   source: string,

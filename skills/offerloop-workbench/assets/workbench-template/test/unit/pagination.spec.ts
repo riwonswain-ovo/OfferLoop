@@ -5,10 +5,11 @@ import {
 } from '../../client/src/pages/workbench/pagination';
 
 describe('workbench pagination', () => {
-  it('uses 30 records per server-side page', () => {
-    expect(WORKBENCH_PAGE_SIZE).toBe(30);
-    expect(getWorkbenchPageCount(65)).toBe(3);
+  it('uses 9 records per server-side page', () => {
+    expect(WORKBENCH_PAGE_SIZE).toBe(9);
+    expect(getWorkbenchPageCount(65)).toBe(8);
     expect(getWorkbenchPageCount(0)).toBe(1);
+    expect(getWorkbenchPageCount(65, 15)).toBe(5);
   });
 
   it('keeps page-token caches isolated by source, table, and view', () => {
