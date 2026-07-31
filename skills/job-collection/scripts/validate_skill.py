@@ -20,6 +20,7 @@ REQUIRED_FILES = {
     "references/excel-insert.md",
     "references/field-contract.md",
     "references/dedup_judge.md",
+    "scripts/tencent_mcp.py",
 }
 
 TEXT_SUFFIXES = {".md", ".py", ".toml", ".yml", ".yaml", ".example"}
@@ -30,6 +31,9 @@ PRIVATE_PATTERNS = {
     "concrete Feishu view id": re.compile(r"\bvew(?!Example\b)[A-Za-z0-9]{10,}\b"),
     "secret assignment": re.compile(
         r"FEISHU_APP_SECRET=(?!replace-me\b|x{8,}\b)[A-Za-z0-9_-]{20,}"
+    ),
+    "concrete Tencent Docs token": re.compile(
+        r"TENCENT_DOCS_TOKEN=(?!replace-me\b|x{8,}\b)[^\s#]{20,}"
     ),
 }
 
@@ -72,6 +76,8 @@ def validate_references(errors: list[str]) -> None:
 
 def validate_private_data(errors: list[str]) -> None:
     for path in text_files():
+        if path == ROOT / "scripts/validate_skill.py":
+            continue
         content = path.read_text(encoding="utf-8")
         for label, pattern in PRIVATE_PATTERNS.items():
             for match in pattern.finditer(content):
@@ -110,7 +116,13 @@ def validate_current_contract(errors: list[str]) -> None:
 
     required_markers = {
         "references/lark-onboarding.md": ["+record-get", "--base-token", "网络错误分层"],
-        "references/tencent-smartsheet-source.md": ["Chrome 扩展恢复 SOP", "每日更新", "tabs.finalize"],
+        "references/tencent-smartsheet-source.md": [
+            "官方 MCP 首选",
+            "Chrome 扩展恢复 SOP",
+            "每日更新",
+            "tabs.finalize",
+            "has_more=false",
+        ],
         "references/excel-insert.md": ["no operation produced", "安全短前缀"],
         "references/personal-excel-source.md": ["13 字段契约", "每次只传一个 `--record-id`"],
     }

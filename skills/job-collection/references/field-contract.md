@@ -86,7 +86,7 @@
 | `source_url` | 去除临时认证参数后的稳定 URL |
 | `app_token` / `table_id` | 仅飞书来源填写 |
 | `is_active` | 是否参与下一次同步 |
-| `credential_status` | `not_required` / `browser_session` / `pending` / `expired` |
+| `credential_status` | `not_required` / `mcp_token` / `browser_session` / `pending` / `expired` |
 | `last_sync_time` | 本来源独立的成功扫描高水位 |
 | `last_sync_result` | 窗口、候选、重复、新增、补全、失败和游标摘要 |
 
@@ -137,7 +137,7 @@
 对账规则：
 
 - `求职进展` 必须包含用户维护的 SingleSelect 字段 `投递简历版本`。选项名称与知识库
-  `01｜当前简历` 中的文档标题完全一致，例如 `互联网产品经理岗 - 简历`；本 Skill 不读取
+  `02｜当前简历` 中的文档标题完全一致，例如 `互联网产品经理岗 - 简历`；本 Skill 不读取
   知识库、不创建或同步选项；
 - 新建：当前阶段=`已投递`、公司=来源公司、投递岗位、岗位 JD 和投递简历版本为空、投递日期
   为本次首次变更日期，并逐值复制企业清单的公告链接和投递链接；

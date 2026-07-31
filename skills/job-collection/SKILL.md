@@ -11,7 +11,9 @@ description: 招聘信息源同步助手。仅读取用户提供的飞书多维�
 
 ## OfferLoop 新用户入口
 
-用户第一次使用、尚未选择 lark-cli profile、或不确定缺少什么配置时，先调用同仓库的 `offerloop-setup`。只配置 `job-collection` 所需能力，不要求用户同时配置邮箱和个人日历。
+用户第一次使用、尚未选择 lark-cli profile、或不确定缺少什么配置时，先调用同仓库的
+`offerloop-setup`。核心初始化会创建或接管私有知识库和三张业务 Base；不要求用户配置邮箱、
+个人日历或可选工作台。
 
 本 Skill 默认使用选定 profile 的 bot 身份执行 Base 同步和 workflow；同一 profile 的 user 身份由 `recruiting-reminder` 在需要个人日历时单独授权。不要把两种身份混用，也不要因为 user 未授权而阻塞纯岗位同步。
 
@@ -20,7 +22,8 @@ description: 招聘信息源同步助手。仅读取用户提供的飞书多维�
 仅支持两类长期信息源：
 
 1. 飞书/Lark 多维表格：URL 包含 `feishu.cn/base/` 或 `larksuite.com/base/`。
-2. 腾讯 Smartsheet：URL 包含 `docs.qq.com/smartsheet/`，使用用户已登录浏览器读取。
+2. 腾讯 Smartsheet：URL 包含 `docs.qq.com/smartsheet/`，优先使用腾讯文档官方 MCP，
+   不可用时回退到用户已登录浏览器。
 
 不主动搜索招聘平台、公众号、搜索引擎或公开网页。用户没有提供来源且「信息源登记」为空时，要求用户先提供上述两类链接，不要自行扩展搜索渠道。
 
@@ -31,7 +34,10 @@ description: 招聘信息源同步助手。仅读取用户提供的飞书多维�
 - 飞书优先使用 `lark-cli` 的本地凭证存储；直接 OpenAPI 模式仅从进程环境变量或 `~/.config/offerloop/job-collection/.env`（遵循 `XDG_CONFIG_HOME`）读取 `FEISHU_APP_ID` / `FEISHU_APP_SECRET`。旧版 Skill 根目录 `.env` 只作兼容迁移。
 - `.env`、浏览器状态、token 缓存和运行快照不得进入 Git、Markdown、日志或对话输出。
 - 不自动投递职位，不删除用户记录，不覆盖用户维护的 `投递进度`、用户字段和主子表映射字段。
-- 腾讯文档只使用可见页面、导出或复制能力；不猜测私有 API，不抓 Cookie、WebSocket 帧或隐藏接口。
+- 腾讯文档只使用官方 MCP、可见页面、导出或复制能力；不猜测私有 API，不抓 Cookie、
+  WebSocket 帧或隐藏接口。
+- 腾讯 MCP Personal Token 只进入 Agent/MCP 客户端的本地安全配置，不写入 Base、仓库、
+  Markdown、日志或对话。不得要求用户把 Token 粘贴到对话中。
 
 ## 运行模式
 
@@ -99,7 +105,7 @@ description: 招聘信息源同步助手。仅读取用户提供的飞书多维�
 - `source_type`：仅 `feishu_bitable` 或 `tencent_smartsheet`。
 - `source_url`：去掉临时登录参数后的稳定 URL。
 - `app_token` / `table_id`：仅飞书来源填写。
-- `credential_status`：`not_required` / `browser_session` / `pending` / `expired`。
+- `credential_status`：`not_required` / `mcp_token` / `browser_session` / `pending` / `expired`。
 - `last_sync_time`：该来源最近一次完整成功扫描的高水位。
 - `last_sync_result`：扫描窗口、候选/重复/新增/补全/失败数和游标前后值。
 
@@ -145,12 +151,19 @@ overlap_start = last_sync_time 所在日期往前 1 天的 00:00:00
 
 读取 `references/tencent-smartsheet-source.md`：
 
-1. 先按 reference 的 Chrome 扩展恢复 SOP 建立用户已登录会话；不得用未登录的内置浏览器冒充恢复成功。
-2. 优先实测导出/复制；可用时走结构化导入。
-3. 不可导出时，在用户已登录的浏览器中逐屏读取。
-4. 必须显式切换并验证“每日更新”或登记的目标工作表，不能点击隐藏 DOM 节点后假定切换成功。
-5. 每屏与上一屏重叠 1-2 行，检查行号和日期连续性；行号只用于连续性检查，不作为跨日游标。
-6. 必须取得可验证的公告或投递入口；只有截图或字段不可辨认时不写入。
+1. 先发现腾讯文档官方 MCP；可用时执行 `tools/list` 并只读探测
+   `smartsheet.list_tables`、`list_views`、`list_fields`、`list_records`。
+2. 从 URL 解析 `file_id`、`tab` 和 `viewId`。`tab/viewId` 只是定位提示，必须用 MCP 列表
+   结果回查工作表和视图，不得猜测或静默切到其他表。
+3. 首次同步用 `scripts/tencent_mcp.py` 的完整分页门禁：默认每页 25 条且绝不超过 100 条，
+   按返回的 `next` 继续，直到 `has_more=false`；逐页处理，不把全表塞进模型上下文。
+4. 原始 JSON 截断时在同一任务内自动缩小页大小并重试当前 `offset`；缩到单条仍截断时，
+   按必需字段分组读取并用 `record_id` 校验合并。只有单字段单条仍失败才停止该来源。
+5. 只有唯一 `record_id` 数等于稳定的 `total`、没有分页漂移且写后验收通过，才把首次扫描
+   视为完整并推进游标。任何未恢复的截断、重复 ID、`total` 变化或下一页不前进都保留旧游标。
+6. MCP 不可用、Token/VIP/文档权限失败时，才按 reference 的 Chrome 扩展恢复 SOP 回退：
+   优先导出/复制，否则在用户已登录浏览器中逐屏读取。
+7. 无论走 MCP 或浏览器，都必须取得可验证的公告或投递入口；字段不可辨认时不写入。
 
 ## 标准化与筛选
 
@@ -198,7 +211,7 @@ overlap_start = last_sync_time 所在日期往前 1 天的 00:00:00
 `求职进展` Base 的所有受管 grid/kanban 视图统一按 `投递日期` 降序、`公司` 升序；没有投递日期的历史记录排在有日期记录之后。创建或接管该 Base 时必须读取并核验每个视图的排序，确保新投递默认显示在最上方，不通过重排物理记录实现置顶。
 
 `求职进展` 必须包含用户维护的 SingleSelect 字段 `投递简历版本`。选项名称与飞书知识库
-`01｜当前简历` 中的文档标题完全一致，例如 `互联网产品经理岗 - 简历`。本 Skill 是招聘信息
+`02｜当前简历` 中的文档标题完全一致，例如 `互联网产品经理岗 - 简历`。本 Skill 是招聘信息
 提供与 Base 对账 Skill，不读取飞书知识库、不列出简历文档，也不自动创建、删除或重命名选项。
 新建求职进展时该字段为空，后续同步始终保留用户选择。
 
@@ -235,13 +248,13 @@ OfferLoop 同步服务，立即写入独立的 `求职进展` Base。沿用公�
 没有配置 `progress_base_url` 时跳过跨 Base 对账并在摘要中标为“未启用”，不能因此阻塞
 企业信息源同步。
 
-## 工作台协作
+## 知识库与可选工作台
 
-企业同步成功并完成求职进展对账后，如果 `offerloop-workspace` 可用且首页已配置，通知它
-刷新企业/进展状态与刷新时间。不要把完整岗位清单复制到首页，也不要修改个人区。
+企业清单和求职进展已作为唯一 Base 对象纳入 OfferLoop 知识库；本 Skill 直接写 Base，不调用
+`offerloop-workspace` 刷新首页，也不复制岗位清单到知识库文档。
 
-`offerloop-workspace` 刷新失败不回滚已经成功的来源游标、企业记录或进展记录；在本次摘要
-中标为“工作台待刷新”。未安装或未配置工作台时，`job-collection` 继续独立运行。
+`offerloop-workbench` 未选择、未部署或不可用时无需处理。已部署的工作台会按需读取 Base，
+不需要同步任务推送刷新；任何工作台错误都不回滚来源游标、企业记录或进展记录。
 
 ## 飞书消息通知
 
@@ -287,7 +300,7 @@ lark-cli im +messages-send \
 - 定时任务只处理「信息源登记」中的 active 来源，不主动搜索平台或公开网页。
 - 飞书来源使用用户选定并固定的 lark-cli profile 与机器人身份；每条命令显式带 `--profile <name> --as bot`，不得依赖默认 profile。
 - 创建定时任务前重新验证 bot app ID、目标 Base 写权限、来源 Base 读权限、workflow 权限和无人值守环境的凭证可读性。长期任务优先建议使用独立的 `job-collection` 飞书应用/profile，避免停用当前 Agent 使用的应用后同步失效。
-- 腾讯来源使用本机已登录浏览器。
+- 腾讯来源优先使用已配置的官方 MCP；不可用时使用本机已登录浏览器。
 - 腾讯来源失败时，飞书来源照常执行，且腾讯游标保持不变。
 - 无人值守运行不能等待用户确认；低置信度冲突只汇报。
 - 无论是否新增，都输出逐来源扫描窗口、候选、重复、硬筛后、新增、补全、失败原因和旧/新游标。

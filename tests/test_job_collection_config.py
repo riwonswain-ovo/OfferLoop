@@ -16,6 +16,13 @@ ROOT = Path(__file__).resolve().parents[1]
 FIELD_CONTRACT = ROOT / "skills" / "job-collection" / "references" / "field-contract.md"
 EXCEL_INSERT = ROOT / "skills" / "job-collection" / "references" / "excel-insert.md"
 JOB_COLLECTION_SKILL = ROOT / "skills" / "job-collection" / "SKILL.md"
+TENCENT_SOURCE = (
+    ROOT
+    / "skills"
+    / "job-collection"
+    / "references"
+    / "tencent-smartsheet-source.md"
+)
 EXPECTED_ENTERPRISE_FIELDS = [
     "信息更新时间",
     "投递进度",
@@ -92,6 +99,22 @@ class JobCollectionConfigTest(unittest.TestCase):
                 env_file,
             )
             self.assertEqual(credentials, ("process", "process-secret"))
+
+    def test_tencent_source_prefers_official_mcp_with_complete_pagination(self):
+        skill = JOB_COLLECTION_SKILL.read_text(encoding="utf-8")
+        source = TENCENT_SOURCE.read_text(encoding="utf-8")
+        self.assertIn("官方 MCP", skill)
+        self.assertIn("scripts/tencent_mcp.py", skill)
+        for marker in (
+            "smartsheet.list_records",
+            "offset",
+            "limit=100",
+            "has_more=false",
+            "total",
+            "record_id",
+            "浏览器兜底",
+        ):
+            self.assertIn(marker, source)
 
 
 if __name__ == "__main__":
