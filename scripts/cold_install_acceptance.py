@@ -88,7 +88,14 @@ def install_all_agents(source, project, home, env):
     for agent in AGENT_ROOTS:
         command.extend(("--agent", agent))
     command.append("--json")
-    completed = run(command, cwd=project, env=env)
+    try:
+        completed = run(command, cwd=project, env=env)
+    except subprocess.CalledProcessError as exc:
+        installer_output = (exc.stdout or "").strip()
+        raise RuntimeError(
+            f"OfferLoop installer failed with exit code {exc.returncode}: "
+            f"{installer_output}"
+        ) from None
     if "Failed to install" in completed.stdout:
         raise AssertionError("documented installer emitted a contradictory failure")
     report = json.loads(completed.stdout)

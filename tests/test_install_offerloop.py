@@ -246,6 +246,8 @@ class OfferLoopInstallerTest(unittest.TestCase):
 
             first = json.loads(first_output.getvalue())
             second = json.loads(second_output.getvalue())
+            first_output.getvalue().encode("ascii")
+            second_output.getvalue().encode("ascii")
             self.assertEqual(first_exit, 0)
             self.assertEqual(second_exit, 0)
             self.assertEqual(first["welcome"]["headline"], "欢迎使用 OfferLoop")

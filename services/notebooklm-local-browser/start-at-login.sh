@@ -11,6 +11,6 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
   --vm-type vz \
   --mount-type virtiofs
 
-cd "/Users/langweixian/Library/Application Support/OfferLoop/notebooklm-browser"
+cd "${HOME}/Library/Application Support/OfferLoop/notebooklm-browser"
 /opt/homebrew/bin/docker context use colima
 /opt/homebrew/bin/docker-compose -p notebooklm-local-browser up -d
