@@ -719,7 +719,7 @@ def main(argv=None) -> int:
                         "installer_version": INSTALLER_VERSION,
                         "offerloop_version": offerloop_version(),
                     },
-                    ensure_ascii=False,
+                    ensure_ascii=True,
                     indent=2,
                 )
             )
@@ -762,7 +762,7 @@ def main(argv=None) -> int:
     if show_welcome:
         payload["welcome"] = WELCOME
     if args.as_json:
-        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        print(json.dumps(payload, ensure_ascii=True, indent=2))
     else:
         if args.dry_run:
             print("DRY RUN：仅预览，未写入任何 Skill 文件。")
