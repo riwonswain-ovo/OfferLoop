@@ -144,7 +144,7 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertIn("不负责日常首页维护", setup)
         self.assertIn("offerloop-workspace", setup)
         self.assertIn("offerloop-workspace", collection)
-        self.assertIn("同步成功", collection)
+        self.assertIn("工作台错误都不回滚", collection)
         self.assertIn("offerloop-workspace", reminder)
         self.assertIn("不抓招聘信息", workspace)
         self.assertIn("不读邮箱", workspace)

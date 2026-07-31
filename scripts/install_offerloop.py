@@ -346,6 +346,13 @@ def _write_manifest(root: Path, agent: str, digests: dict[str, str]) -> None:
     temporary.replace(destination)
 
 
+def _move_directory(source: Path, destination: Path) -> None:
+    """Move a directory across platforms, including Windows hosted runners."""
+    if destination.exists():
+        raise FileExistsError(f"destination already exists: {destination.name}")
+    shutil.move(str(source), str(destination))
+
+
 def _yaml_scalar(value: str) -> str:
     """Return a conservative YAML scalar without requiring PyYAML."""
     value = value.split(" #", 1)[0].strip()
@@ -598,7 +605,7 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
                         / relative
                     )
                     backup.parent.mkdir(parents=True, exist_ok=True)
-                    candidate.replace(backup)
+                    _move_directory(candidate, backup)
                     external_backups.append((backup, candidate))
 
             for name, status in operations:
@@ -610,19 +617,19 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
                     # become active through recursive Skill discovery.
                     backup = root.parent / ".offerloop-backups" / timestamp / name
                     backup.parent.mkdir(parents=True, exist_ok=True)
-                    destination.replace(backup)
+                    _move_directory(destination, backup)
                 if status != "already_installed":
                     try:
-                        staged.replace(destination)
+                        _move_directory(staged, destination)
                     except Exception:
                         if backup and backup.exists() and not destination.exists():
-                            backup.replace(destination)
+                            _move_directory(backup, destination)
                         raise
         except Exception:
             for backup, candidate in reversed(external_backups):
                 if backup.exists() and not candidate.exists():
                     candidate.parent.mkdir(parents=True, exist_ok=True)
-                    backup.replace(candidate)
+                    _move_directory(backup, candidate)
             raise
 
     statuses = {status for _, status in operations}

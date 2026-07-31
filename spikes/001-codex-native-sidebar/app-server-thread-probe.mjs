@@ -6,7 +6,7 @@ const CODEX_BIN =
   '/Applications/ChatGPT.app/Contents/Resources/codex';
 const WORKSPACE =
   process.env.OFFERLOOP_PROBE_WORKSPACE ??
-  '/Users/langweixian/Desktop/ai coding/OfferLoop';
+  process.cwd();
 const THREAD_NAME = 'OfferLoop 原生会话验证';
 const TIMEOUT_MS = 180_000;
 

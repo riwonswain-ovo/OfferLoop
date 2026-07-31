@@ -6,19 +6,20 @@
     <string>com.offerloop.agent-worker</string>
     <key>ProgramArguments</key>
     <array>
-      <string>/Users/langweixian/.local/share/fnm/node-versions/v24.15.0/installation/bin/node</string>
-      <string>/Users/langweixian/Desktop/ai coding/OfferLoop/services/offerloop-agent-gateway/src/worker.mjs</string>
+      <string>/usr/bin/env</string>
+      <string>node</string>
+      <string>/path/to/OfferLoop/services/offerloop-agent-gateway/src/worker.mjs</string>
     </array>
     <key>WorkingDirectory</key>
-    <string>/Users/langweixian/Desktop/ai coding/OfferLoop/services/offerloop-agent-gateway</string>
+    <string>/path/to/OfferLoop/services/offerloop-agent-gateway</string>
     <key>EnvironmentVariables</key>
     <dict>
       <key>CODEX_BIN</key>
       <string>/Applications/ChatGPT.app/Contents/Resources/codex</string>
       <key>OFFERLOOP_SOURCE_ROOT</key>
-      <string>/Users/langweixian/Desktop/ai coding/OfferLoop</string>
+      <string>/path/to/OfferLoop</string>
       <key>PATH</key>
-      <string>/Users/langweixian/.local/share/fnm/node-versions/v24.15.0/installation/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Applications/ChatGPT.app/Contents/Resources</string>
+      <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Applications/ChatGPT.app/Contents/Resources</string>
     </dict>
     <key>RunAtLoad</key>
     <true/>

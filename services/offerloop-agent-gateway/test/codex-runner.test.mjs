@@ -13,7 +13,7 @@ test('buildAgentPrompt keeps Skill safety instructions', () => {
     confirmed: false,
     message: '检查面试通知',
     route: 'recruiting-reminder',
-    sourceRoot: '/Users/example/OfferLoop',
+    sourceRoot: '/workspace/OfferLoop',
   });
 
   assert.match(prompt, /SKILL[.]md/u);
@@ -37,7 +37,7 @@ test('createCodexArgs starts or resumes a session', () => {
     confirmed: false,
     message: '你好',
     route: 'auto',
-    sourceRoot: '/Users/example/OfferLoop',
+    sourceRoot: '/workspace/OfferLoop',
     workspace: '/tmp/offerloop-runtime',
   });
   const resumedRun = createCodexArgs({
@@ -45,7 +45,7 @@ test('createCodexArgs starts or resumes a session', () => {
     message: '继续',
     route: 'auto',
     sessionId: 'session-id',
-    sourceRoot: '/Users/example/OfferLoop',
+    sourceRoot: '/workspace/OfferLoop',
     workspace: '/tmp/offerloop-runtime',
   });
 
@@ -70,7 +70,7 @@ test('createCodexArgs starts or resumes a session', () => {
     true,
   );
   assert.equal(firstRun.includes('/tmp/offerloop-runtime'), true);
-  assert.equal(firstRun.includes('/Users/example/OfferLoop'), false);
+  assert.equal(firstRun.includes('/workspace/OfferLoop'), false);
   assert.equal(resumedRun.includes('resume'), true);
   assert.equal(resumedRun.includes('session-id'), true);
   assert.equal(
