@@ -85,6 +85,8 @@
 app_token、table_id、is_active、credential_status、last_sync_time、last_sync_result。
 
 首次同步前游标为空。只有来源完整扫描、企业双写和验收全部成功后才写高水位。
+腾讯来源优先登记 `credential_status=mcp_token`；只有官方 MCP 不可用而浏览器登录态已验证时，
+才登记 `browser_session`。Token 本身不写入「信息源登记」。
 
 ## 7. 独立求职进展
 

@@ -86,7 +86,7 @@
 | `source_url` | 去除临时认证参数后的稳定 URL |
 | `app_token` / `table_id` | 仅飞书来源填写 |
 | `is_active` | 是否参与下一次同步 |
-| `credential_status` | `not_required` / `browser_session` / `pending` / `expired` |
+| `credential_status` | `not_required` / `mcp_token` / `browser_session` / `pending` / `expired` |
 | `last_sync_time` | 本来源独立的成功扫描高水位 |
 | `last_sync_result` | 窗口、候选、重复、新增、补全、失败和游标摘要 |
 
