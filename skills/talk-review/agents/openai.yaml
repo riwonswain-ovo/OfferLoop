@@ -1,4 +1,4 @@
 interface:
   display_name: "真实面试复盘"
-  short_description: "解析真实面试ASR，生成求职者复盘和招聘者视角评估"
-  default_prompt: "Use $talk-review to parse my interview ASR faithfully, confirm uncertain passages, and generate an evidence-based candidate review plus recruiter-perspective assessment."
+  short_description: "复盘真实面试 ASR，支持 AI 产品专项诊断与缺口回流"
+  default_prompt: "使用 $talk-review 忠实解析并复盘我的真实面试 ASR；若为 AI 产品岗位，请诊断项目证据链、技术边界、指标口径和追问表现。"

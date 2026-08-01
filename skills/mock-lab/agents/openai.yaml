@@ -1,4 +1,4 @@
 interface:
   display_name: "模拟面试实验室"
-  short_description: "覆盖互联网高频题型，支持真实模拟与逐题专业答题训练"
-  default_prompt: "Use $mock-lab to confirm my target role and choose realistic simulation or question-by-question coaching, then dynamically interview me and help strengthen my answers."
+  short_description: "动态模拟各类岗位面试，支持 AI 产品证据压力追问"
+  default_prompt: "使用 $mock-lab 按我的目标岗位和 JD 进行一次一题的模拟；若为 AI 产品岗位，请围绕项目真实性、技术选型、评测和所有权动态追问。"

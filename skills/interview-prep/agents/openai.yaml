@@ -1,4 +1,4 @@
 interface:
   display_name: "面试准备"
-  short_description: "适配各行业岗位，生成兼顾快速复习与系统练习的分轮准备"
-  default_prompt: "Use $interview-prep to build a role-adapted, practice-first guide for my company, JD, interview round, and selected experience materials."
+  short_description: "适配各行业岗位，生成公司认知、专业补齐和 AI 专项战斗卡"
+  default_prompt: "使用 $interview-prep 根据公司、完整 JD、面试轮次和我选择的经历生成岗位适配、练习优先的准备文档；若为 AI 产品岗位，请进入专项岗位指南。"

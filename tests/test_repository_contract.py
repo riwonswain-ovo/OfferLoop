@@ -12,12 +12,15 @@ class RepositoryContractTest(unittest.TestCase):
         root = SKILLS / "experience-deepthink"
         expected = {
             "product.md",
+            "ai-product.md",
+            "strategy-product.md",
             "operations.md",
             "commercialization.md",
             "pmo.md",
             "strategy-analysis.md",
             "business-analysis.md",
             "data-analysis.md",
+            "multi-role-specializations.md",
         }
         discovered = {
             path.name
@@ -34,6 +37,133 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertNotIn("目标岗位必须映射", skill)
         self.assertIn("在用户完成上述输入前，不读取简历", skill)
         self.assertNotIn("检查 `current_resumes`", skill)
+        self.assertIn("references/role-routing.md", skill)
+        self.assertIn("AI 产品与策略产品同时命中", skill)
+        self.assertIn("AI 产品与策略产品加载各自专项路线", skill)
+        self.assertIn("references/ai-agent-skill-products.md", skill)
+        self.assertIn("references/ai-audit-products.md", skill)
+        self.assertIn("references/ai-action-agent-products.md", skill)
+        self.assertIn("references/ai-interview-evidence-pressure.md", skill)
+
+        routing = (root / "references" / "role-routing.md").read_text(
+            encoding="utf-8"
+        )
+        for expected_text in (
+            "AI 产品主路线",
+            "策略产品主路线",
+            "通用路线",
+            "复合与切换",
+            "目标岗位职责才决定主路线",
+            "不要把战略分析、策略运营",
+            "ai-audit-products.md",
+            "ai-action-agent-products.md",
+        ):
+            self.assertIn(expected_text, routing)
+
+        ai_product = (
+            root / "references" / "role-playbooks" / "ai-product.md"
+        ).read_text(encoding="utf-8")
+        for expected_text in (
+            "场景价值与 AI 适用性",
+            "能力边界与产品链路",
+            "方案设计与选型取舍",
+            "评测、准入与错误闭环",
+            "跨团队落地与上线治理",
+            "技术效果到业务结果",
+            "ai-agent-skill-products.md",
+            "真实样本、数据契约与产品形态",
+            "Confidence",
+            "可执行业务对象",
+            "ai-audit-products.md",
+            "ai-action-agent-products.md",
+        ):
+            self.assertIn(expected_text, ai_product)
+
+        agent_skill_products = (
+            root / "references" / "ai-agent-skill-products.md"
+        ).read_text(encoding="utf-8")
+        for expected_text in (
+            "任务价值与形态选择",
+            "端到端运行链路",
+            "路由、触发与职责边界",
+            "Skill 产品设计",
+            "模型、Agent、Skill 与工具分工",
+            "多 Skill / 多 Agent 编排与交接",
+            "多角色内容生成的质量闭环",
+            "质量评测与“真的完成”",
+            "反馈回流与持续优化",
+            "仅使用 ChatGPT、Prompt 或通用 AI 工具",
+            "可重复任务族",
+            "判断—执行—交付三段契约",
+            "确定性强",
+            "输出 schema",
+            "触发与路由正确性",
+            "流程遵循度",
+            "输出契约稳定性",
+            "真实任务泛化",
+            "Prompt 失效证据链",
+            "隐性经验显性化",
+            "工具选择策略",
+            "Prompt 与 Skill 的同任务基线",
+            "产品入口",
+            "渐进式加载契约",
+            "指导与执行边界",
+            "实际运行证据",
+            "任务颗粒度与 MVP 范围",
+            "AI 辅助创建归属",
+            "成熟度与证据阶梯",
+        ):
+            self.assertIn(expected_text, agent_skill_products)
+
+        ai_audit = (
+            root / "references" / "ai-audit-products.md"
+        ).read_text(encoding="utf-8")
+        for expected_text in (
+            "审核五问",
+            "首个真实样本与数据契约",
+            "规则体系与技术路由",
+            "规则—证据—判断—复核链",
+            "Confidence 与人工分流",
+            "不得使用课程中的固定阈值",
+        ):
+            self.assertIn(expected_text, ai_audit)
+
+        action_agent = (
+            root / "references" / "ai-action-agent-products.md"
+        ).read_text(encoding="utf-8")
+        for expected_text in (
+            "产品形态与人机介入",
+            "业务对象—状态—动作",
+            "身份、权限与数据范围",
+            "意图—槽位—草稿—确认—执行",
+            "审计、失败恢复与幂等",
+            "数据—风险—可执行动作闭环",
+            "失败关闭",
+        ):
+            self.assertIn(expected_text, action_agent)
+
+        rag = (
+            root / "references" / "ai-rag-knowledge-products.md"
+        ).read_text(encoding="utf-8")
+        for expected_text in (
+            "Agentic RAG 真实性门",
+            "中间反馈驱动",
+            "一次 Query Rewrite",
+        ):
+            self.assertIn(expected_text, rag)
+
+        strategy_product = (
+            root / "references" / "role-playbooks" / "strategy-product.md"
+        ).read_text(encoding="utf-8")
+        for expected_text in (
+            "策略对象与业务目标",
+            "数据、信号与问题诊断",
+            "策略机制与方案取舍",
+            "产品化与系统落地",
+            "实验、归因与护栏",
+            "监控、异常与迭代",
+        ):
+            self.assertIn(expected_text, strategy_product)
 
     def test_experience_deepthink_output_keeps_reusable_evidence_and_stories(self):
         schema = (
@@ -70,6 +200,8 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertIn("不生成固定题型题库", schema)
         self.assertIn("岗位方向不受预设分类限制", schema)
         self.assertIn("严格按金字塔原理组织", schema)
+        self.assertIn("AI 经历条件约束", schema)
+        self.assertIn("端到端技术链路", schema)
         for internal_only_field in (
             "信息来源可靠性与交叉验证（如适用）：",
             "可复用方法、适用条件与失效边界：",
@@ -114,6 +246,8 @@ class RepositoryContractTest(unittest.TestCase):
             "证据冲突与交叉验证",
             "方法沉淀与经历查漏",
             "不向用户展示完整雷达",
+            "AI 技术应用专项深挖",
+            "ai-technology-application.md",
         ):
             self.assertIn(expected, workflow)
         for expected in (
@@ -142,8 +276,49 @@ class RepositoryContractTest(unittest.TestCase):
             "先给结论",
             "选择二至四个支撑角度",
             "不新增、删除或重命名最终文档",
+            "AI 技术应用（跨岗位条件视角）",
         ):
             self.assertIn(expected, thinking)
+
+        ai_application = (
+            SKILLS
+            / "experience-deepthink"
+            / "references"
+            / "ai-technology-application.md"
+        ).read_text(encoding="utf-8")
+        for expected in (
+            "业务问题与 AI 适用性",
+            "端到端技术链路",
+            "选型、取舍与个人贡献",
+            "评测、实验与错误分析",
+            "上线治理与持续迭代",
+            "技术结果到用户和业务价值",
+            "每轮从下列优先级中只选一个问题",
+            "首个结构化样本",
+            "未校准分数",
+            "失败关闭",
+        ):
+            self.assertIn(expected, ai_application)
+        skill = (
+            SKILLS / "experience-deepthink" / "SKILL.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("references/ai-technology-application.md", skill)
+        self.assertIn("是否触发由经历内容决定", skill)
+
+        glossary = (
+            SKILLS
+            / "experience-deepthink"
+            / "references"
+            / "ai-concept-glossary.md"
+        ).read_text(encoding="utf-8")
+        for expected in (
+            "Agentic RAG",
+            "数据契约（Data Contract / JSON Schema）",
+            "状态机（State Machine）",
+            "审计记录（Audit Record）",
+            "Confidence 校准",
+        ):
+            self.assertIn(expected, glossary)
 
     def test_mock_lab_routes_optional_playbooks_patterns_modes_and_contexts(self):
         root = SKILLS / "mock-lab"
@@ -183,9 +358,11 @@ class RepositoryContractTest(unittest.TestCase):
             role_playbooks,
             {
                 "product.md",
+                "ai-product.md",
                 "strategy-business-analysis.md",
                 "management-consulting.md",
                 "data-analysis.md",
+                "multi-role-evidence-pressure.md",
             },
         )
         self.assertEqual(
@@ -193,6 +370,8 @@ class RepositoryContractTest(unittest.TestCase):
             {
                 "common-behavioral.md",
                 "product.md",
+                "ai-product.md",
+                "ai-coding-product-delivery.md",
                 "strategy-business-analysis.md",
                 "management-consulting.md",
                 "data-analysis.md",
@@ -208,12 +387,15 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertEqual(case_contexts, {"internet-business.md"})
         for expected in (
             "references/role-playbooks/product.md",
+            "references/role-playbooks/ai-product.md",
             "references/role-playbooks/strategy-business-analysis.md",
             "references/role-playbooks/management-consulting.md",
             "references/role-playbooks/data-analysis.md",
             "references/question-archetypes/internet-interview-map.md",
             "references/question-patterns/common-behavioral.md",
             "references/question-patterns/product.md",
+            "references/question-patterns/ai-product.md",
+            "references/question-patterns/ai-coding-product-delivery.md",
             "references/question-patterns/strategy-business-analysis.md",
             "references/question-patterns/management-consulting.md",
             "references/question-patterns/data-analysis.md",
@@ -594,6 +776,8 @@ class RepositoryContractTest(unittest.TestCase):
             self.assertIn(product_name, readme)
         self.assertIn("不在工作台内部嵌入 Agent", readme)
         self.assertIn("打开 Agent 新任务并预填 Prompt", readme)
+        self.assertNotIn("当前只支持 Codex", readme)
+        self.assertNotIn("不会新建第二个妙搭应用", readme)
         self.assertIn("~/.config/offerloop/", readme)
         self.assertIn("~/.local/state/offerloop/", readme)
         self.assertIn("macOS、Linux 与 PowerShell", readme)
@@ -834,6 +1018,8 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertIn("一页 A4 PDF", skill)
         self.assertIn("固定信息卡", intake)
         self.assertIn("PDF 不是恰好一页", gates)
+        self.assertIn("references/ai-product-resume.md", skill)
+        self.assertIn("Demo、PoC、MVP、试点和生产运行", gates)
         self.assertTrue((root / "assets" / "resume-template.html").is_file())
         self.assertTrue((root / "scripts" / "render_resume.sh").is_file())
         artifact_contract = (
@@ -841,6 +1027,174 @@ class RepositoryContractTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("`resume-tailor`", artifact_contract)
         self.assertIn("不生成 `run_id`", artifact_contract)
+
+    def test_ai_product_job_search_specialization_routes_across_five_skills(self):
+        expected_files = (
+            SKILLS
+            / "experience-deepthink"
+            / "references"
+            / "ai-interview-evidence-pressure.md",
+            SKILLS
+            / "resume-tailor"
+            / "references"
+            / "ai-product-resume.md",
+            SKILLS
+            / "interview-prep"
+            / "references"
+            / "role-guides"
+            / "ai-product.md",
+            SKILLS
+            / "mock-lab"
+            / "references"
+            / "role-playbooks"
+            / "ai-product.md",
+            SKILLS
+            / "mock-lab"
+            / "references"
+            / "question-patterns"
+            / "ai-product.md",
+            SKILLS
+            / "talk-review"
+            / "references"
+            / "ai-product-interview-review.md",
+        )
+        for path in expected_files:
+            self.assertTrue(path.is_file(), path)
+
+        skill_expectations = {
+            "experience-deepthink": (
+                "ai-interview-evidence-pressure.md",
+                "主张—机制—实例—口径/物证—所有权—局限/反事实",
+            ),
+            "resume-tailor": (
+                "ai-product-resume.md",
+                "项目成熟度",
+            ),
+            "interview-prep": (
+                "role-guides/ai-product.md",
+                "理解、设计、落地",
+            ),
+            "mock-lab": (
+                "role-playbooks/ai-product.md",
+                "question-patterns/ai-product.md",
+            ),
+            "talk-review": (
+                "ai-product-interview-review.md",
+                "精确回流",
+            ),
+        }
+        for name, snippets in skill_expectations.items():
+            skill = (SKILLS / name / "SKILL.md").read_text(encoding="utf-8")
+            for snippet in snippets:
+                self.assertIn(snippet, skill, name)
+
+        resume_ai = (
+            SKILLS
+            / "resume-tailor"
+            / "references"
+            / "ai-product-resume.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("不强制包含数字", resume_ai)
+        self.assertIn("团队技术实现没有变成候选人个人实现", resume_ai)
+
+        mock_ai = (
+            SKILLS
+            / "mock-lab"
+            / "references"
+            / "question-patterns"
+            / "ai-product.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("同一证据缺口最多连续追问三次", mock_ai)
+        self.assertIn("不羞辱", mock_ai)
+
+        review_ai = (
+            SKILLS
+            / "talk-review"
+            / "references"
+            / "ai-product-interview-review.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("不能直接断言", review_ai)
+        self.assertIn("resume-tailor", review_ai)
+
+    def test_ai_coding_product_delivery_routes_across_five_skills(self):
+        expected_files = (
+            SKILLS
+            / "experience-deepthink"
+            / "references"
+            / "ai-coding-product-delivery.md",
+            SKILLS
+            / "resume-tailor"
+            / "references"
+            / "ai-coding-evidence.md",
+            SKILLS
+            / "interview-prep"
+            / "references"
+            / "role-guides"
+            / "ai-coding-product-delivery.md",
+            SKILLS
+            / "mock-lab"
+            / "references"
+            / "question-patterns"
+            / "ai-coding-product-delivery.md",
+            SKILLS
+            / "talk-review"
+            / "references"
+            / "ai-coding-interview-review.md",
+        )
+        for path in expected_files:
+            self.assertTrue(path.is_file(), path)
+
+        skill_expectations = {
+            "experience-deepthink": (
+                "ai-coding-product-delivery.md",
+                "跟做、配置、AI 辅助实现、独立交付和团队生产",
+            ),
+            "resume-tailor": (
+                "ai-coding-evidence.md",
+                "production deployment",
+            ),
+            "interview-prep": (
+                "role-guides/ai-coding-product-delivery.md",
+                "Spec/SDD",
+            ),
+            "mock-lab": (
+                "question-patterns/ai-coding-product-delivery.md",
+                "不把它变成前端、数据库或 Git 知识考试",
+            ),
+            "talk-review": (
+                "ai-coding-interview-review.md",
+                "部署等于生产",
+            ),
+        }
+        for name, snippets in skill_expectations.items():
+            skill = (SKILLS / name / "SKILL.md").read_text(encoding="utf-8")
+            for snippet in snippets:
+                self.assertIn(snippet, skill, name)
+
+        deepthink = expected_files[0].read_text(encoding="utf-8")
+        self.assertIn("有链接", deepthink)
+        self.assertIn("模型 + Harness + 人类判断", deepthink)
+        self.assertIn("密钥", deepthink)
+        glossary = (
+            SKILLS
+            / "experience-deepthink"
+            / "references"
+            / "ai-concept-glossary.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("### AI Coding", glossary)
+        self.assertIn("### Agent Harness", glossary)
+        self.assertIn("### 生产运行", glossary)
+
+        resume = expected_files[1].read_text(encoding="utf-8")
+        self.assertIn("不能仅凭链接写生产", resume)
+        self.assertIn("AI、模板、第三方平台、程序与人工", resume)
+
+        mock = expected_files[3].read_text(encoding="utf-8")
+        self.assertIn("同一证据缺口最多连续追问三次", mock)
+
+        review = expected_files[4].read_text(encoding="utf-8")
+        self.assertIn("不能断言面试官认定造假", review)
+        self.assertIn("resume-tailor", review)
 
     def test_resume_version_is_user_maintained_in_both_business_bases(self):
         collection = (SKILLS / "job-collection" / "SKILL.md").read_text(
@@ -891,6 +1245,7 @@ class RepositoryContractTest(unittest.TestCase):
             self.assertIn(f'"{agent}"', acceptance)
         self.assertIn("four Agents, eleven Skills", acceptance)
         self.assertNotIn("four Agents, ten Skills", acceptance)
+        self.assertNotIn("four Agents, twelve Skills", acceptance)
         self.assertIn("版本升级为 4", end_to_end)
         self.assertNotIn("版本升级为 3", end_to_end)
         self.assertIn("install_offerloop.py", acceptance)
@@ -910,6 +1265,7 @@ class RepositoryContractTest(unittest.TestCase):
         )
         self.assertIn("exactly the eleven supported OfferLoop Skills", installer)
         self.assertNotIn("exactly the ten supported OfferLoop Skills", installer)
+        self.assertNotIn("exactly the twelve supported OfferLoop Skills", installer)
         for expected in (
             '"codex"',
             '"claude-code"',

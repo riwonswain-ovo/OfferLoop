@@ -1,6 +1,6 @@
 ---
 name: experience-deepthink
-description: 直接在 Chat 中接收用户讲述的一段具体经历和目标岗位方向，再进行连续一题一答的经历深挖；不以读取简历、飞书资料或历史材料作为启动前提。经历可以是实习、项目、科研、校园竞赛、学生工作、创业、志愿服务或其他可验证实践，岗位可以是产品、技术、运营、财务、HR、法务、市场、销售或其他方向。根据岗位名称、可选 JD、用户确认的能力重点和可选岗位参考动态适配追问，沉淀并持续维护同一份岗位专属 Markdown，包含严格按金字塔原理组织的经历全景及背景、目标、方案、结果口述稿，详细事实与证据，以及失败、冲突、决策、协作和重来改进故事。用户说“深挖这段经历”“帮我梳理实习/项目/科研/竞赛经历”“追问我的经历”“准备项目口述稿”或要求继续完善某段经历时使用；不负责针对具体公司和面试轮次生成题库，不负责正式模拟面试。
+description: 直接在 Chat 中接收用户讲述的一段具体经历和目标岗位方向，再进行连续一题一答的经历深挖；不以读取简历、飞书资料或历史材料作为启动前提。经历可以是实习、项目、科研、校园竞赛、学生工作、创业、志愿服务或其他可验证实践，岗位可以是产品、技术、运营、财务、HR、法务、市场、销售或其他方向。根据岗位名称、可选 JD、用户确认的能力重点和可选岗位参考动态适配追问；AI 产品与策略产品加载各自专项路线，其他岗位走通用路线或相关岗位参考。沉淀并持续维护同一份岗位专属 Markdown，包含严格按金字塔原理组织的经历全景及背景、目标、方案、结果口述稿，详细事实与证据，以及失败、冲突、决策、协作和重来改进故事。用户说“深挖这段经历”“帮我梳理实习/项目/科研/竞赛经历”“追问我的经历”“准备项目口述稿”或要求继续完善某段经历时使用；不负责针对具体公司和面试轮次生成题库，不负责正式模拟面试。
 ---
 
 # Experience Deepthink
@@ -20,9 +20,40 @@ description: 直接在 Chat 中接收用户讲述的一段具体经历和目标�
 
 3. 在用户完成上述输入前，不读取简历、飞书资料、关联 Base、历史经历文档或其他个人材料，
    也不要求用户先上传简历、提供简历版本、完成 OfferLoop 配置或给出 JD。
-4. 用户完成首次讲述并明确岗位方向后，完整读取 `references/thinking-and-answer-logic.md`，
-   再从 Chat 内容确认文档身份和岗位能力主线并开始连续追问。JD 和证明材料仅在用户主动提供
-   时作为补充，不得替代用户的首次讲述。
+4. 用户完成首次讲述并明确岗位方向后，完整读取 `references/thinking-and-answer-logic.md`、
+   `references/role-routing.md` 和 `references/role-decision-evidence-method.md`，先从目标岗位名称、
+   可选 JD、用户确认的能力重点和经历内容确定通用或专项路线，再开始连续追问。JD 和证明材料
+   仅在用户主动提供时作为补充，不得替代用户的首次讲述。
+   如果经历涉及大模型、机器学习、推荐/搜索、计算机视觉、语音、智能体、RAG、AI API、
+   Prompt、微调或其他 AI/算法能力的真实应用，同时完整读取
+   `references/ai-technology-application.md`；是否触发由经历内容决定，不限于 AI 产品或技术岗。
+   如果经历进一步涉及 Agent、Skill、工具调用、工作流编排、多智能体或任务路由，同时完整读取
+   `references/ai-agent-skill-products.md`；仅使用通用 AI 工具辅助工作不触发。
+   再按经历中真实存在的核心机制只加载最小专项集合：
+   - 合同审查、内容审核、风控、质量检查、合规判断或材料预审：
+     `references/ai-audit-products.md`；
+   - Agent 查询私有业务数据，或创建、修改、发送、发布、审批、分配、关闭等改变外部状态：
+     `references/ai-action-agent-products.md`；
+   - 知识库、企业搜索、文档问答、检索增强或引用溯源：
+     `references/ai-rag-knowledge-products.md`；
+   - 跨轮状态、用户画像、长期记忆、任务记忆或上下文压缩：
+     `references/ai-context-memory-products.md`；
+   - Prompt 系统化迭代、LLM 节点、固定流程编排或 Dify/Coze 等 Workflow：
+     `references/ai-prompt-workflow-products.md`；
+   - AI API 产品接入、MCP、A2A、Function Call、插件平台或跨 Agent/外部工具生态：
+     `references/ai-tool-ecosystem-products.md`；
+   - 预训练、SFT、LoRA、RLHF、DPO、训练数据、基座选择或训练实验：
+     `references/ai-model-training-products.md`。
+   - 使用 Coding Agent、低代码/全栈平台或 AI 辅助方式构建原型、应用、内部工具并涉及
+     Spec、API/数据库、测试、部署或生产交付：
+     `references/ai-coding-product-delivery.md`。
+   技术名词只作为路由线索；用户未真实参与相应机制的设计、验证或落地时，不加载专项。
+   只有用户直接询问术语含义、希望演练 AI 概念，或必须澄清概念才能判断其真实项目机制时，
+   才读取 `references/ai-concept-glossary.md`；不得把词典作为所有 AI 经历的默认上下文。
+   目标岗位是 AI 产品、AIGC 产品、大模型产品、Agent 产品或以 AI 产品判断为核心的复合岗位，
+   且已经形成一条较完整项目主线、准备生成口述稿或需要检查强主张时，再读取
+   `references/ai-interview-evidence-pressure.md`。不得在首次讲述后立即加载，也不得把它当成
+   固定面试题库。
 5. 只有需要接续或保存同一份经历深挖文档时，才从本 Skill 根目录定位兄弟
    `offerloop-workspace`，完整读取 `references/artifact-contract.md`，再读取 `lark-wiki`、
    `lark-doc` 并运行共享 `artifact_contract.py` 检查兼容目录键 `resume_deepthink`。该键仅用于
@@ -55,12 +86,20 @@ description: 直接在 Chat 中接收用户讲述的一段具体经历和目标�
 的完整清单。确认岗位方向后，只在明显相关时读取对应文件，不读取无关文件：
 
 - 产品：`references/role-playbooks/product.md`
+- AI 产品、AIGC 产品、大模型产品、智能体产品：先读
+  `references/role-playbooks/product.md`，再读 `references/role-playbooks/ai-product.md`
+- 策略产品、推荐/增长/风控/定价/调度等策略产品：先读
+  `references/role-playbooks/product.md`，再读 `references/role-playbooks/strategy-product.md`
 - 运营：`references/role-playbooks/operations.md`
 - 商业化产品、商业化运营、增长变现：`references/role-playbooks/commercialization.md`
 - PMO：`references/role-playbooks/pmo.md`
 - 战略分析、战略运营、战投：`references/role-playbooks/strategy-analysis.md`
 - 商业分析、经营分析：`references/role-playbooks/business-analysis.md`
 - 数据分析：`references/role-playbooks/data-analysis.md`
+
+AI 产品、策略产品、商业化产品、C 端产品、商业分析、数据分析、市场、GTM、产品运营或策略运营
+还按需读取 `references/role-playbooks/multi-role-specializations.md` 中对应小节。它只改变证据
+假设、追问重心和验真条件，不替代更细的 AI 产品、策略产品或通用岗位 playbook。
 
 岗位未命中上述参考时不得停止、要求用户改选或降级为某个相近岗位。直接根据 JD 和用户确认
 建立本轮岗位能力主线，至少明确：
@@ -73,6 +112,33 @@ description: 直接在 Chat 中接收用户讲述的一段具体经历和目标�
 复合岗位可以按需读取多个明显相关的 playbook，但只加载真正有帮助的最小集合。playbook 与
 JD 冲突时以用户提供的真实 JD 和明确岗位方向为准。
 
+岗位路由只改变深挖重点和线索顺序，不改变文档身份、事实约束、连续一题一答或
+`references/output-schema.md`。AI 产品与策略产品同时命中时，按 JD 的核心职责和用户希望证明
+的能力确定主路线，另一条作为条件视角加载；依据不足时先问一个最小澄清问题，不凭岗位热词
+擅自分流。其他产品分型和未命中专项的岗位继续使用通用流程及最相关的既有 playbook。
+
+AI 产品经历中的专项内容按真实方案继续分流：审核/风控/质检加载
+`references/ai-audit-products.md`；会改变外部状态的 Agent 加载
+`references/ai-action-agent-products.md`；涉及 Agent、Skill、工具调用、工作流编排、多智能体
+或任务路由时加载 `references/ai-agent-skill-products.md`。涉及其他 AI/算法应用时只使用
+`references/ai-technology-application.md` 和 AI 产品 playbook。不能因为用户提到 ChatGPT、
+Prompt 或某个 Agent 框架就默认其做过 Agent 产品设计。
+
+RAG、Context/Memory、Prompt/Workflow、MCP/A2A、模型训练/微调等专项也按经历机制而不是岗位
+名称触发。一个经历可命中多个专项，但每轮只读取与当前最高价值证据缺口直接相关的参考；不得
+为了“覆盖全面”一次加载全部 AI 专项，也不得按参考目录顺序盘问。
+
+AI Coding 专项同样按真实参与触发。只用通用 AI 工具润色文案、生成公式或做一次性代码问答
+不触发；涉及产品实现与交付时，使用 `references/ai-coding-product-delivery.md` 区分跟做、配置、AI 辅助实现、独立交付和团队生产，并核验 Spec、系统边界、验收、版本、部署和运行证据。
+
+AI 术语词典只服务于必要澄清和真实项目验证。经历深挖不能因用户会解释概念，就推断其做过相关
+设计或实现；面试中的独立术语突袭回答主要由 `interview-prep` 处理。
+
+`references/ai-interview-evidence-pressure.md` 只在 AI 产品经历已经形成较完整主线后使用，
+沿“主张—机制—实例—口径/物证—所有权—局限/反事实”检查最强的一条陈述。每轮只补一个会
+改变真实性、产品判断或个人贡献判断的证据缺口；简历措辞交给 `resume-tailor`，面试现场施压
+交给 `mock-lab`。
+
 `references/experience-evidence-radar.md` 只在一段高价值线索已经挖到复盘层、用户卡壳需要
 换入口，或成稿前查漏时读取。它是内部证据覆盖雷达，不是问题清单；每次最多选择一个与岗位
 和真实经历高度相关的缺口继续追问，不顺序遍历，不要求用户凑齐全部维度。
@@ -82,6 +148,30 @@ JD 冲突时以用户提供的真实 JD 和明确岗位方向为准。
 严格执行 `references/conversation-workflow.md`，使用岗位能力主线和可选 playbook 确认的证据、
 目标、行动、结果与故事素材重点。保持连续一题一答，围绕高价值线索按
 “根因—归属—落地—价值—复盘”纵向钻取，仅在规定条件下发散。
+
+AI 相关经历还必须使用 `references/ai-technology-application.md` 检查“业务问题—AI 适用性—
+技术链路—选型权衡—评测验证—上线治理—业务结果”是否形成证据闭环。根据目标岗位和用户实际
+参与边界控制技术深度：产品、运营、商业等岗位要证明技术理解如何转化为方案、决策和落地，
+技术岗位再深入数据、模型、工程与实验细节；不得把术语识别、工具罗列或未经证实的团队实现
+写成用户本人的 AI 技术应用能力。
+
+Agent / Skill 类经历还必须使用 `references/ai-agent-skill-products.md` 检查“任务价值—运行
+链路—路由与边界—Skill 设计—模型/Agent/Skill/工具分工—多 Skill 编排—质量评测—反馈回流”
+是否形成闭环。每轮只选择会改变产品判断或个人贡献判断的一个缺口，不按架构清单连续盘问。
+
+审核类 AI 经历用 `references/ai-audit-products.md` 先完成“审核五问”，再随机抽查一条真实规则，
+追到首个结构化样本、字段契约、规则来源、证据位置、判断、人工复核和错误代价。行动型 Agent
+用 `references/ai-action-agent-products.md` 检查业务对象、身份/权限、状态机、必填槽位、执行前
+确认、幂等/恢复、审计和最终业务状态。两者重叠时按当前最高风险动作选一条线纵向钻取，不同时
+盘问两份清单。
+
+其他 AI 专项按当前事实加载相应参考，优先沿“现象或失败 → 所在链路 → 方案与取舍 → 验证 →
+上线结果”钻取。专项用于发现证据，不用于考察概念：用户不能解释底层实现时，先确认其是否
+负责该层；不属于其职责则转向其真实参与的需求、方案、评测、交互、验收或推动动作。
+
+同时执行“岗位决策证据深潜法”：先判断该岗位要证明的主决策，再对用户讲述形成证据假设；
+每次只追一条高价值线索，按问题、判断、动作、机制、结果和复盘闭环，并用所有权、指标语义、
+反事实或迁移问题验真。岗位知识只用于发现应追问的事实，不能补成用户经历。
 
 用户完成启动输入后，如果需要接续且存在同一身份的既有文档，再读取文档并区分“已确认”
 “待核实”“本轮新增”。不重复询问已经确认且没有冲突的事实；出现新证据或口径冲突时，展示
@@ -127,3 +217,37 @@ JD 冲突时以用户提供的真实 JD 和明确岗位方向为准。
 文档（神奇柚子）》《商业化50讲：从0到1学习商业化-v1.4》《产品经理面试题库_合并版》抽象
 而来。只保留可迁移方法，不复制课程正文、固定题目、参考答案、时效性行业结论、经验阈值或
 灰色/违规做法。
+
+Agent、Skill 与工具协作的运行链路、职责分层、多 Skill 编排和反向优化视角由用户提供的
+《Skill 如何和 Agent 协作》《Skill 到底是什么》《初识 Agent-Skill》《Agent Skill》、
+《实操-写出你的第一个 Skill》抽象而来；只用于深挖用户真实参与的 AI 产品经历，不把教学
+示例当成用户事实，也不复制课程讲义正文。
+
+Agent 产品形态、Harness、上下文与记忆、Prompt、RAG、Workflow、MCP 与 A2A 等专项视角由
+用户提供的 Agent 系列课程材料抽象而来。只吸收可迁移的判断框架、失败模式和验证方法；课程
+案例、匿名业绩、经验阈值、生态规模、协议版本与时效性结论不得作为用户事实或默认标准。
+
+AI 产品定义、项目阶段、模型训练与微调、数据与评测、API 接入、产品指标及常见术语视角由
+用户提供的《传统 AI 产品经理工作流程》《模型训练基础》《AI-PM 求职方法论与岗位必备技能》
+《AI-PM 转行学习指南》《大模型十二步法》《AI 产品经理基础知识》《通用 AI 产品项目讲》
+《AI 产品营考试题》《AI 领域常见概念扫盲》《API 接口调用基础》《LoRA 训练入门/进阶》
+《AI 全局认知与行业图谱》《从建筑思维到产品思维》《大模型核心原理》《AI 产品设计方法论》
+《大模型项目全流程》《产品经理核心技能》等材料抽象而来。只保留可迁移的能力框架、概念边界
+和追问方法；不吸收考试答案、匿名案例、固定样本量/阈值/灰度比例、时效性岗位与薪资结论、
+模型或平台榜单以及课程中的个人求职脚本。
+
+AI 审核、内容生成、规范问答、质量管理、项目管理和行动型 Agent 的专项视角由用户提供的
+《AI 智能审核产品》《AI 内容生成 Agent》《合同审查助手》《建规景规范问答助手》
+《建筑施工质检情报员规格文档》《质量管理 Agent》《项目管理通用 Agent》等项目材料抽象而来。
+只吸收审核五问、首个真实样本与数据契约、规则—证据—复核、受控写入、多角色质量闭环、
+Agentic RAG 真实性、Confidence 校准和失败关闭等可迁移方法；不吸收项目设定、固定参数、
+效果目标、课程评价或时效性专业结论。
+
+AI 产品经历的面试证据压力与校招/社招深度调节，由用户提供的 AI 面试复盘、个人题库和求职
+课程材料，与上述 AI 产品及 Agent 项目材料交叉提炼。只吸收面试官如何验证机制、实例、指标、
+物证、所有权和成熟度；不吸收固定题单、参考答案、个人项目数字、公司流程或“包装经历”话术。
+
+AI Coding 与产品交付视角由用户提供的 AI Coding 课程、Codex 入门材料和生产项目实操交叉
+提炼。只吸收需求—Spec—实现—验收—部署证据链、Harness、系统边界、权限安全、成熟度和
+AI/模板/团队/本人分工；不吸收安装步骤、账号凭据、固定工具/模型推荐、价格、课程项目成果或
+“一键部署即生产”的表述。

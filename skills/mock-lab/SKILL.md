@@ -1,6 +1,6 @@
 ---
 name: mock-lab
-description: 面向任意行业与职能岗位进行真实模拟或逐题训练，重点覆盖互联网产品、战略商分、数据分析、咨询及商业化等方向。先确认目标岗位、可选 JD、运行方式和范围，再组合通用协议、岗位 Playbook、互联网题型、问题模式、领域视角和用户材料；普通面试一次一题，Case 与群面按阶段运行，真实模拟结束后统一复盘，逐题训练则答完即诊断并重组专业答案。用户说“模拟面试”“面试陪练”“按这个岗位/JD 问我”“练费米题/业务面/HR 面/Case 面/群面”“帮我把答案说专业”时使用；不负责生成面试准备题库或复盘真实面试。
+description: 面向任意行业与职能岗位进行真实模拟或逐题训练，重点覆盖互联网产品、AI 产品、战略商分、数据分析、咨询及商业化等方向。先确认目标岗位、可选 JD、运行方式和范围，再组合通用协议、岗位 Playbook、互联网题型、问题模式、领域视角和用户材料；AI 产品、AIGC、大模型、Agent、模型/数据平台或 AI+行业产品岗位加载 AI 产品经理专项 Playbook，通过项目真实性、技术选型、指标评测、Bad Case、人机边界和所有权进行动态压力追问。普通面试一次一题，Case 与群面按阶段运行，真实模拟结束后统一复盘，逐题训练则答完即诊断并重组专业答案。用户说“模拟面试”“面试陪练”“按这个岗位/JD 问我”“练 AI 产品项目深挖/费米题/业务面/HR 面/Case 面/群面”“帮我把答案说专业”时使用；不负责生成面试准备题库或复盘真实面试。
 ---
 
 # Mock Lab
@@ -44,6 +44,11 @@ description: 面向任意行业与职能岗位进行真实模拟或逐题训练�
 
 - 互联网产品经理及以产品判断为主的复合岗位：
   `references/role-playbooks/product.md`
+- AI 产品、AIGC、大模型、Agent、模型/数据平台、AI+行业产品及以 AI 产品判断为核心的复合
+  岗位：先读 `references/role-playbooks/product.md`，再读
+  `references/role-playbooks/ai-product.md`
+- AI 产品、策略产品、商业化产品、C 端产品、商业分析、数据分析、市场、GTM、产品运营和
+  策略运营的专项压力变量：`references/role-playbooks/multi-role-evidence-pressure.md`
 - 互联网战略、商业分析、经营分析或战投：
   `references/role-playbooks/strategy-business-analysis.md`
 - 管理咨询及以咨询式 Case 为核心的岗位：
@@ -55,6 +60,9 @@ description: 面向任意行业与职能岗位进行真实模拟或逐题训练�
 
 - 跨岗位行为面：`references/question-patterns/common-behavioral.md`
 - 产品：`references/question-patterns/product.md`
+- AI 产品：`references/question-patterns/ai-product.md`
+- AI 产品经历进一步涉及 Coding Agent、应用搭建、Spec、API/数据库、测试、部署或生产交付：
+  `references/question-patterns/ai-coding-product-delivery.md`
 - 战略与商业分析：
   `references/question-patterns/strategy-business-analysis.md`
 - 管理咨询：`references/question-patterns/management-consulting.md`
@@ -78,6 +86,12 @@ JD 或用户方向明确涉及广告、会员、抽佣、增值服务、营销�
 Playbook 与通用行为问题模式，不需要同时加载咨询、数据和互联网 Case 情境库。产品运营、数据
 分析或项目管理等相邻岗位只有在本次 JD 确实以产品判断为核心时才加载产品参考，不能只因岗位
 名称相近就套用。
+
+AI 产品经理专项也按真实 JD 触发：标题含“AI”但职责偏纯算法、工程、销售、交付或运营时，
+只组合实际相关的岗位能力，不强制加载 AI 产品 Playbook。命中时用 AI 产品 Playbook 确定证据
+标准，用 AI 产品问题模式生成动态变体；不得按 Agent、RAG、Prompt、训练术语目录顺序考试。
+涉及 AI Coding 产品交付时，再用对应问题模式核验参与层级、Spec—验收、系统边界、Harness、
+生产证据和所有权；不把它变成前端、数据库或 Git 知识考试。
 
 “管培生”不是统一职能：先按具体轮岗方向和 JD 组合通用行为模式、相关岗位 Playbook 与可选
 群面模式，不建立跨公司固定流程。运营、销售等当前没有独立 Playbook 的岗位，直接根据 JD
@@ -138,6 +152,14 @@ Playbook、题型全景、领域视角、模式、问题模式或情境库与 JD
 7. 用户说“跳过”时进入下一主问题；说“暂停”时保留当前状态；说结束口令时立即停止。
 8. 普通停顿不视为结束。不冒充特定真人，不虚构公司内部流程或声称问题一定来自某家公司。
 
+AI 产品岗位且用户允许压力追问时，可按 `references/question-patterns/ai-product.md` 礼貌中断
+持续偏题、换一种方式重复未回答的问题、要求一个具体样本或指标口径、切换业务/产品/技术/风险
+视角，或追加一个失败与约束变化。压力只针对证据和判断；用户已经回答充分时立即停止。
+
+每个追问同时执行“自适应证据压力图”：只从上一回答中选择一个最高风险缺口，再选择证据压力、
+机制压力、单变量条件压力或边界压力。追问必须能说明由哪句话触发；不能为了覆盖题库而转问，
+不能同时改变多个条件，也不能把压力面变成重复质疑。
+
 用户选择 Case 时同时执行 `references/interview-modes/case-interview.md`：一次只推进一个阶段，
 根据用户的澄清和结构分批提供信息。用户选择群面时同时执行
 `references/interview-modes/group-discussion.md`：一次只要求一个讨论动作，每轮最多模拟两个
@@ -166,3 +188,13 @@ Playbook、题型全景、领域视角、模式、问题模式或情境库与 JD
 
 从本轮问题和追问中整理后续训练任务。报告可以建议运行 `experience-deepthink`、`pm-sense`
 或 `interview-prep`，但不得自动修改简历、经历深挖、准备文档、岗位 Playbook 或问题模式。
+
+## AI 产品专项来源边界
+
+AI 产品 Playbook 与问题模式由用户提供的 AI PM 课程、Agent/RAG/Prompt/Workflow/MCP/模型
+训练材料、AI Agent 项目案例和 AI 面试复盘交叉提炼。只保留动态证据链、产品决策与压力行为；
+不吸收固定题库、参考答案、课程项目数字、固定阈值、模型/平台榜单或公司面试流程。
+
+AI Coding 产品交付问题模式由用户提供的 AI Coding 课程、Codex 入门和生产项目实操提炼。
+只吸收可动态验证的所有权、系统、验收、安全和成熟度变量；不吸收工具操作题、固定技术栈、
+账号凭据或把课程 Demo 当成候选人经历。
