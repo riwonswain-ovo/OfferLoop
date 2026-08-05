@@ -951,7 +951,7 @@ class RepositoryContractTest(unittest.TestCase):
             "企业清单",
             "求职进展",
             "笔面试中心",
-            "02｜当前简历",
+            "02｜简历合集",
             "03｜经历深挖",
             "04｜面试准备",
             "05｜面试复盘",
@@ -964,6 +964,7 @@ class RepositoryContractTest(unittest.TestCase):
             for title in expected:
                 self.assertIn(title, text)
             self.assertNotIn("01｜当前简历", text)
+            self.assertNotIn("02｜当前简历", text)
             self.assertNotIn("06｜训练与题库", text)
             self.assertNotIn("待学会题库", text)
 

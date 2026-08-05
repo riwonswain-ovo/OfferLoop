@@ -31,7 +31,7 @@ class ArtifactContractTest(unittest.TestCase):
             contract.describe_layout(),
             {
                 "folders": {
-                    "current_resumes": ["02｜当前简历"],
+                    "current_resumes": ["02｜简历合集"],
                     "resume_deepthink": ["03｜经历深挖"],
                     "interview_prep": ["04｜面试准备"],
                     "interview_review": ["05｜面试复盘", "已完成复盘"],
