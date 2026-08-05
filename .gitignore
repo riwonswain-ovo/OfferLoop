@@ -28,3 +28,8 @@ processed_emails.json
 .spark/
 .spark_project
 *.tsbuildinfo
+
+# Local package-manager caches, design drafts, and evaluation output
+/.pnpm-store/
+/sketches/
+/skills/*/test-results.md
