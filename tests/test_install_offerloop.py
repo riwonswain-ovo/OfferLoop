@@ -250,7 +250,7 @@ class OfferLoopInstallerTest(unittest.TestCase):
 
             rendered = output.getvalue()
             self.assertEqual(exit_code, 0)
-            self.assertIn("11 个 Skill 已处理完成", rendered)
+            self.assertIn("12 个 Skill 已处理完成", rendered)
             self.assertIn("欢迎使用 OfferLoop", rendered)
             self.assertIn("求职基础能力", rendered)
             self.assertIn("求职训练能力", rendered)
@@ -259,7 +259,7 @@ class OfferLoopInstallerTest(unittest.TestCase):
             self.assertIn("安装只添加 Skill", rendered)
             self.assertIn("结束当前 Agent 会话并新开会话", rendered)
             self.assertIn("三个入口帮我选择", rendered)
-            self.assertIn("如果我要求，再展开介绍 11 个 Skill", rendered)
+            self.assertIn("如果我要求，再展开介绍 12 个 Skill", rendered)
 
     def test_verify_is_read_only_and_requires_a_complete_install(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -375,7 +375,7 @@ class OfferLoopInstallerTest(unittest.TestCase):
                     len(group["skills"])
                     for group in first["welcome"]["groups"]
                 ),
-                11,
+                12,
             )
             self.assertNotIn("welcome", second)
 

@@ -598,6 +598,7 @@ class RepositoryContractTest(unittest.TestCase):
             "mock-lab",
             "talk-review",
             "pm-sense",
+            "aptitude-lab",
         }
         discovered = {
             path.parent.name for path in SKILLS.glob("*/SKILL.md") if path.is_file()
@@ -682,7 +683,7 @@ class RepositoryContractTest(unittest.TestCase):
         ):
             self.assertIn(expected, onboarding)
 
-    def test_setup_first_run_welcome_introduces_all_eleven_skills(self):
+    def test_setup_first_run_welcome_introduces_all_twelve_skills(self):
         setup = (SKILLS / "offerloop-setup" / "SKILL.md").read_text(
             encoding="utf-8"
         )
@@ -693,7 +694,7 @@ class RepositoryContractTest(unittest.TestCase):
             SKILLS / "offerloop-setup" / "references" / "welcome.md"
         ).read_text(encoding="utf-8")
         self.assertIn("references/welcome.md", setup)
-        self.assertIn("all eleven OfferLoop skills", metadata)
+        self.assertIn("all twelve OfferLoop skills", metadata)
         self.assertIn("不要在入口介绍前要求目标岗位", setup)
         self.assertIn("安装只添加了 Skill", welcome)
         for name in (
@@ -708,6 +709,7 @@ class RepositoryContractTest(unittest.TestCase):
             "interview-prep",
             "mock-lab",
             "talk-review",
+            "aptitude-lab",
         ):
             self.assertIn(f"`{name}`", welcome)
 
@@ -802,7 +804,7 @@ class RepositoryContractTest(unittest.TestCase):
         sections = (
             "## 1. 安装前准备",
             "## 2. 如何安装",
-            "## 3. 认识十一个 Skill",
+            "## 3. 认识十二个 Skill",
             "## 4. 旧用户如何升级",
             "## 5. 其他说明",
         )
@@ -818,6 +820,7 @@ class RepositoryContractTest(unittest.TestCase):
             "### `experience-deepthink`",
             "### `resume-tailor`",
             "### `pm-sense`",
+            "### `aptitude-lab`",
             "### `interview-prep`",
             "### `mock-lab`",
             "### `talk-review`",
@@ -917,7 +920,7 @@ class RepositoryContractTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("# OfferLoop 使用指南", template)
         self.assertIn("OFFERLOOP:OPTIONAL:WORKBENCH", template)
-        self.assertIn("## OfferLoop 的 11 个 Skill", template)
+        self.assertIn("## OfferLoop 的 12 个 Skill", template)
         for name in (
             "offerloop-setup",
             "offerloop-workspace",
@@ -930,6 +933,7 @@ class RepositoryContractTest(unittest.TestCase):
             "interview-prep",
             "mock-lab",
             "talk-review",
+            "aptitude-lab",
         ):
             self.assertIn(f"`{name}`", template)
         self.assertNotIn("OFFERLOOP:MANAGED", template)
@@ -1243,9 +1247,9 @@ class RepositoryContractTest(unittest.TestCase):
         security = (ROOT / "SECURITY.md").read_text(encoding="utf-8")
         for agent in ("codex", "claude-code", "hermes-agent"):
             self.assertIn(f'"{agent}"', acceptance)
-        self.assertIn("four Agents, eleven Skills", acceptance)
+        self.assertIn("four Agents, twelve Skills", acceptance)
         self.assertNotIn("four Agents, ten Skills", acceptance)
-        self.assertNotIn("four Agents, twelve Skills", acceptance)
+        self.assertNotIn("four Agents, eleven Skills", acceptance)
         self.assertIn("版本升级为 4", end_to_end)
         self.assertNotIn("版本升级为 3", end_to_end)
         self.assertIn("install_offerloop.py", acceptance)
@@ -1263,9 +1267,9 @@ class RepositoryContractTest(unittest.TestCase):
         installer = (ROOT / "scripts" / "install_offerloop.py").read_text(
             encoding="utf-8"
         )
-        self.assertIn("exactly the eleven supported OfferLoop Skills", installer)
+        self.assertIn("exactly the twelve supported OfferLoop Skills", installer)
         self.assertNotIn("exactly the ten supported OfferLoop Skills", installer)
-        self.assertNotIn("exactly the twelve supported OfferLoop Skills", installer)
+        self.assertNotIn("exactly the eleven supported OfferLoop Skills", installer)
         for expected in (
             '"codex"',
             '"claude-code"',

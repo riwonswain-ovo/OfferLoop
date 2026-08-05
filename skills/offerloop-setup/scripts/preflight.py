@@ -30,6 +30,7 @@ BUNDLED_SKILLS = (
     "mock-lab",
     "talk-review",
     "pm-sense",
+    "aptitude-lab",
 )
 REQUIRED_BUNDLED_BY_CAPABILITY = {
     "workspace": {"offerloop-setup", "offerloop-workspace"},
@@ -47,6 +48,7 @@ REQUIRED_BUNDLED_BY_CAPABILITY = {
         "mock-lab",
         "talk-review",
         "pm-sense",
+        "aptitude-lab",
     },
     "workbench": {
         "offerloop-setup",

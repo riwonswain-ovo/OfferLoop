@@ -171,6 +171,7 @@ class OfferLoopSetupTest(unittest.TestCase):
                     "mock-lab",
                     "talk-review",
                     "pm-sense",
+                    "aptitude-lab",
                 },
             )
 

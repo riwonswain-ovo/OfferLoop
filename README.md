@@ -8,16 +8,16 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Skills](https://img.shields.io/badge/Skills-11-7C3AED)](#3-认识十一个-skill)
+[![Skills](https://img.shields.io/badge/Skills-12-7C3AED)](#3-认识十二个-skill)
 
 </div>
 
 > 当前版本：0.1.0-alpha.8（开发版）。本仓库尚未与公开仓库同步；能访问本开发仓库的测试用户
 > 请使用下方开发版安装命令。公开用户应以
 > [OfferLoop 公开仓库](https://github.com/riwonswain-ovo/OfferLoop) 自己的版本号和 README 为准，
-> 不要用公开旧版本配合本页的十一项 Skill 清单。旧用户请直接阅读[如何升级](#4-旧用户如何升级)。
+> 不要用公开旧版本配合本页的十二项 Skill 清单。旧用户请直接阅读[如何升级](#4-旧用户如何升级)。
 
-OfferLoop 包含 11 个标准 Agent Skill。完成线上初始化后一定会有一个默认私有的飞书知识库，
+OfferLoop 包含 12 个标准 Agent Skill。完成线上初始化后一定会有一个默认私有的飞书知识库，
 其中组织三张业务 Base、当前简历和每次训练 Markdown 产物；飞书工作台是可选项，未部署不影响
 招聘同步、笔面试提醒或任何训练 Skill。工作台中的自动化按钮会打开 Agent 新任务并预填 Prompt，
 不在工作台内部嵌入 Agent。
@@ -78,7 +78,7 @@ Windows PowerShell 使用：
 py -3 scripts/install_offerloop.py --agent codex --dry-run
 ```
 
-预览必须显示正确 Agent、正确目标目录和十一个 Skill。若返回 `conflict`，检查同名目录来源；
+预览必须显示正确 Agent、正确目标目录和十二个 Skill。若返回 `conflict`，检查同名目录来源；
 来源不明就停止。只有确认属于旧版 OfferLoop 时，才在预览和安装命令中增加 `--upgrade`。
 
 ### 第三步：安装并核验
@@ -97,7 +97,7 @@ py -3 scripts/install_offerloop.py --agent codex
 py -3 scripts/install_offerloop.py --agent codex --verify
 ```
 
-只有出现 `codex: 安装核验通过` 才表示十一个 Skill、内容摘要和安装清单都位于目标目录。
+只有出现 `codex: 安装核验通过` 才表示十二个 Skill、内容摘要和安装清单都位于目标目录。
 为多个 Agent 安装时重复 `--agent`，例如：
 
 ```bash
@@ -119,7 +119,7 @@ python3 scripts/install_offerloop.py --agent codex --agent claude-code --dry-run
 Agent 通常只在会话开始时发现 Skill。安装完成后结束当前会话并新开会话，然后发送：
 
 ```text
-我刚安装 OfferLoop。请调用 offerloop-setup，先用“找岗位、管笔面试、做求职训练”三个入口帮我选择；如果我要求，再展开介绍 11 个 Skill。先做只读检查，不要创建或修改飞书资源。
+我刚安装 OfferLoop。请调用 offerloop-setup，先用“找岗位、管笔面试、做求职训练”三个入口帮我选择；如果我要求，再展开介绍 12 个 Skill。先做只读检查，不要创建或修改飞书资源。
 ```
 
 首次安装欢迎会先给出三个自然语言入口，只介绍当前目标相关的 Skill 和隐私边界；用户明确要求时，
@@ -139,9 +139,9 @@ Agent 通常只在会话开始时发现 Skill。安装完成后结束当前会�
 这些能力时，可以先让 Agent 一次性预览 OfferLoop 与所需 Lark 依赖，确认后批量安装，最后只
 重新开启一次会话。
 
-## 3. 认识十一个 Skill
+## 3. 认识十二个 Skill
 
-十一个 Skill 的关系如下：
+十二个 Skill 的关系如下：
 
 ```text
 offerloop-setup
@@ -149,7 +149,7 @@ offerloop-setup
   ├─ 纯 Chat 求职训练可直接开始
   ├─ 为 job-collection 做首次预检与配置
   ├─ 为 recruiting-reminder 做首次预检与配置
-  └─ 为六个求职训练 Skill 做统一存储预检与配置
+  └─ 为七个求职训练 Skill 做统一存储预检与配置
 
 job-collection ── 已投递记录 ──> 求职进展
 recruiting-reminder ── 笔面试事件 ──> 求职进展 + 个人日历
@@ -159,6 +159,7 @@ offerloop-workbench ── 可选体验层 ──> 聚合读取三张 Base + 日
 experience-deepthink ── 一段真实经历 + 岗位方向 ──> 持续维护的经历深挖文档
 resume-tailor ── 目标岗位 + 用户选定经历 + 固定信息 ──> 一页 PDF 简历
 pm-sense ── 产品判断与答案 ──> 产品 Sense 训练文档
+aptitude-lab ── 行测与校招通用能力题 ──> 逐题诊断 + 提速训练
 interview-prep ── 求职进展 JD + 投递简历版本 ──> 面试准备文档
 mock-lab ── 当前简历 + 经历深挖 + 可选 JD ──> 模拟面试报告
 talk-review ── ASR + 当前简历 + 经历深挖 ──> 真实面试复盘
@@ -172,14 +173,14 @@ talk-review ── ASR + 当前简历 + 经历深挖 ──> 真实面试复盘
 
 #### 第一次运行前需要准备
 
-- 已安装十一个 OfferLoop Skill，并重新开启 Agent 会话。
+- 已安装十二个 OfferLoop Skill，并重新开启 Agent 会话。
 - Python 3.10 或更高版本。
 - 不需要提前记住 Skill 名称。首次运行先让你从“找岗位”“管笔面试”“做求职训练”三个入口选择，再介绍相关 Skill；单独使用 `coaching` 可先在 Chat 中开始，其他能力以及训练产物保存再检查核心知识库。只有 `workbench` / `full` 涉及工作台。
 - 不必提前准备飞书密钥或邮箱授权码；缺少 `lark-cli`、外部 Lark Skill、profile 或资源定位时，预检会给出解决动作。
 
 #### 第一次运行流程
 
-1. 首次使用时先展示三个自然语言入口和隐私边界；只有用户明确要求时，才完整介绍十一个 Skill、使用示例和常用闭环。
+1. 首次使用时先展示三个自然语言入口和隐私边界；只有用户明确要求时，才完整介绍十二个 Skill、使用示例和常用闭环。
 2. 询问本次要启用的能力，未选择的能力标记为 `not_selected`。
 3. 运行只读离线预检；纯 Chat 求职训练只检查对应 OfferLoop Skill，其他所选能力再检查 Python、`lark-cli`、外部 Lark Skill、本地配置和文件权限。
 4. 用 `ready`、`needs_action`、`blocked`、`unverified` 汇报状态，并给出下一步。
@@ -530,6 +531,47 @@ talk-review ── ASR + 当前简历 + 经历深挖 ──> 真实面试复盘
 
 ---
 
+### `aptitude-lab`：行测与校招通用能力笔试训练
+
+#### 作用
+
+训练数字推理、数学运算、资料分析、图形推理、逻辑判断和言语理解。支持混合诊断、专项练习、
+限时模拟、错题复盘和直接讲题，重点定位错误发生在哪个决策点，并给出更短的可靠路径。
+
+#### 第一次运行前需要准备
+
+- 可以直接说目标公司或模块，也可以上传一道题、截图或错题。
+- 没有现成题目时，Skill 默认从 6 题混合诊断开始。
+- 限时模拟需要确认总时长和题量；没有自动计时能力时由用户自行计时。
+
+#### 第一次运行流程
+
+1. 一次只给一题，作答前不泄露题型、提示或答案。
+2. 用户提交答案、可选用时和把握度后，Skill 独立求解并验算。
+3. 反馈正确性、最短路径、验算、错误标签和时间策略。
+4. 答错或超时时先做同方法近迁移，掌握后再增加干扰。
+5. 限时模拟统一交卷后评分，不在过程中暗示正误。
+
+#### 第一次运行后的输出
+
+- 每题的可靠解析、提速方法和可迁移识别信号。
+- 题型识别、条件读取、建模、方法选择、计算和止损等错误标签。
+- 阶段正确率、已记录用时、最值得补强的方法和下一轮建议。
+
+#### 后续每次运行带来的增量
+
+后续训练根据最近错误和速度动态选题；同一方法先做近迁移，再做间隔复测，不机械遍历知识点。
+用户未提供足够题量或用时时只给定性信号，不制造精确能力分。
+
+#### 案例
+
+```text
+调用 aptitude-lab，先给我做一组拼多多校招笔试混合诊断。
+一次一题，我答完再讲；如果我做得太慢，也请告诉我什么时候应该跳题。
+```
+
+---
+
 ### `interview-prep`：生成岗位化面试准备文档
 
 #### 作用
@@ -670,7 +712,7 @@ talk-review ── ASR + 当前简历 + 经历深挖 ──> 真实面试复盘
   cp -a ~/.local/state/offerloop ~/.local/state/offerloop.backup-$(date +%Y%m%d)
   ```
 
-### 更新十一个 Skill
+### 更新十二个 Skill
 
 先在开发仓库中更新代码，然后用与首次安装相同的安装器预览升级。以下以 Codex 为例：
 
@@ -689,7 +731,7 @@ Windows 将 `python3` 替换为 `py -3`；其他 Agent 替换 `--agent` 参数�
 更新后重新开启 Agent 会话，然后发送：
 
 ```text
-请调用 offerloop-setup。我是旧版 OfferLoop 用户，已经升级到十一个 Skill。
+请调用 offerloop-setup。我是旧版 OfferLoop 用户，已经升级到十二个 Skill。
 请只读检查我的旧配置和现有飞书 Base，给出迁移计划；不要创建、修改或删除任何资源。
 ```
 

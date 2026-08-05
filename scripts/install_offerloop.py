@@ -31,6 +31,7 @@ SKILL_NAMES = (
     "mock-lab",
     "talk-review",
     "pm-sense",
+    "aptitude-lab",
 )
 LEGACY_SKILL_RENAMES = {
     "experience-deepthink": "resume-deepthink",
@@ -59,7 +60,7 @@ MANIFEST_NAME = ".offerloop-install.json"
 WELCOME = {
     "headline": "欢迎使用 OfferLoop",
     "summary": (
-        "OfferLoop 包含 11 个可以独立或组合使用的 Skill。"
+        "OfferLoop 包含 12 个可以独立或组合使用的 Skill。"
         "用户不需要记住名称，只需描述当前想解决的问题。"
     ),
     "groups": [
@@ -120,6 +121,12 @@ WELCOME = {
                     "example": "让我先回答一道产品场景题，再帮我完善。",
                 },
                 {
+                    "name": "aptitude-lab",
+                    "title": "笔试训练",
+                    "purpose": "训练行测与校招通用能力题，逐题诊断错因、方法和速度",
+                    "example": "先给我做一组拼多多笔试混合诊断。",
+                },
+                {
                     "name": "interview-prep",
                     "title": "面试准备",
                     "purpose": "结合 JD、投递简历和素材生成针对性准备文档",
@@ -146,7 +153,7 @@ WELCOME = {
     ],
     "next_prompt": (
         "我刚安装 OfferLoop。请先用“找岗位、管笔面试、做求职训练”"
-        "三个入口帮我选择；如果我要求，再展开介绍 11 个 Skill。"
+        "三个入口帮我选择；如果我要求，再展开介绍 12 个 Skill。"
         "先做只读检查，不要创建或修改飞书资源。"
     ),
     "privacy_notice": (
@@ -261,7 +268,7 @@ def validate_sources() -> None:
     }
     if not set(SKILL_NAMES).issubset(discovered):
         raise ValueError(
-            "repository must contain exactly the eleven supported OfferLoop Skills"
+            "repository must contain exactly the twelve supported OfferLoop Skills"
         )
     for name in SKILL_NAMES:
         skill_file = SKILLS_SOURCE / name / "SKILL.md"

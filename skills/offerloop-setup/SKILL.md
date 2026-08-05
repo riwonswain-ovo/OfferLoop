@@ -1,6 +1,6 @@
 ---
 name: offerloop-setup
-description: 介绍 OfferLoop 的十一个 Skill，并按需初始化私有飞书知识库、三张业务 Base、飞书身份和公共配置。适用于“安装/初始化 OfferLoop”“第一次使用”“介绍十一个 Skill”“检查环境或配置”“修复任一 OfferLoop Skill”“搭建完整 OfferLoop”；求职训练可先在 Chat 中体验，保存时再接入核心空间，飞书工作台按需部署。
+description: 介绍 OfferLoop 的十二个 Skill，并按需初始化私有飞书知识库、三张业务 Base、飞书身份和公共配置。适用于“安装/初始化 OfferLoop”“第一次使用”“介绍十二个 Skill”“检查环境或配置”“修复任一 OfferLoop Skill”“搭建完整 OfferLoop”；求职训练可先在 Chat 中体验，保存时再接入核心空间，飞书工作台按需部署。
 ---
 
 # OfferLoop Setup
@@ -11,7 +11,7 @@ description: 介绍 OfferLoop 的十一个 Skill，并按需初始化私有飞�
 
 用户表示刚安装、第一次使用或不了解各 Skill 时，完整读取 `references/welcome.md`，先用“找岗位、
 管笔面试、做求职训练”三个自然语言入口和隐私边界帮助其选择，再介绍本次相关 Skill。用户明确
-要求介绍十一个 Skill 时，才展示完整能力地图和两个常用闭环。不要在入口介绍前要求目标岗位、
+要求介绍十二个 Skill 时，才展示完整能力地图和两个常用闭环。不要在入口介绍前要求目标岗位、
 读取私人材料或运行线上检查。
 
 非首次使用的配置请求可以直接询问本次要启用哪项能力：

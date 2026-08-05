@@ -25,6 +25,7 @@ SKILL_NAMES = (
     "mock-lab",
     "talk-review",
     "pm-sense",
+    "aptitude-lab",
 )
 AGENT_ROOTS = {
     "codex": Path(".codex/skills"),
@@ -315,7 +316,7 @@ def main():
         roots = install_all_agents(source, project, home, env)
         assert_collection_preflight(project, roots["codex"], env)
         print(
-            "cold install accepted: four Agents, eleven Skills, idempotency, "
+            "cold install accepted: four Agents, twelve Skills, idempotency, "
             "post-install verification, collection preflight, recovery, and redaction"
         )
 
