@@ -57,6 +57,7 @@ import {
   type HomeScheduleItem,
 } from './home-schedule';
 import type { WorkbenchPageId } from './WorkbenchTopNav';
+import { getWorkbenchOAuthRecoveryRoute } from './workbench-oauth';
 
 interface WorkbenchHomeOverviewProps {
   onPageChange: (page: WorkbenchPageId) => void;
@@ -247,11 +248,10 @@ const WorkbenchHomeOverview: React.FC<WorkbenchHomeOverviewProps> = ({
     const code: string = String(params.get('code') ?? '');
     const state: string = String(params.get('state') ?? '');
     const denied: boolean = params.get('error') === 'access_denied';
-    const workbenchPath: string = window.location.pathname.replace(
-      /\/calendar-oauth-callback$/u,
-      '',
+    const workbenchRoute: string = getWorkbenchOAuthRecoveryRoute(
+      window.location.pathname,
+      window.location.search,
     );
-    window.history.replaceState({}, document.title, workbenchPath);
     const completeOAuth = async (): Promise<void> => {
       setLoading(true);
       setError('');
@@ -293,6 +293,7 @@ const WorkbenchHomeOverview: React.FC<WorkbenchHomeOverviewProps> = ({
         });
       } finally {
         setLoading(false);
+        window.location.replace(workbenchRoute);
       }
     };
     void completeOAuth();

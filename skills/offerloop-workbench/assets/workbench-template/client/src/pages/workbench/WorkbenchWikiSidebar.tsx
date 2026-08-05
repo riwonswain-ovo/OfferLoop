@@ -23,6 +23,7 @@ import { ScrollArea } from '@client/src/components/ui/scroll-area';
 import { Skeleton } from '@client/src/components/ui/skeleton';
 import { cn } from '@client/src/lib/utils';
 import { WorkbenchBrandMark } from './WorkbenchTopNav';
+import { isWikiFolderNode } from './workbench-wiki-nodes';
 
 interface WorkbenchWikiSidebarProps {
   open: boolean;
@@ -52,7 +53,8 @@ const WikiTreeNode: React.FC<WikiTreeNodeProps> = ({
   const [expanded, setExpanded] = useState<boolean>(false);
   const active: boolean = activeNodeToken === node.nodeToken;
   const hasChildren: boolean = node.children.length > 0;
-  const NodeIcon = hasChildren ? Folder : FileText;
+  const isFolder: boolean = isWikiFolderNode(node);
+  const NodeIcon = isFolder ? Folder : FileText;
 
   return (
     <Collapsible open={expanded} onOpenChange={setExpanded}>
@@ -87,6 +89,10 @@ const WikiTreeNode: React.FC<WikiTreeNodeProps> = ({
         <button
           type="button"
           onClick={() => {
+            if (isFolder) {
+              if (hasChildren) setExpanded((current: boolean) => !current);
+              return;
+            }
             onSelect(node);
           }}
           className="flex min-w-0 flex-1 items-center gap-1.5 py-1 pr-2 text-left"

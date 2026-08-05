@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import {
+  useLocation,
+  useSearchParams,
+} from 'react-router-dom';
 
 import { Skeleton } from '@client/src/components/ui/skeleton';
 import { cn } from '@client/src/lib/utils';
@@ -17,6 +20,7 @@ import {
 } from './WorkbenchTopNav';
 import { findWorkbenchWikiNode, useWorkbenchWiki } from './useWorkbenchWiki';
 import { WorkbenchWikiSidebar } from './WorkbenchWikiSidebar';
+import { getWorkbenchOAuthRecoveryRoute } from './workbench-oauth';
 
 const SIDEBAR_STORAGE_KEY = 'offerloop-wiki-sidebar-open';
 
@@ -36,6 +40,7 @@ const isWorkbenchPageId = (value: string | null): value is WorkbenchPageId =>
   WORKBENCH_NAV_ITEMS.some((item) => item.id === value);
 
 const WorkbenchPage: React.FC = () => {
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedNodeToken: string | null = searchParams.get('document');
   const activePage: WorkbenchPageId = isWorkbenchPageId(
@@ -53,6 +58,22 @@ const WorkbenchPage: React.FC = () => {
     wiki.directory?.nodes ?? [],
     selectedNodeToken,
   );
+  const recoveringOAuthDocumentRoute: boolean = Boolean(
+    selectedNodeToken
+    && location.pathname.endsWith('/calendar-oauth-callback'),
+  );
+  useEffect(() => {
+    if (!recoveringOAuthDocumentRoute) {
+      return;
+    }
+    window.location.replace(
+      getWorkbenchOAuthRecoveryRoute(location.pathname, location.search),
+    );
+  }, [
+    location.pathname,
+    location.search,
+    recoveringOAuthDocumentRoute,
+  ]);
   useEffect(() => {
     window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(sidebarOpen));
   }, [sidebarOpen]);
@@ -128,7 +149,14 @@ const WorkbenchPage: React.FC = () => {
           sidebarOpen ? 'md:ml-[248px]' : 'md:ml-[58px]',
         )}
       >
-        {selectedWikiNode && WorkbenchWikiDocument ? (
+        {recoveringOAuthDocumentRoute ? (
+          <main className="flex min-h-screen items-center justify-center bg-background p-6">
+            <div className="w-full max-w-3xl space-y-4">
+              <Skeleton className="h-16 w-full" />
+              <Skeleton className="h-[560px] w-full" />
+            </div>
+          </main>
+        ) : selectedWikiNode && WorkbenchWikiDocument ? (
           <WorkbenchWikiDocument
             node={selectedWikiNode}
             onBack={handleWorkbenchSelect}

@@ -34,7 +34,7 @@ interface MaterialVisual {
 }
 
 const TYPE_VISUALS: Record<MaterialType, MaterialVisual> = {
-  当前简历: { icon: FileText, badgeClassName: 'bg-blue-50 text-blue-600' },
+  简历合集: { icon: FileText, badgeClassName: 'bg-blue-50 text-blue-600' },
   经历深挖: { icon: Search, badgeClassName: 'bg-blue-50 text-blue-600' },
   面试准备: {
     icon: FileSearch,
@@ -50,7 +50,7 @@ const TYPE_VISUALS: Record<MaterialType, MaterialVisual> = {
   },
 };
 
-const ARTIFACT_TYPES: Array<'全部产物' | Exclude<MaterialType, '当前简历'>> = [
+const ARTIFACT_TYPES: Array<'全部产物' | Exclude<MaterialType, '简历合集'>> = [
   '全部产物',
   '经历深挖',
   '面试准备',
@@ -64,18 +64,6 @@ interface WorkbenchMaterialsPageProps {
   onRefresh: () => Promise<void>;
   onNodeSelect: (node: WorkbenchWikiNode) => void;
 }
-
-const findCurrentResumeNode = (
-  nodes: WorkbenchWikiNode[],
-): WorkbenchWikiNode | undefined => {
-  for (const node of nodes) {
-    if (node.title.trim() === '01｜当前简历') return node;
-    const childMatch: WorkbenchWikiNode | undefined =
-      findCurrentResumeNode(node.children);
-    if (childMatch) return childMatch;
-  }
-  return undefined;
-};
 
 const MaterialRows: React.FC<{
   items: MaterialItem[];
@@ -107,10 +95,12 @@ const MaterialRows: React.FC<{
                 </button>
               </td>
               <td className="px-4 py-3.5">
-                <span className={cn(
-                  'inline-flex rounded px-2 py-1 text-[10px]',
-                  visual.badgeClassName,
-                )}>
+                <span
+                  className={cn(
+                    'inline-flex rounded px-2 py-1 text-[10px]',
+                    visual.badgeClassName,
+                  )}
+                >
                   {material.type}
                 </span>
               </td>
@@ -128,7 +118,10 @@ const MaterialRows: React.FC<{
         })}
         {items.length === 0 ? (
           <tr>
-            <td colSpan={3} className="px-5 py-20 text-center text-xs text-muted-foreground">
+            <td
+              colSpan={3}
+              className="px-5 py-20 text-center text-xs text-muted-foreground"
+            >
               暂无匹配的训练产物
             </td>
           </tr>
@@ -155,29 +148,20 @@ const WorkbenchMaterialsPage: React.FC<WorkbenchMaterialsPageProps> = ({
   );
   const artifacts: MaterialItem[] = useMemo(() => {
     const normalized: string = query.trim().toLowerCase();
-    return materials.filter((item: MaterialItem): boolean =>
-      item.type !== '当前简历'
-      && (!normalized || item.name.toLowerCase().includes(normalized))
-      && (typeFilter === '全部产物' || item.type === typeFilter));
+    return materials.filter(
+      (item: MaterialItem): boolean =>
+        item.type !== '简历合集' &&
+        (!normalized || item.name.toLowerCase().includes(normalized)) &&
+        (typeFilter === '全部产物' || item.type === typeFilter),
+    );
   }, [materials, query, typeFilter]);
   const deepDiveMaterials: MaterialItem[] = materials
     .filter((item: MaterialItem): boolean => item.type === '经历深挖')
     .slice(0, 3);
   const collectedResumes: MaterialItem[] = materials
-    .filter((item: MaterialItem): boolean => item.type === '当前简历')
+    .filter((item: MaterialItem): boolean => item.type === '简历合集')
     .slice(0, 3);
-  const currentResumeNode: WorkbenchWikiNode | undefined =
-    findCurrentResumeNode(directory?.nodes ?? []);
-  const resumes: MaterialItem[] = collectedResumes.length > 0
-    ? collectedResumes
-    : currentResumeNode
-      ? [{
-        id: currentResumeNode.nodeToken,
-        name: currentResumeNode.title,
-        type: '当前简历',
-        node: currentResumeNode,
-      }]
-      : [];
+  const resumes: MaterialItem[] = collectedResumes;
 
   const refreshMaterials = async (): Promise<void> => {
     setRefreshing(true);
@@ -195,7 +179,7 @@ const WorkbenchMaterialsPage: React.FC<WorkbenchMaterialsPageProps> = ({
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">材料中心</h1>
             <p className="mt-1 text-xs text-muted-foreground">
-              左侧查看最近训练产物；右侧保留经历深挖与当前简历入口。
+              左侧查看最近训练产物；右侧保留经历深挖与简历合集入口。
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -213,7 +197,9 @@ const WorkbenchMaterialsPage: React.FC<WorkbenchMaterialsPageProps> = ({
             </Button>
             <Button size="sm" onClick={() => void refreshMaterials()}>
               {refreshing || loading ? '刷新中' : '刷新材料'}
-              <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
+              <RefreshCw
+                className={cn('h-4 w-4', refreshing && 'animate-spin')}
+              />
             </Button>
           </div>
         </header>
@@ -245,12 +231,16 @@ const WorkbenchMaterialsPage: React.FC<WorkbenchMaterialsPageProps> = ({
                 <label className="relative w-36 shrink-0">
                   <select
                     value={typeFilter}
-                    onChange={(event) => setTypeFilter(
-                      event.target.value as (typeof ARTIFACT_TYPES)[number],
-                    )}
+                    onChange={(event) =>
+                      setTypeFilter(
+                        event.target.value as (typeof ARTIFACT_TYPES)[number],
+                      )
+                    }
                     className="h-9 w-full appearance-none rounded-lg border bg-background px-3 pr-8 text-xs outline-none"
                   >
-                    {ARTIFACT_TYPES.map((type) => <option key={type}>{type}</option>)}
+                    {ARTIFACT_TYPES.map((type) => (
+                      <option key={type}>{type}</option>
+                    ))}
                   </select>
                   <ChevronDown className="pointer-events-none absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 </label>
@@ -293,11 +283,15 @@ const WorkbenchMaterialsPage: React.FC<WorkbenchMaterialsPageProps> = ({
                 ) : null}
               </div>
               <Button asChild className="w-full shrink-0">
-                <a href={buildCodexTaskUrl(buildOfferLoopPrompt(
-                  'experience-deepthink',
-                  '我想开始一次经历深挖。请先让我自然讲述一段具体经历，'
-                  + '一次只追问一个问题，确认后再写入飞书知识库。',
-                ))}>
+                <a
+                  href={buildCodexTaskUrl(
+                    buildOfferLoopPrompt(
+                      'experience-deepthink',
+                      '我想开始一次经历深挖。请先让我自然讲述一段具体经历，' +
+                        '一次只追问一个问题，确认后再写入飞书知识库。',
+                    ),
+                  )}
+                >
                   开始经历深挖
                 </a>
               </Button>
@@ -310,9 +304,9 @@ const WorkbenchMaterialsPage: React.FC<WorkbenchMaterialsPageProps> = ({
                     <FileText className="h-5 w-5" />
                   </span>
                   <div>
-                    <h2 className="text-base font-semibold">当前简历</h2>
+                    <h2 className="text-base font-semibold">简历合集</h2>
                     <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
-                      查看当前版本，或针对目标岗位新建一份简历
+                      查看已收录版本，或针对目标岗位新建一份简历
                     </p>
                   </div>
                 </div>
@@ -335,16 +329,20 @@ const WorkbenchMaterialsPage: React.FC<WorkbenchMaterialsPageProps> = ({
                 ))}
                 {resumes.length === 0 ? (
                   <p className="rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground">
-                    暂无当前简历
+                    暂无已收录简历
                   </p>
                 ) : null}
               </div>
               <Button asChild className="w-full shrink-0">
-                <a href={buildCodexTaskUrl(buildOfferLoopPrompt(
-                  'resume-tailor',
-                  '我想针对目标岗位制作一份简历。请先让我确认岗位和选择经历，'
-                  + '生成前再次向我确认。',
-                ))}>
+                <a
+                  href={buildCodexTaskUrl(
+                    buildOfferLoopPrompt(
+                      'resume-tailor',
+                      '我想针对目标岗位制作一份简历。请先让我确认岗位和选择经历，' +
+                        '生成前再次向我确认。',
+                    ),
+                  )}
+                >
                   新建岗位简历
                 </a>
               </Button>

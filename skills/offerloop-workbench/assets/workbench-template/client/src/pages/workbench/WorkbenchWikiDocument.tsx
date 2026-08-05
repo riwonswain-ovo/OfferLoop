@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import SHA1 from 'crypto-js/sha1';
 import {
   ArrowLeft,
   ExternalLink,
@@ -8,9 +7,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 
-import { useCurrentUserProfile } from '@lark-apaas/client-toolkit/hooks/useCurrentUserProfile';
 import { logger } from '@lark-apaas/client-toolkit/logger';
-import type { UserProfileData } from '@lark-apaas/client-toolkit/tools/services';
 
 import type {
   WorkbenchWikiComponentAuth,
@@ -23,7 +20,6 @@ import {
   getWorkbenchWikiComponentAuth,
   getWorkbenchWikiDocumentPreview,
 } from '@client/src/api';
-import { fetchUserProfile } from '@client/src/components/business-ui/api/user-profiles/service';
 import { useExternalScript } from '@client/src/lib/external-script';
 import {
   Alert,
@@ -71,16 +67,6 @@ interface WorkbenchWikiDocumentProps {
   onBack: () => void;
 }
 
-const createNonce = (length: number): string => {
-  const characters =
-    'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let result = '';
-  for (let index = 0; index < length; index += 1) {
-    result += characters.charAt(Math.floor(Math.random() * characters.length));
-  }
-  return result;
-};
-
 const summarizeComponentError = (value: unknown): string => {
   if (value instanceof Error) {
     return `${value.name}: ${value.message}`;
@@ -116,7 +102,6 @@ const WorkbenchWikiDocument: React.FC<WorkbenchWikiDocumentProps> = ({
   const mountRef = useRef<HTMLDivElement>(null);
   const embedFailureHandledRef = useRef<boolean>(false);
   const previewRequestIdRef = useRef<number>(0);
-  const userInfo = useCurrentUserProfile();
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
   const [authorizationUrl, setAuthorizationUrl] = useState<string>('');
@@ -129,12 +114,6 @@ const WorkbenchWikiDocument: React.FC<WorkbenchWikiDocumentProps> = ({
   const [previewLoading, setPreviewLoading] = useState<boolean>(false);
   const [previewError, setPreviewError] = useState<string>('');
   const scriptOptions = useMemo(() => ({}), []);
-  const docsPocEnabled = useMemo(
-    (): boolean =>
-      new URLSearchParams(globalThis.location.search).get('docsPoc') === '1',
-    [],
-  );
-  const componentUserId = docsPocEnabled ? '' : (userInfo?.user_id ?? '');
   const scriptStatus = useExternalScript(LARK_DOC_COMPONENT_SDK, scriptOptions);
 
   useEffect(() => {
@@ -192,10 +171,7 @@ const WorkbenchWikiDocument: React.FC<WorkbenchWikiDocumentProps> = ({
       setLoading(false);
       return;
     }
-    if (
-      !node.documentUrl
-      || (!docsPocEnabled && !componentUserId)
-    ) {
+    if (!node.documentUrl) {
       return;
     }
     if (scriptStatus === 'error') {
@@ -229,48 +205,14 @@ const WorkbenchWikiDocument: React.FC<WorkbenchWikiDocumentProps> = ({
       setError('');
       setAuthorizationUrl('');
       try {
-        let componentAuth: WorkbenchWikiComponentAuth;
-        if (docsPocEnabled) {
-          const authResponse: WorkbenchWikiComponentAuthResponse =
-            await getWorkbenchWikiComponentAuth(globalThis.location.href);
-          if (!authResponse.connected || !authResponse.auth) {
-            setAuthorizationUrl(authResponse.authorizationUrl ?? '');
-            setLoading(false);
-            return;
-          }
-          componentAuth = authResponse.auth;
-        } else {
-          if (!componentUserId) {
-            throw new Error('当前账号暂时无法使用飞书云文档组件');
-          }
-          const profile: UserProfileData = await fetchUserProfile(
-            componentUserId,
-            'apaas',
-          );
-          if (!profile.useLarkCard) {
-            throw new Error('当前账号暂时无法使用飞书云文档组件');
-          }
-          if (profile.larkCardParam.needRedirect) {
-            setAuthorizationUrl(profile.larkCardParam.redirectURL ?? '');
-            setLoading(false);
-            return;
-          }
-          const timestamp: number = Date.now();
-          const nonceStr: string = createNonce(16);
-          const url: string = globalThis.location.href.split('#')[0] ?? '';
-          const signatureSource =
-            `jsapi_ticket=${profile.larkCardParam.jsAPITicket}` +
-            `&noncestr=${nonceStr}&timestamp=${timestamp}&url=${url}`;
-          componentAuth = {
-            openId: profile.larkCardParam.larkOpenID,
-            signature: SHA1(signatureSource).toString(),
-            appId: profile.larkCardParam.larkAppID,
-            timestamp,
-            nonceStr,
-            url,
-            jsApiList: ['DocsComponent'],
-          };
+        const authResponse: WorkbenchWikiComponentAuthResponse =
+          await getWorkbenchWikiComponentAuth(globalThis.location.href);
+        if (!authResponse.connected || !authResponse.auth) {
+          setAuthorizationUrl(authResponse.authorizationUrl ?? '');
+          setLoading(false);
+          return;
         }
+        const componentAuth: WorkbenchWikiComponentAuth = authResponse.auth;
 
         if (cancelled || !mountRef.current) {
           return;
@@ -324,20 +266,12 @@ const WorkbenchWikiDocument: React.FC<WorkbenchWikiDocumentProps> = ({
           onAuthError: (authError: unknown): void => {
             const detail = summarizeComponentError(authError);
             logger.error(`飞书文档组件鉴权失败：${detail}`);
-            failEmbedding(
-              docsPocEnabled
-                ? `飞书文档组件鉴权失败：${detail}`
-                : '飞书文档授权已失效，请刷新后重试。',
-            );
+            failEmbedding(`飞书文档组件鉴权失败：${detail}`);
           },
           onError: (componentError: unknown): void => {
             const detail = summarizeComponentError(componentError);
             logger.error(`飞书文档组件运行失败：${detail}`);
-            failEmbedding(
-              docsPocEnabled
-                ? `飞书文档组件运行失败：${detail}`
-                : '飞书文档暂时无法打开，请稍后重试。',
-            );
+            failEmbedding(`飞书文档组件运行失败：${detail}`);
           },
           onMountSuccess: (): void => {
             if (!cancelled) {
@@ -378,11 +312,9 @@ const WorkbenchWikiDocument: React.FC<WorkbenchWikiDocumentProps> = ({
   }, [
     node.documentUrl,
     node.wikiUrl,
-    docsPocEnabled,
     embedEnabled,
     retryCount,
     scriptStatus,
-    componentUserId,
   ]);
 
   const retryEmbedding = (): void => {
@@ -398,8 +330,8 @@ const WorkbenchWikiDocument: React.FC<WorkbenchWikiDocumentProps> = ({
   };
 
   return (
-    <main className="flex min-h-screen flex-col bg-muted/30">
-      <header className="grid min-h-18 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2 border-b bg-background px-4 pt-20 pb-3 md:flex md:flex-wrap md:gap-3 md:px-6 md:py-3">
+    <main className="flex h-dvh min-h-0 flex-col overflow-hidden bg-muted/30">
+      <header className="grid min-h-18 shrink-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2 border-b bg-background px-4 pt-20 pb-3 md:flex md:flex-wrap md:gap-3 md:px-6 md:py-3">
         <Button
           variant="ghost"
           size="icon"
@@ -440,10 +372,10 @@ const WorkbenchWikiDocument: React.FC<WorkbenchWikiDocumentProps> = ({
           </Alert>
         </div>
       ) : (
-        <section className="relative min-h-0 flex-1 bg-background">
+        <section className="relative min-h-0 flex-1 overflow-hidden bg-background">
           <div
             ref={mountRef}
-            className="h-[calc(100vh-9rem)] min-h-[480px] w-full md:h-[calc(100vh-4.5rem)] md:min-h-[560px]"
+            className="h-full min-h-0 w-full overflow-hidden"
           />
           {embedEnabled && loading ? (
             <div className="absolute inset-0 flex items-center justify-center bg-background/90">
@@ -478,7 +410,10 @@ const WorkbenchWikiDocument: React.FC<WorkbenchWikiDocumentProps> = ({
             <div className="absolute inset-0 overflow-y-auto bg-background">
               <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b bg-background/95 px-5 py-3 backdrop-blur">
                 <p className="text-sm text-muted-foreground">
-                  飞书内嵌组件在当前环境未能加载，现显示纯文字预览。彩色图标、卡片和编辑能力请在飞书中打开。
+                  {error
+                    ? `${error} 当前显示纯文字预览。`
+                    : '飞书内嵌组件在当前环境未能加载，现显示纯文字预览。'}
+                  彩色图标、卡片和编辑能力请在飞书中打开。
                 </p>
                 <div className="flex gap-2">
                   <Button

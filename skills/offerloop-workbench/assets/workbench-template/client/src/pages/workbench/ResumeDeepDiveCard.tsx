@@ -19,10 +19,10 @@ const ResumeDeepDiveCard: React.FC = () => (
         <div className="space-y-1.5">
           <CardTitle className="flex items-center gap-2 text-xl">
             <FileSearch className="size-5 text-primary" />
-            简历深挖
+            经历深挖
           </CardTitle>
           <CardDescription>
-            真实问题将在简历深挖 Skill 接入简历素材后生成
+            真实问题将在经历深挖 Skill 接入简历素材后生成
           </CardDescription>
         </div>
         <Badge variant="secondary">5 题</Badge>
@@ -34,7 +34,7 @@ const ResumeDeepDiveCard: React.FC = () => (
           key={slot}
           className="rounded-lg border border-dashed bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
         >
-          第 {slot} 题将在简历深挖 Skill 启用后生成
+          第 {slot} 题将在经历深挖 Skill 启用后生成
         </div>
       ))}
     </CardContent>

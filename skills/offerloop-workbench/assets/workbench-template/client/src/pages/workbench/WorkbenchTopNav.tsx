@@ -1,8 +1,7 @@
 import React from 'react';
 
+import offerLoopLogoUrl from '@client/src/assets/offerloop-logo-transparent.png';
 import { cn } from '@client/src/lib/utils';
-
-const OFFERLOOP_LOGO_URL = '/favicon.svg';
 
 type WorkbenchPageId =
   | 'home'
@@ -73,10 +72,10 @@ const WorkbenchBrandMark: React.FC<WorkbenchBrandMarkProps> = ({
   className,
 }) => (
   <img
-    src={OFFERLOOP_LOGO_URL}
+    src={offerLoopLogoUrl}
     alt="OfferLoop"
     className={cn(
-      'size-9 shrink-0 overflow-hidden rounded-[10px] object-cover text-transparent',
+      'size-9 shrink-0 object-contain',
       className,
     )}
   />

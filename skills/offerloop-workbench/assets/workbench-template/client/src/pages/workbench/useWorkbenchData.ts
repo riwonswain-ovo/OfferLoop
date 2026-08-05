@@ -18,6 +18,7 @@ import {
 } from '@client/src/api';
 
 import { getWorkbenchDatasetKey } from './pagination';
+import { getWorkbenchOAuthRecoveryRoute } from './workbench-oauth';
 
 interface DatasetSelection {
   source: WorkbenchDatasetSource;
@@ -324,11 +325,10 @@ const useWorkbenchData = (
     const code: string = String(params.get('code') ?? '');
     const state: string = String(params.get('state') ?? '');
     const denied: boolean = params.get('error') === 'access_denied';
-    const workbenchPath: string = window.location.pathname.replace(
-      /\/calendar-oauth-callback$/u,
-      '',
+    const workbenchRoute: string = getWorkbenchOAuthRecoveryRoute(
+      window.location.pathname,
+      window.location.search,
     );
-    window.history.replaceState({}, document.title, workbenchPath);
     if (denied) {
       setCalendar({
         connected: false,
@@ -336,6 +336,7 @@ const useWorkbenchData = (
         message: '你已取消个人日历授权，可稍后重新连接。',
       });
       setCalendarLoading(false);
+      window.location.replace(workbenchRoute);
       return;
     }
     if (!code || !state) {
@@ -345,6 +346,7 @@ const useWorkbenchData = (
         message: '个人日历授权回跳缺少必要参数，请重新连接。',
       });
       setCalendarLoading(false);
+      window.location.replace(workbenchRoute);
       return;
     }
     setCalendarLoading(true);
@@ -373,6 +375,8 @@ const useWorkbenchData = (
           : '个人日历授权未能完成，请重新连接。',
       });
       setCalendarLoading(false);
+    } finally {
+      window.location.replace(workbenchRoute);
     }
   };
 
