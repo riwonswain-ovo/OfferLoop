@@ -70,7 +70,7 @@ const DISLIKE_REASONS: ProductSenseDislikeReason[] = [
 
 const buildAgentTaskUrl = (session: ProductSenseSession): string => {
   const prompt: string = [
-    '请使用 $pm-sense Skill 与我完成这道产品 Sense 训练。',
+    '请使用 $competency-lab Skill 与我完成这道岗位能力训练。',
     '',
     `题目：${session.question.prompt}`,
     `公司：${session.question.company}`,
@@ -80,7 +80,7 @@ const buildAgentTaskUrl = (session: ProductSenseSession): string => {
     '',
     '训练要求：',
     '1. 先让我独立初答，不要提前给框架或标准答案。',
-    '2. 按 $pm-sense 的金字塔、MECE、逐轮追问和阶段收束流程训练。',
+    '2. 按 $competency-lab 的岗位能力画像、逐轮追问和阶段收束流程训练。',
     '3. 我完成自主总结后，再进行官方资料与小红书外部研究。',
     '4. 保留我的原始判断，明确区分事实、观点、假设和推断。',
     '5. 完成后生成 1 分钟和 3 分钟答案，并保存为飞书知识库文档。',
@@ -100,9 +100,9 @@ const buildRegenerationTaskUrl = (
   preference: string,
 ): string => {
   const prompt: string = [
-    '请使用 $pm-sense Skill 的“每日题单”模式重新生成今天的 3 道题。',
-    '同时完整读取 OfferLoop 项目中的 skills/pm-sense/SKILL.md 与'
-      + ' skills/pm-sense/references/daily-question-generation.md。',
+    '请使用 $competency-lab Skill 的“每日题单”模式重新生成今天的 3 道题。',
+    '同时完整读取 OfferLoop 项目中的 skills/competency-lab/SKILL.md 与'
+      + ' skills/competency-lab/references/daily-question-generation.md。',
     `目标日期：${session.dailyDate}`,
     '先读取该用户今天最新批次的题目、全部不喜欢反馈与具体原因，'
       + '再生成 batch_no + 1 的新批次。',
@@ -360,7 +360,7 @@ const ProductSenseCard: React.FC = () => {
                 产品 Sense
               </CardTitle>
               <CardDescription>
-                $pm-sense Agent 陪练 · 飞书归档后才会进入下一题
+                $competency-lab Agent 陪练 · 飞书归档后才会进入下一题
               </CardDescription>
             </div>
             <Badge variant="secondary">
@@ -488,7 +488,7 @@ const ProductSenseCard: React.FC = () => {
               <div>
                 <p className="font-medium">今天这批题都不合适</p>
                 <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                  可以补充一句偏好，再让 $pm-sense Agent 生成新的一批。
+                  可以补充一句偏好，再让 $competency-lab Agent 生成新的一批。
                   旧题和拒绝原因会保留，用于后续个性化。
                 </p>
               </div>
@@ -521,7 +521,7 @@ const ProductSenseCard: React.FC = () => {
                 <Sparkles />
                 <AlertTitle>今日题单正在准备</AlertTitle>
                 <AlertDescription>
-                  题目由 $pm-sense Agent 动态生成，不从静态题库抽取。
+                  题目由 $competency-lab Agent 动态生成，不从静态题库抽取。
                   准备完成后点击下方按钮读取一次。
                 </AlertDescription>
                 <Button
@@ -570,7 +570,7 @@ const ProductSenseCard: React.FC = () => {
               <Alert>
                 <Sparkles />
                 <AlertTitle>
-                  当前题已锁定，交由 $pm-sense Agent 陪练
+                  当前题已锁定，交由 $competency-lab Agent 陪练
                 </AlertTitle>
                 <AlertDescription>
                   Codex 会打开一个新任务并预填题目与训练要求。

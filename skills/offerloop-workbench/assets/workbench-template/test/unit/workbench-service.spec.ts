@@ -393,9 +393,19 @@ describe('WorkbenchService', () => {
     expect(response.progressView.viewType).toBe('kanban');
     expect(response.progress.records[0].recordId).toBe('progress-1');
     expect(response.upcomingEvents.records[0].recordId).toBe('event-1');
-    expect(response.stageCounts).toEqual(
-      Object.entries(stageTotals).map(([stage, count]) => ({ stage, count })),
-    );
+    expect(response.stageCounts).toEqual([
+      { stage: '待反馈', count: 0 },
+      { stage: '待笔试', count: 15 },
+      { stage: '待面试', count: 0 },
+      { stage: '待群面', count: 8 },
+      { stage: '待一面', count: 16 },
+      { stage: '待二面', count: 9 },
+      { stage: '待三面', count: 4 },
+      { stage: '待HR面', count: 3 },
+      { stage: '待OC', count: 0 },
+      { stage: 'Offer', count: 2 },
+      { stage: '已结束', count: 0 },
+    ]);
     const upcomingCall = get.mock.calls.find(
       ([url]: [string]): boolean =>
         url.includes('/reminder-base/') && url.endsWith('/records'),
@@ -410,7 +420,7 @@ describe('WorkbenchService', () => {
         { filter?: unknown }?,
       ]) => url.includes('page_size=1') && Boolean(body?.filter),
     );
-    expect(countCalls).toHaveLength(9);
+    expect(countCalls).toHaveLength(13);
   });
 
   it('keeps knowledge digest optional when its Base is not configured', async () => {

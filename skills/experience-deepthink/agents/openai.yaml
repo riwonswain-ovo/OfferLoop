@@ -1,4 +1,4 @@
 interface:
   display_name: "经历深挖"
-  short_description: "按岗位深挖真实经历，支持 AI 产品与策略产品专项路线"
-  default_prompt: "使用 $experience-deepthink 深挖一段真实经历；如果目标是 AI 产品岗位，请加载对应专项路线并一次只追问一个最高价值证据缺口。"
+  short_description: "先还原可验证的项目细节，再生成两分钟内可口述的面试逐字稿"
+  default_prompt: "使用 $experience-deepthink 通过连续一题一答先维护细节复原稿；事实稳定后，再仅依据该稿生成 12 题面试逐字稿。"

@@ -1,4 +1,0 @@
-interface:
-  display_name: "PM Sense"
-  short_description: "逐步训练产品判断并保存单题文档"
-  default_prompt: "Use $pm-sense to coach me through this product question and save the result."

@@ -1,164 +1,118 @@
 # OfferLoop 飞书材料与产物契约
 
-## 职责边界
+## 职责
 
-`scripts/artifact_contract.py` 只处理本地确定性逻辑：
+`scripts/artifact_contract.py` 只处理确定性本地逻辑：schema v5 迁移、固定目录定位、`run_id`、标题、状态路由和 Markdown 校验。它不访问飞书，也不保存凭证或私人正文。
 
-- schema v3 到 v4 的配置迁移；
-- 固定文件夹 locator 的校验、登记与解析；
-- `run_id`、标题、状态路由和 Markdown 校验；
-- 从 Agent 已读取的候选节点中按 `run_id` 判断唯一、缺失或冲突。
+在线读取和写入由 Agent 按 `lark-wiki`、`lark-doc`、`lark-base` 的规则完成。OfferLoop 私有空间内的唯一匹配材料可自动读取；零匹配、多匹配、冲突或空间外材料才询问用户。
 
-脚本不访问飞书。Agent 必须先读取 `lark-wiki`、`lark-doc`；只有对应业务流程明确要求或用户
-另行要求 Base 操作时才读取 `lark-base`。完成节点查询和文档读写后，按各 Skill 的明确规则
-决定是否回填 Base。线上操作成功后，才登记返回的 locator。不得把飞书 token、简历正文或
-ASR 正文打印到日志。
+## 用户画像前置门禁
 
-## 固定材料
+除 `career-profile` 外，8 个 OfferLoop 业务 Skill 必须把 `profile-gate.md` 作为第一项业务检查。
+`02｜用户画像` 下的岗位选择偏好、个人性格探索和语言表达习惯文档全部缺失、空白或只有模板
+占位内容时，不得启动原 Skill；改由 `career-profile` 一次只问一个问题，并在每条确认信息后自动
+保存对应文档。只要存在至少一条用户确认的有效信息即可通过全局门禁，不要求状态已经是
+`completed`；`job-collection` 仍必须单独要求岗位选择偏好文档已经完成。
 
-知识库中的个人材料只保留 `02｜简历合集`。文件夹可包含多个当前仍在使用的简历版本，但不建立
-历史简历或其他个人材料目录。
+确定性正文判定使用 `scripts/profile_gate.py`。脚本不访问飞书、不保留或回显用户画像值。
 
-每份简历的飞书文档标题就是唯一“简历版本名”，例如：
+三份文档分别提供岗位选择、自我认识和个人语言画像。需要生成自我评价、自我介绍、面试
+逐字稿或参考回答的 Skill 同时执行 `voice-contract.md`；招聘信息同步按用户已确认的岗位迁移
+边界执行 `job-collection/references/prewrite-confirmation.md`。
 
-```text
-互联网产品经理岗 - 简历
-AI 产品经理岗 - 简历
-```
-
-`求职进展` 和 `笔面试中心` 的 `投递简历版本` SingleSelect 选项必须使用完全相同的名称。用户
-维护这些选项和记录值；`job-collection`、`recruiting-reminder` 不读取知识库，也不自动同步
-选项。消费方按标题精确匹配：
-
-- 唯一命中：读取该简历。
-- 零命中：报告缺失并让用户修正选项或简历标题。
-- 多个同名节点：停止并让用户选择；不得取“最新”或第一份。
-
-`resume-tailor` 只有在用户确认当前 PDF 内容并明确要求登记时，才把与 PDF 同源的结构化 Markdown
-正文写入 `02｜简历合集`。它使用上述唯一版本名规则，不生成 `run_id`，也不进入下方“每次产物”
-流程。PDF 继续作为本地文件交付；飞书文档不得声称包含未实际上传的二进制附件。
-
-旧简历需要退出当前使用范围时，必须由用户明确指定保留位置或确认删除；OfferLoop 不创建历史
-简历或归档目录，也不让退出使用范围的简历参与任何 Skill 的默认读取。
-
-## 固定线上目录
+## 固定目录与 locator
 
 ```text
-02｜简历合集
-03｜经历深挖
-04｜面试准备
-05｜面试复盘 / ASR 待复盘、已完成复盘
-06｜产品 Sense
-07｜模拟面试
+02｜用户画像                         user_profile
+03｜定制简历                         current_resumes（根定位；按岗位路由到 01–08 子目录）
+04｜经历深挖                         experience_deepthink（根定位）
+04｜经历深挖/细节复原文档             细节复原稿固定子目录
+04｜经历深挖/面试逐字文档             面试逐字稿固定子目录
+05｜岗位能力与训练/岗位能力画像       competency_profiles
+05｜岗位能力与训练/专项训练           competency_training（根定位）
+05｜岗位能力与训练/专项训练/方法论训练  方法论及其逐题训练文档
+05｜岗位能力与训练/专项训练/行业认知训练 行业认知及其逐题训练文档
+05｜岗位能力与训练/每日三题            每日题单固定子目录
+05｜岗位能力与训练/周报                周报固定子目录
+06｜面试准备                         interview_prep
+07｜模拟面试                         mock_lab
+08｜真实面试复盘/ASR 待复盘           interview_asr
+08｜真实面试复盘/已完成复盘           interview_review
 ```
 
-## 固定 locator
+旧 schema v4 的 `resume_deepthink`、`pm_sense` 等 locator 在迁移时映射到新键，沿用原节点；迁移不删除、复制或静默移动线上文档。
 
-schema v4 只登记以下文件夹：
+## 标题标准
 
-```text
-current_resumes
-resume_deepthink  # 兼容既有 schema v4 的内部键，对应“03｜经历深挖”
-pm_sense
-interview_prep
-mock_lab
-interview_asr
-interview_review
-```
+- `岗位选择偏好｜<显示名>`
+- `个人性格探索｜<显示名>`
+- `语言表达习惯｜<显示名>`
+- 旧 `用户画像｜<显示名>` 仅作迁移兼容，不再新建
+- `简历｜<目标岗位>｜<公司或通用>`；用户明确要求另建版本时追加 `｜v<版本>`
+- `细节复原稿｜<经历>｜<岗位方向>`
+- `面试逐字稿｜<经历>｜<岗位方向>`
+- `岗位能力地图｜<岗位方向>`；每个岗位方向只维护一份长期主文档
+- `能力训练｜<岗位方向>｜<日期>｜<序号>`
+- `每日三题｜<日期>`
+- `训练题｜<题目名称>`
+- `岗位能力周报｜<开始日期>—<结束日期>`
+- `面试准备｜<公司>｜<岗位>｜<环节>｜<日期>`
+- `模拟面试｜<公司或方向>｜<岗位>｜<环节>｜<日期>｜<序号>`
+- `面试ASR｜<公司>｜<岗位>｜<环节>｜<日期>`
+- `面试复盘｜<公司>｜<岗位>｜<环节>｜<日期>`
+- `招聘者评估｜<公司>｜<岗位>｜<环节>｜<日期>`
 
-线上创建或确认唯一节点后，分别使用：
+`run_id` 仅用于会话内幂等、失败补偿和内部元数据，不进入标题。
 
-```text
-python3 scripts/artifact_contract.py describe-layout --json
+## 自动读取
 
-python3 scripts/artifact_contract.py register-folder \
-  --kind current_resumes --node-token '<NODE_TOKEN>'
+每个 Skill 在 `SKILL.md` 中维护“场景—必读材料—缺失处理”表。开始实质工作前简短列出实际读取的材料：
 
-```
+- 唯一匹配：自动读取。
+- 零匹配：说明缺失并请求最小补充。
+- 多匹配：列出必要候选让用户选择。
+- 冲突：展示冲突，不自行选择“最新”。
+- 明确必读材料未读取：停止实质工作，不假装完成。
 
-`describe-layout` 是目录名称与 locator 的唯一机器可读映射；线上查找时必须使用该映射，不得从
-旧目录名称推断。不得在日志或最终回复中重复 node token。发现多个同名节点时让用户选择，不
-登记猜测结果。
+不建立哈希回执、机器可读 `required-context` 清单或复杂 completed 门禁。
 
-## 每次产物
+## 自动保存
 
-适用于 `experience-deepthink`、`pm-sense`、`interview-prep`、`mock-lab` 和 `talk-review`。
-`interview-prep` 先在聊天中交付完整初稿；只有用户明确确认当前版本并要求保存后，才进入以下
-正式产物流程：
+所有产出型 Skill（`career-profile`、`experience-deepthink`、`resume-tailor`、`competency-lab`、`interview-prep`、`mock-lab`、`talk-review`）在每次生成、补充或修订内容后默认自动保存：
 
-1. 用 `new-run --skill <name>` 生成 `run_id`，并在会话内保留。
-2. 用 `route-folder` 获得目标目录键，再用 `resolve-folder` 获得 locator。
-3. 用 `build-title` 生成确定性标题。`experience-deepthink` 必须传经历名称和完整岗位方向，
-   标题固定为 `经历深挖｜<经历名称>｜<完整岗位方向>`，不包含日期或 `run_id`。
-4. `experience-deepthink` 通过 `lark-wiki` 列出目标目录下候选节点，把最小候选数组交给
-   `find-by-title`；其他 Skill 继续使用 `find-by-run`。候选只包含 `title`、`node_token`
-   和可选 `url`。
-5. `found` 时更新原节点；`missing` 时创建；`ambiguous` 时停止并让用户选择。
-6. 将最终 Markdown 交给 `validate-markdown --file - --run-id ...`；
-   `experience-deepthink` 改用 `validate-markdown --file - --run-id ... --content-only`。
-7. 通过 `lark-doc` 写入 Markdown Docx/Wiki 节点。
+- 正常结束：`completed`。
+- 用户暂停、时间到或提前结束：`incomplete`，正文保留已完成内容、缺口和续做清单。
+- 唯一同名节点：更新。
+- 零命中：创建。
+- 多个同名节点：停止并让用户选择。
+- 用户明确说“不保存”：本轮不写入飞书。
+- 用户明确要求“另建文档记录本次更新”：创建独立版本，不覆盖主文档。
+- 响应丢失：先按标题重新查找，再决定是否重试。
 
-成功响应丢失时沿用原 `run_id` 重试。成功完成一次运行后，新运行必须生成新 `run_id`。
-`experience-deepthink` 的新 `run_id` 只在会话内用于幂等和失败重试，不写入正文、不改变标题，
-也不创建第二份正式文档。
+每次成功保存后返回“知识库面包屑路径 + 文档 URL”。保存失败时交付完整 Markdown 和原 `run_id`，不得声称已经写入。
 
 ## Markdown 最低结构
 
+`experience-deepthink`、`interview-prep`、`mock-lab` 和 `talk-review` 使用各自固定的用户可见内容模板，并通过
+`validate-markdown --content-only` 校验。`interview-prep` 正文不显示“产物信息”、生成状态、
+生成 Skill、`run_id`、locator 或其他内部运行元数据；`mock-lab` 只移除“产物信息”目录，
+其余既有正文目录和顺序保持不变；`talk-review` 的求职者复盘与招聘者评估都不设置“产物信息”
+目录。
+
+其余产物至少包含：
+
 ```markdown
-# <确定性标题>
+# <标准标题>
 
 ## 产物信息
-
-- 产物类型：
 - 状态：completed / incomplete
-- 生成时间：
-- run_id：
 - 生成 Skill：
-- 来源及读取时间：
-- 关联简历版本：
-- 目标投递方向：
-- 关联求职记录：
-- 关联面试事件：
+- 来源：
+- 目标岗位：
 
 ## 正文
+
+## 待续做
 ```
 
-不同 Skill 可将不适用字段留空，但不得省略 `run_id`、来源和目标方向。经历未从简历读取时，
-`关联简历版本` 写“无”。明确区分已确认事实、待确认信息、外部证据和推断。不得输出 HTML、
-图片发布物或 ZIP。
-
-`experience-deepthink` 是 content-only 例外：正文严格使用其 `output-schema.md`，不包含
-“产物信息”或 `run_id`；运行元数据只保留在会话执行上下文中。
-
-## 产物读取规则
-
-- `experience-deepthink`：必须先接收用户在 Chat 中直接输入的经历和目标岗位方向，不主动读取
-  当前简历。首次输入完成后，经历名称和完整岗位方向一致时，读取并更新同一份经历深挖文档；
-  岗位方向不同才创建独立文档。发现旧版“简历深挖”候选时可以迁移唯一匹配文档；多个候选时
-  让用户选择，不自动合并或删除。
-- `pm-sense`：默认不读取简历或其他知识库正文；用户要求延续同一训练时才读取指定训练文档。
-- `interview-prep`：以用户本次明确提供的公司、岗位、JD 和轮次为目标事实源。个人材料使用
-  用户手动指定的 `experience-deepthink` 产物（飞书候选须先列出并让用户选择）或用户上传的
-  简历；上一轮准备文档只在用户手动指定后读取。聊天交付不要求任何 locator；用户确认保存时
-  只要求 `interview_prep` locator，若用户选择从飞书读取经历深挖则另需
-  `resume_deepthink` locator。
-- `mock-lab`：读取用户选定的简历，并按本次岗位方向和简历中可见经历选择相关经历深挖文档；
-  JD 有则读取，无则按用户确认的方向进行。
-- `talk-review`：读取用户选定的 ASR、简历，并按实际面试岗位方向和转写中涉及的经历选择相关
-  经历深挖文档。
-
-每个消费方先读节点标题和产物信息，再读取匹配正文；`experience-deepthink` 没有产物信息，
-只按稳定标题和正文结构判断。不得默认扫描无关目录。
-
-## 迁移
-
-schema v3 升级到 v4 时：
-
-- 保留当前简历、旧简历深挖目录、产品思维和模拟面试 locator；内部兼容键
-  `resume_deepthink` 继续指向原节点，不自动移动或重命名线上目录。
-- 将旧“准备完成/待准备”目录优先映射到 `04｜面试准备`。
-- 将旧“待复盘”映射为 `05｜面试复盘/ASR 待复盘`，将旧“已完成复盘”映射为
-  `05｜面试复盘/已完成复盘`。
-- 已登记的旧目录 locator 继续有效，不自动移动或重命名线上节点。
-- 不登记旧经历主档、产品主档、历史简历、其他材料或旧通用题库 locator。
-- 不删除或移动任何线上旧节点；需要归档时另行列出并取得用户确认。
+正式正文不显示 `run_id`。运行时可将其作为文档属性或内部状态保存。

@@ -6,28 +6,37 @@
 查找同名资源，也不新建第二套：
 
 1. 列出表、字段、视图、记录数和 workflow。
-2. 读取已有用户偏好和信息源登记，只询问当前操作必需但缺失的值。
+2. 读取 `岗位选择偏好｜<显示名>`、已有用户偏好和信息源登记。偏好文档缺失、空白或未完成时
+   转入 `career-profile` 的固定建档流程；本 Skill 不得询问任何求职偏好。
 3. 对照 `field-contract.md` 和 `excel-insert.md` 报告差异。
 4. 未得到结构迁移授权前，不删除字段、表或视图，不改写状态和 record ID 映射。
 
 用户明确表示没有现有目标 Base 时才进入新建流程。创建 Base、表、workflow 或权限变更前
 再次列出目标并取得确认。
 
-## 2. 收集最小求职偏好
+## 2. 读取并镜像岗位选择偏好
 
-按需询问，不做一次性长表单：
+`career-profile` 保存的 `岗位选择偏好｜<显示名>` 是人工可读唯一真源；`用户偏好` 表只保留
+机器可读运行镜像。`job-collection` 不再负责下面任何字段的提问、解释或确认：
 
 | 偏好 | 用途 |
 |---|---|
-| `graduation_year` | 届次和批次时间窗硬筛 |
-| `target_cities` | 城市硬筛；`全国` 表示软筛 |
-| `selected_industries` | 行业范围和分类参考 |
-| `excluded_industries` | 排除行业硬筛 |
-| `excluded_companies` | 排除公司硬筛 |
-| `target_companies` | 仅用于优先展示，不作排他筛选 |
+| `graduation_year` | 从“预计毕业年份”镜像；届次和批次时间窗硬筛 |
+| `target_cities`、`city_filter_mode` | 从城市范围镜像；`全国` 表示用户已明确不限制城市 |
+| `selected_industries` | 从可保留行业镜像；明确不限才使用空列表 |
+| `target_job_preferences` | 从愿意考虑的直接匹配、可迁移和用户补充方向合并镜像 |
+| `excluded_industries` | 从明确排除行业镜像 |
+| `excluded_companies` | 从明确排除公司镜像 |
+| `target_companies` | 从优先关注公司镜像；仅用于展示优先级 |
+| `excluded_recruitment_types` | 从明确排除招聘类型镜像 |
 
-已有值原样保留。用户说“没有限制”时保存明确的空列表或 `全国`，不要把缺失和无偏好混为
-一谈。
+偏好文档为“指定城市”时镜像完整列表并设置 `city_filter_mode=include`；为“全国”时镜像 `全国`
+并设置 `city_filter_mode=all`。行业、招聘类型和企业偏好只有明确“不限”或“没有”才可镜像为空
+列表。文档缺失、`incomplete`、有待补节点或语义含糊时，在读取来源前转入 `career-profile`，待其
+保存后返回原任务；不得根据历史企业记录反推，也不得把缺失当作无限制。
+
+旧 Base 已有偏好但新文档为空时，同样转入 `career-profile`，由它迁移旧答案、补问缺失项并完成
+最终确认。文档完成后，Base 与文档冲突时自动以文档覆盖运行镜像，不再向用户重复确认。
 
 ## 3. 登记信息源
 
@@ -69,6 +78,7 @@
 - target_cities 与 city_filter_mode；
 - target_companies；
 - selected_industries；
+- target_job_preferences；
 - excluded_industries；
 - excluded_companies；
 - excluded_recruitment_types（例如暑期实习、普通实习、社招）。
@@ -76,6 +86,12 @@
 `excluded_recruitment_types` 属于必读硬筛字段。任何 CLI/中间输出把长字段名显示为
 `excluded_recruitment...` 时，只能在该前缀唯一对应真实字段的情况下还原；缺失或歧义时必须
 停止同步并报告，禁止把它当成空数组继续写入。
+
+所有上述偏好字段都是运行镜像，不是提问入口。写入或修复前必须已有 `career-profile` 中完成并
+经用户整体确认的岗位选择偏好文档。
+
+旧 Base 缺少 `target_job_preferences` 等镜像字段时先报告增量加字段计划并取得结构迁移授权，再从
+岗位选择偏好文档写入；不从既有企业记录或历史对话反推偏好。
 
 旧版来源定位列只读兼容；新来源统一写 `信息源登记`，不再把单个来源塞进偏好记录。
 
@@ -105,10 +121,11 @@ Skill 管理。
 ## 8. 首次同步与验收
 
 1. 按来源逐个扫描、映射、拆批次、硬筛和跨来源去重。
-2. 按 `excel-insert.md` 双写主表与唯一子表。
-3. 检查字段、状态、映射、视图和 10 条 workflow。
-4. 对主表已投递记录执行求职进展幂等对账。
-5. 每个来源独立写入结果与游标。
+2. 按 `prewrite-confirmation.md` 对岗位软偏好不匹配/不确定的候选集中确认。
+3. 只把岗位匹配或用户明确接受的候选按 `excel-insert.md` 双写主表与唯一子表。
+4. 检查字段、状态、映射、视图和 10 条 workflow。
+5. 对主表已投递记录执行求职进展幂等对账。
+6. 仅在确认与写入终态完整时为每个来源独立写入结果与游标。
 
 最终报告 Base URL、偏好摘要、来源数量、每来源候选/重复/新增/补全/失败、进展对账状态和
 下一次重叠扫描起点。可选工作台按需读取 Base，不需要本 Skill 推送刷新；工作台失败

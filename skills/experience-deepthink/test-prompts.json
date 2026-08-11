@@ -1,7 +1,21 @@
 {
   "skill": "experience-deepthink",
-  "version": "0.4.0",
+  "version": "0.6.0",
   "test_cases": [
+    {
+      "id": "should-produce-dual-artifacts-01",
+      "type": "should_trigger",
+      "prompt": "这段项目我已经深挖完了，请整理最终产物。",
+      "expected_behavior": "若事实主线已稳定，交付两份独立 Markdown：细节复原稿按固定八章保存事实；面试逐字稿按固定 12 题组织表达，并且只能使用细节复原稿中的事实。若仍处于阶段一，则只维护细节复原稿。",
+      "notes": "双阶段双产物输出契约"
+    },
+    {
+      "id": "edge-dual-artifact-missing-story-01",
+      "type": "edge_case",
+      "prompt": "项目里没有明显冲突，但还是帮我把最终细节复原稿和逐字稿都写完整。",
+      "expected_behavior": "仍交付细节复原稿与面试逐字稿两份产物；冲突题保留具体待补项，不编造冲突。",
+      "notes": "双产物与故事真实性边界"
+    },
     {
       "id": "should-trigger-audit-01",
       "type": "should_trigger",

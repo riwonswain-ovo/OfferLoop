@@ -50,14 +50,13 @@ class OfferLoopWorkspaceTest(unittest.TestCase):
         content = TEMPLATE.read_text(encoding="utf-8")
         for expected in (
             "# OfferLoop 使用指南",
-            "## 从这里开始",
             "OFFERLOOP:OPTIONAL:WORKBENCH",
-            "三张业务 Base 是唯一事实源",
-            "## 第一次使用",
-            "## 日常流程",
-            "## 核心功能与数据位置",
-            "## 可以对 Agent 说",
-            "## 常见问题",
+            "## 三张核心数据表",
+            "## 三条闭环",
+            "## 9 个长期 Skill",
+            "## 固定目录",
+            "不复制记录",
+            "原生 Agent 深链接",
         ):
             self.assertIn(expected, content)
         self.assertNotIn("OFFERLOOP:MANAGED", content)

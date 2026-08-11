@@ -45,7 +45,10 @@
 
 ## 3. 增量双写
 
-每条通过筛选与去重的新记录按以下顺序处理：
+每条通过筛选与去重、且路由为 `auto_write` 或已获用户明确接受的新记录按以下顺序处理：
+
+`prewrite_confirmation`、`awaiting_confirmation` 或 `confirmed_skipped` 都不得进入本节双写流程；
+详细门禁见 `prewrite-confirmation.md`。
 
 1. 用规范化投递链接、公告链接和公司+批次+项目建立主表去重索引。
 2. 按企业性质选出唯一子表。

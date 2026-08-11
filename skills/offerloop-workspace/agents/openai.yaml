@@ -1,4 +1,0 @@
-interface:
-  display_name: "OfferLoop Workspace"
-  short_description: "维护必需的飞书知识库、三张 Base 与训练产物"
-  default_prompt: "Use $offerloop-workspace to initialize or check my required OfferLoop Feishu knowledge base and artifact folders."

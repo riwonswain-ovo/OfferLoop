@@ -1,7 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import {
-  ArrowRight,
-  BookOpen,
   CheckCircle2,
   ExternalLink,
   LoaderCircle,
@@ -192,7 +190,10 @@ const WorkbenchProductSensePage: React.FC = () => {
                     </span>
                     {active ? <CheckCircle2 className="h-4 w-4 text-blue-600" /> : null}
                   </div>
-                  <p className="mt-3 text-sm font-medium leading-6">
+                  <p
+                    className="mt-3 min-h-[72px] line-clamp-3 text-sm font-medium leading-6"
+                    title={question.prompt}
+                  >
                     {question.prompt}
                   </p>
                   <p className="mt-2 text-[10px] text-muted-foreground">
@@ -204,8 +205,8 @@ const WorkbenchProductSensePage: React.FC = () => {
           </div>
         </section>
 
-        <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[minmax(0,1.55fr)_330px]">
-          <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border bg-background p-5">
+        <div className="min-h-0 flex-1">
+          <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border bg-background p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2">
@@ -248,7 +249,7 @@ const WorkbenchProductSensePage: React.FC = () => {
                 <a
                   href={buildCodexTaskUrl(
                     buildOfferLoopPrompt(
-                      'pm-sense',
+                      'competency-lab',
                       `请使用 PM Sense 训练流程与我完成这道题：\n`
                       + `${session.question.prompt}\n\n`
                       + `我的独立初答：${draft.trim()
@@ -264,72 +265,6 @@ const WorkbenchProductSensePage: React.FC = () => {
             </div>
           </section>
 
-          <aside className="grid min-h-0 grid-rows-[minmax(0,1.45fr)_minmax(0,0.55fr)] gap-3">
-            <section className="min-h-0 overflow-auto rounded-xl border bg-background p-5">
-              <div className="flex items-center gap-2">
-                <BookOpen className="h-5 w-5 text-violet-600" />
-                <h2 className="text-base font-semibold">训练流程</h2>
-              </div>
-              <div className="mt-5 space-y-3">
-                {[
-                  ['1', '阅读题目', '理解事实锚点与问题边界'],
-                  ['2', '独立思考', '保留你的原始判断'],
-                  ['3', '追问对话', 'Codex 一次只追问一个问题'],
-                  ['4', '反馈校准', '检查原子化、归组与 MECE'],
-                  ['5', '沉淀文档', '确认后写入飞书知识库'],
-                ].map(([index, title, description], itemIndex: number) => (
-                  <div key={index} className="flex gap-3">
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-50 text-xs font-medium text-blue-600">
-                      {index}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium">{title}</p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {description}
-                      </p>
-                    </div>
-                    {itemIndex < 4 ? (
-                      <ArrowRight className="ml-auto h-4 w-4 text-slate-300" />
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className="min-h-0 overflow-auto rounded-xl border bg-background p-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold">训练概览</h2>
-                <span className="text-[10px] text-muted-foreground">
-                  当前真实会话
-                </span>
-              </div>
-              <div className="mt-3 grid grid-cols-3 gap-2">
-                {[
-                  ['累计完成', session.completedCount],
-                  ['候选题池', session.poolSize],
-                  ['训练进度', `${session.progress}%`],
-                ].map(([label, value]) => (
-                  <div key={String(label)} className="rounded-lg bg-slate-50 p-2 text-center">
-                    <p className="text-base font-semibold text-blue-600">{value}</p>
-                    <p className="mt-1 text-[9px] text-muted-foreground">{label}</p>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                {session.preference.learnedSignals.length > 0
-                  ? session.preference.learnedSignals.slice(0, 4).map((signal: string) => (
-                    <span key={signal} className="rounded-full bg-violet-50 px-2 py-1 text-[9px] text-violet-600">
-                      {signal}
-                    </span>
-                  ))
-                  : (
-                    <p className="text-[10px] leading-5 text-muted-foreground">
-                      完成更多题目后，这里会显示你的选题偏好。
-                    </p>
-                  )}
-              </div>
-            </section>
-          </aside>
         </div>
       </div>
     </main>

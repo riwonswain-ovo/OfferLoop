@@ -31,13 +31,15 @@ class ArtifactContractTest(unittest.TestCase):
             contract.describe_layout(),
             {
                 "folders": {
-                    "current_resumes": ["02｜简历合集"],
-                    "resume_deepthink": ["03｜经历深挖"],
-                    "interview_prep": ["04｜面试准备"],
-                    "interview_review": ["05｜面试复盘", "已完成复盘"],
-                    "interview_asr": ["05｜面试复盘", "ASR 待复盘"],
-                    "pm_sense": ["06｜产品 Sense"],
+                    "user_profile": ["02｜用户画像"],
+                    "current_resumes": ["03｜定制简历"],
+                    "experience_deepthink": ["04｜经历深挖"],
+                    "competency_profiles": ["05｜岗位能力与训练", "岗位能力画像"],
+                    "competency_training": ["05｜岗位能力与训练", "专项训练"],
+                    "interview_prep": ["06｜面试准备"],
                     "mock_lab": ["07｜模拟面试"],
+                    "interview_review": ["08｜真实面试复盘", "已完成复盘"],
+                    "interview_asr": ["08｜真实面试复盘", "ASR 待复盘"],
                 },
             },
         )
@@ -51,7 +53,7 @@ class ArtifactContractTest(unittest.TestCase):
                 "notifications": {"status": "disabled"},
             }
         )
-        self.assertEqual(migrated["schema_version"], 4)
+        self.assertEqual(migrated["schema_version"], 5)
         self.assertEqual(migrated["lark_profile"], "offerloop")
         self.assertEqual(migrated["notifications"], {"status": "disabled"})
         self.assertEqual(
@@ -63,10 +65,10 @@ class ArtifactContractTest(unittest.TestCase):
         now = datetime(2026, 7, 24, 12, 30, 45, tzinfo=timezone.utc)
         cases = {
             "experience-deepthink": "经历深挖｜推荐系统实习｜产品经理",
-            "interview-prep": "示例公司｜产品经理｜一面准备｜2026-07-24｜",
-            "mock-lab": "示例公司产品面｜模拟面试｜2026-07-24｜",
-            "talk-review": "示例公司｜产品经理｜一面复盘｜2026-07-24｜",
-            "pm-sense": "产品思维｜AI 搜索设计｜2026-07-24｜",
+            "interview-prep": "面试准备｜示例公司｜产品经理｜一面｜2026-07-24",
+            "mock-lab": "模拟面试｜示例公司｜产品经理｜一面｜2026-07-24｜01",
+            "talk-review": "面试复盘｜示例公司｜产品经理｜一面｜2026-07-24",
+            "competency-lab": "能力训练｜产品经理｜2026-07-24｜01",
         }
         for skill, prefix in cases.items():
             with self.subTest(skill=skill):
@@ -93,8 +95,7 @@ class ArtifactContractTest(unittest.TestCase):
                 if skill == "experience-deepthink":
                     self.assertEqual(title, prefix)
                     self.assertNotIn(run_id, title)
-                else:
-                    self.assertTrue(title.endswith(run_id))
+                self.assertNotIn(run_id, title)
 
     def test_experience_deepthink_title_is_stable_per_experience_and_direction(self):
         contract = load_module()
@@ -136,6 +137,126 @@ class ArtifactContractTest(unittest.TestCase):
         )
         self.assertEqual(product, later_product)
 
+    def test_experience_deepthink_builds_stable_titles_for_both_artifacts(self):
+        contract = load_module()
+        run_id = contract.new_run_id(
+            "experience-deepthink",
+            now=datetime(2026, 7, 24, 12, 30, 45, tzinfo=timezone.utc),
+            suffix="a1b2c3d4",
+        )
+        shared = {
+            "subject": "推荐系统实习",
+            "target_direction": "产品经理",
+        }
+        detail_reconstruction = contract.build_title(
+            "experience-deepthink",
+            run_id,
+            artifact_type="detail-reconstruction",
+            **shared,
+        )
+        legacy_restored_prd = contract.build_title(
+            "experience-deepthink",
+            run_id,
+            artifact_type="restored-prd",
+            **shared,
+        )
+        interview_transcript = contract.build_title(
+            "experience-deepthink",
+            run_id,
+            artifact_type="interview-transcript",
+            **shared,
+        )
+        self.assertEqual(
+            detail_reconstruction,
+            "细节复原稿｜推荐系统实习｜产品经理",
+        )
+        self.assertEqual(
+            legacy_restored_prd,
+            "复原 PRD｜推荐系统实习｜产品经理",
+        )
+        self.assertEqual(
+            interview_transcript,
+            "面试逐字稿｜推荐系统实习｜产品经理",
+        )
+        self.assertNotIn(run_id, detail_reconstruction)
+        self.assertNotIn(run_id, legacy_restored_prd)
+        self.assertNotIn(run_id, interview_transcript)
+
+    def test_career_profile_builds_three_distinct_document_titles(self):
+        contract = load_module()
+        run_id = contract.new_run_id(
+            "career-profile",
+            now=datetime(2026, 7, 24, 12, 30, 45, tzinfo=timezone.utc),
+            suffix="a1b2c3d4",
+        )
+        expected = {
+            "job-preference": "岗位选择偏好｜小王",
+            "personality-exploration": "个人性格探索｜小王",
+            "language-habits": "语言表达习惯｜小王",
+        }
+        for artifact_type, title in expected.items():
+            self.assertEqual(
+                contract.build_title(
+                    "career-profile",
+                    run_id,
+                    artifact_type=artifact_type,
+                    subject="小王",
+                ),
+                title,
+            )
+            self.assertEqual(
+                contract.route_folder(
+                    "career-profile",
+                    "incomplete",
+                    artifact_type=artifact_type,
+                ),
+                "user_profile",
+            )
+
+    def test_talk_review_builds_distinct_titles_for_all_artifacts(self):
+        contract = load_module()
+        run_id = contract.new_run_id(
+            "talk-review",
+            now=datetime(2026, 7, 24, 12, 30, 45, tzinfo=timezone.utc),
+            suffix="a1b2c3d4",
+        )
+        shared = {
+            "company": "示例公司",
+            "position": "产品经理",
+            "stage": "一面",
+            "date": "2026-07-24",
+        }
+        self.assertEqual(
+            contract.build_title("talk-review", run_id, **shared),
+            "面试复盘｜示例公司｜产品经理｜一面｜2026-07-24",
+        )
+        self.assertEqual(
+            contract.build_title(
+                "talk-review",
+                run_id,
+                artifact_type="recruiter-assessment",
+                **shared,
+            ),
+            "招聘者评估｜示例公司｜产品经理｜一面｜2026-07-24",
+        )
+        self.assertEqual(
+            contract.build_title(
+                "talk-review",
+                run_id,
+                artifact_type="interview-asr",
+                **shared,
+            ),
+            "面试ASR｜示例公司｜产品经理｜一面｜2026-07-24",
+        )
+        self.assertEqual(
+            contract.route_folder(
+                "talk-review",
+                "completed",
+                artifact_type="recruiter-assessment",
+            ),
+            "interview_review",
+        )
+
     def test_find_by_title_never_chooses_first_ambiguous_candidate(self):
         contract = load_module()
         title = "经历深挖｜推荐系统实习｜产品经理"
@@ -171,16 +292,16 @@ class ArtifactContractTest(unittest.TestCase):
             )
             contract.register_folder(path, "current_resumes", "wik_folder_a")
             result = contract.register_folder(
-                path, "resume_deepthink", "wik_folder_b"
+                path, "experience_deepthink", "wik_folder_b"
             )
             storage = contract.load_config(path)["artifact_storage"]
-            self.assertTrue(storage["readiness"]["resume_deepthink"])
+            self.assertTrue(storage["readiness"]["experience_deepthink"])
             self.assertEqual(storage["status"], "partial")
             self.assertEqual(
-                storage["folders"]["resume_deepthink"], "wik_folder_b"
+                storage["folders"]["experience_deepthink"], "wik_folder_b"
             )
             self.assertNotIn("documents", storage)
-            self.assertEqual(result["schema_version"], 4)
+            self.assertEqual(result["schema_version"], 5)
 
     def test_v3_storage_migrates_to_current_resume_and_fixed_output_folders(self):
         contract = load_module()
@@ -204,7 +325,7 @@ class ArtifactContractTest(unittest.TestCase):
         migrated = contract.migrate_config(old)
         storage = migrated["artifact_storage"]
 
-        self.assertEqual(migrated["schema_version"], 4)
+        self.assertEqual(migrated["schema_version"], 5)
         self.assertEqual(storage["folders"]["current_resumes"], "resume-folder")
         self.assertEqual(storage["folders"]["interview_prep"], "prep-folder")
         self.assertEqual(storage["folders"]["interview_asr"], "asr-folder")
@@ -217,8 +338,8 @@ class ArtifactContractTest(unittest.TestCase):
         run_id = "mock-lab-20260724123045-a1b2c3d4"
         result = contract.find_by_run(
             [
-                {"title": f"A｜{run_id}", "node_token": "one"},
-                {"title": f"B｜{run_id}", "node_token": "two"},
+                {"title": "A", "run_id": run_id, "node_token": "one"},
+                {"title": "B", "metadata": {"run_id": run_id}, "node_token": "two"},
             ],
             run_id,
         )
@@ -227,7 +348,7 @@ class ArtifactContractTest(unittest.TestCase):
 
     def test_markdown_requires_metadata_and_rejects_html(self):
         contract = load_module()
-        run_id = "pm-sense-20260724123045-a1b2c3d4"
+        run_id = "competency-lab-20260724123045-a1b2c3d4"
         valid = contract.validate_markdown(
             f"# 标题\n\n## 产物信息\n\n- run_id：{run_id}\n\n## 正文\n\n内容",
             run_id=run_id,
@@ -245,6 +366,63 @@ class ArtifactContractTest(unittest.TestCase):
         markdown = (
             "# 经历深挖｜竞赛经历｜财务分析岗\n\n"
             "## 一、经历全景与基础口述稿\n\n内容"
+        )
+        self.assertFalse(
+            contract.validate_markdown(markdown, run_id=run_id)["valid"]
+        )
+        self.assertTrue(
+            contract.validate_markdown(
+                markdown,
+                run_id=run_id,
+                content_only=True,
+            )["valid"]
+        )
+
+    def test_interview_prep_content_only_markdown_omits_metadata(self):
+        contract = load_module()
+        run_id = "interview-prep-20260724123045-a1b2c3d4"
+        markdown = (
+            "# 面试准备｜示例公司｜产品经理｜一面｜2026-07-24\n\n"
+            "## 90 秒自我介绍\n\n内容\n\n"
+            "## 公司、业务与岗位认知\n\n内容"
+        )
+        self.assertFalse(
+            contract.validate_markdown(markdown, run_id=run_id)["valid"]
+        )
+        self.assertTrue(
+            contract.validate_markdown(
+                markdown,
+                run_id=run_id,
+                content_only=True,
+            )["valid"]
+        )
+
+    def test_mock_lab_content_only_markdown_omits_metadata_section(self):
+        contract = load_module()
+        run_id = "mock-lab-20260724123045-a1b2c3d4"
+        markdown = (
+            "# 模拟面试｜示例公司｜产品经理｜一面｜2026-07-24｜01\n\n"
+            "## 模拟设置\n\n内容\n\n"
+            "## 材料来源\n\n内容"
+        )
+        self.assertFalse(
+            contract.validate_markdown(markdown, run_id=run_id)["valid"]
+        )
+        self.assertTrue(
+            contract.validate_markdown(
+                markdown,
+                run_id=run_id,
+                content_only=True,
+            )["valid"]
+        )
+
+    def test_talk_review_content_only_markdown_omits_metadata_section(self):
+        contract = load_module()
+        run_id = "talk-review-20260724123045-a1b2c3d4"
+        markdown = (
+            "# 面试复盘｜示例公司｜产品经理｜一面｜2026-07-24\n\n"
+            "## 面试概览\n\n内容\n\n"
+            "## 原始转写来源与质量\n\n内容"
         )
         self.assertFalse(
             contract.validate_markdown(markdown, run_id=run_id)["valid"]

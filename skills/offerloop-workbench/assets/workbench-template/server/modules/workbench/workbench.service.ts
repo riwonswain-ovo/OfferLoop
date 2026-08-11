@@ -47,13 +47,15 @@ const EVENT_TABLE_ORDER: string[] = [
 ];
 
 const PROGRESS_STAGE_ORDER: string[] = [
-  '已投递',
-  '笔试',
-  '群面',
-  '一面',
-  '二面',
-  '三面',
-  'HR面',
+  '待反馈',
+  '待笔试',
+  '待面试',
+  '待群面',
+  '待一面',
+  '待二面',
+  '待三面',
+  '待HR面',
+  '待OC',
   'Offer',
   '已结束',
 ];
@@ -66,7 +68,7 @@ const SEARCH_FIELDS: Record<WorkbenchDatasetQuery['source'], string[]> = {
 
 const FILTER_FIELDS: Record<WorkbenchDatasetQuery['source'], string[]> = {
   companies: ['招聘批次', '城市', '投递进度'],
-  progress: ['公司', '投递岗位', '当前阶段'],
+  progress: ['公司', '投递岗位', '当前状态', '下一环节', '流程结果'],
   events: ['公司', '环节', '完成状态'],
 };
 
@@ -164,14 +166,16 @@ export class WorkbenchService {
       opportunityCount: companies.total,
       stageCounts: [],
       upcomingEvents,
+      dailyCheckin: this.readDailyCheckinStatus(),
     };
   }
 
   async getHomeStageCounts(): Promise<WorkbenchHomeStageCountsResponse> {
     const progressConfig: DatasetConfig = this.readDatasetConfig('PROGRESS');
+    const eventsConfig: DatasetConfig = this.readDatasetConfig('REMINDER');
     return {
       generatedAt: new Date().toISOString(),
-      stageCounts: await this.readProgressStageCounts(progressConfig),
+      stageCounts: await this.readProgressStageCounts(progressConfig, eventsConfig),
     };
   }
 
@@ -246,7 +250,7 @@ export class WorkbenchService {
         { ...metadata.eventsConfig, tableId: eventTable.tableId },
         upcomingView.viewId,
       ),
-      this.readProgressStageCounts(metadata.progressConfig),
+      this.readProgressStageCounts(metadata.progressConfig, metadata.eventsConfig),
     ]);
 
     return {
@@ -661,6 +665,26 @@ export class WorkbenchService {
     return value;
   }
 
+  private readDailyCheckinStatus(): WorkbenchHomeResponse['dailyCheckin'] {
+    const rawStatus: string = String(
+      process.env.DAILY_CHECKIN_STATUS ?? 'unverified',
+    ).trim();
+    const allowed = new Set(['enabled', 'paused', 'disabled', 'unverified']);
+    const status: WorkbenchHomeResponse['dailyCheckin']['status'] =
+      allowed.has(rawStatus)
+        ? rawStatus as WorkbenchHomeResponse['dailyCheckin']['status']
+        : 'unverified';
+    const pauseReason: string = String(
+      process.env.DAILY_CHECKIN_PAUSE_REASON ?? '',
+    ).trim();
+    return {
+      status,
+      sendTime: '21:30',
+      timezone: 'Asia/Shanghai',
+      ...(pauseReason ? { pauseReason } : {}),
+    };
+  }
+
   private async getAccessToken(): Promise<string> {
     if (this.accessToken && Date.now() < this.accessTokenExpiresAt) {
       return this.accessToken;
@@ -796,13 +820,37 @@ export class WorkbenchService {
   }
 
   private async readProgressStageCounts(
-    config: DatasetConfig,
+    progressConfig: DatasetConfig,
+    eventsConfig: DatasetConfig,
   ): Promise<WorkbenchStageCount[]> {
+    const pendingEventCount = (stage: string): Promise<number> =>
+      this.countRecordsByConditions(eventsConfig, [
+        { fieldName: '环节', value: stage },
+        { fieldName: '完成状态', value: '待完成' },
+      ]);
+    const terminalCount = async (): Promise<number> => {
+      const values: string[] = ['未通过', '主动放弃', '岗位关闭'];
+      const counts: number[] = await Promise.all(
+        values.map((value: string): Promise<number> =>
+          this.countRecordsByField(progressConfig, '流程结果', value)),
+      );
+      return counts.reduce((sum: number, count: number): number => sum + count, 0);
+    };
+    const counters: Record<string, () => Promise<number>> = {
+      待反馈: (): Promise<number> => this.countRecordsByField(progressConfig, '下一环节', '待反馈'),
+      待笔试: (): Promise<number> => pendingEventCount('笔试'),
+      待面试: (): Promise<number> => pendingEventCount('面试（轮次待确认）'),
+      待群面: (): Promise<number> => pendingEventCount('群面'),
+      待一面: (): Promise<number> => pendingEventCount('一面'),
+      待二面: (): Promise<number> => pendingEventCount('二面'),
+      待三面: (): Promise<number> => pendingEventCount('三面'),
+      待HR面: (): Promise<number> => pendingEventCount('HR面'),
+      待OC: (): Promise<number> => this.countRecordsByField(progressConfig, '下一环节', 'OC'),
+      Offer: (): Promise<number> => this.countRecordsByField(progressConfig, '流程结果', 'Offer'),
+      已结束: terminalCount,
+    };
     const counts: number[] = await Promise.all(
-      PROGRESS_STAGE_ORDER.map(
-        (stage: string): Promise<number> =>
-          this.countRecordsByField(config, '当前阶段', stage),
-      ),
+      PROGRESS_STAGE_ORDER.map((stage: string): Promise<number> => counters[stage]()),
     );
     return PROGRESS_STAGE_ORDER.map(
       (stage: string, index: number): WorkbenchStageCount => ({
@@ -817,6 +865,13 @@ export class WorkbenchService {
     fieldName: string,
     value: string,
   ): Promise<number> {
+    return this.countRecordsByConditions(config, [{ fieldName, value }]);
+  }
+
+  private async countRecordsByConditions(
+    config: DatasetConfig,
+    conditions: Array<{ fieldName: string; value: string }>,
+  ): Promise<number> {
     const token: string = await this.getAccessToken();
     const url: string =
       `${FEISHU_API_ROOT}/bitable/v1/apps/${config.baseToken}`
@@ -828,11 +883,11 @@ export class WorkbenchService {
           {
             filter: {
               conjunction: 'and',
-              conditions: [{
-                field_name: fieldName,
+              conditions: conditions.map((condition) => ({
+                field_name: condition.fieldName,
                 operator: 'is',
-                value: [value],
-              }],
+                value: [condition.value],
+              })),
             },
           },
           {

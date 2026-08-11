@@ -14,18 +14,15 @@ import tempfile
 
 
 SKILL_NAMES = (
-    "offerloop-setup",
+    "career-profile",
     "job-collection",
     "recruiting-reminder",
-    "offerloop-workspace",
-    "offerloop-workbench",
     "experience-deepthink",
     "resume-tailor",
+    "competency-lab",
     "interview-prep",
     "mock-lab",
     "talk-review",
-    "pm-sense",
-    "aptitude-lab",
 )
 AGENT_ROOTS = {
     "codex": Path(".codex/skills"),
@@ -150,7 +147,7 @@ def install_all_agents(source, project, home, env):
 
 
 def assert_collection_preflight(project, skills_root, env):
-    setup_scripts = skills_root / "offerloop-setup" / "scripts"
+    setup_scripts = skills_root / ".offerloop-runtime" / "scripts"
     configure = setup_scripts / "configure.py"
     preflight = setup_scripts / "preflight.py"
 
@@ -217,7 +214,7 @@ def assert_collection_preflight(project, skills_root, env):
             "--workspace-core-data-node-token",
             "cold_core_data",
             "--schema-version",
-            "4",
+            "5",
         ],
         cwd=project,
         env=ready_env,
@@ -296,7 +293,9 @@ def main():
     )
     args = parser.parse_args()
     source = args.source.resolve()
-    if not (source / "skills" / "offerloop-setup" / "SKILL.md").is_file():
+    if not (source / "scripts" / "install_offerloop.py").is_file():
+        raise SystemExit(f"not an OfferLoop checkout: {source}")
+    if not all((source / "skills" / name / "SKILL.md").is_file() for name in SKILL_NAMES):
         raise SystemExit(f"not an OfferLoop checkout: {source}")
 
     with tempfile.TemporaryDirectory(prefix="offerloop-cold-install-") as temporary:
@@ -316,7 +315,7 @@ def main():
         roots = install_all_agents(source, project, home, env)
         assert_collection_preflight(project, roots["codex"], env)
         print(
-            "cold install accepted: four Agents, twelve Skills, idempotency, "
+            "cold install accepted: four Agents, nine Skills, idempotency, "
             "post-install verification, collection preflight, recovery, and redaction"
         )
 

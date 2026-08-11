@@ -1,4 +1,0 @@
-interface:
-  display_name: "笔试训练实验室"
-  short_description: "专项训练行测与校招通用能力题，逐题诊断错因、方法与速度"
-  default_prompt: "使用 $aptitude-lab 按一次一题的方式训练我的行测与校招通用能力笔试，并在作答后诊断错因。"

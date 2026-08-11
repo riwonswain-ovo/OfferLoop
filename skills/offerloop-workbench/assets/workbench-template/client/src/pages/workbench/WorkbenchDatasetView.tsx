@@ -52,7 +52,10 @@ const COMPANY_COLUMNS: DatasetColumn[] = [
 ];
 
 const PROGRESS_COLUMNS: DatasetColumn[] = [
-  { key: '当前阶段', label: '当前阶段' },
+  { key: '当前状态', label: '当前状态' },
+  { key: '最近完成节点', label: '最近完成' },
+  { key: '下一环节', label: '下一环节' },
+  { key: '流程结果', label: '流程结果' },
   { key: '公司', label: '公司', width: 'min-w-36' },
   { key: '投递岗位', label: '投递岗位', width: 'min-w-48' },
   { key: '投递日期', label: '投递日期' },
@@ -96,13 +99,15 @@ const INTERVIEW_COLUMNS: DatasetColumn[] = [
 ];
 
 const PROGRESS_STAGE_ORDER: string[] = [
-  '已投递',
-  '笔试',
-  '群面',
-  '一面',
-  '二面',
-  '三面',
-  'HR面',
+  '待反馈',
+  '待笔试',
+  '待面试',
+  '待群面',
+  '待一面',
+  '待二面',
+  '待三面',
+  '待HR面',
+  '待OC',
   'Offer',
   '已结束',
 ];

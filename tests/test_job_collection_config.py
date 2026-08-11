@@ -23,6 +23,30 @@ TENCENT_SOURCE = (
     / "references"
     / "tencent-smartsheet-source.md"
 )
+PREWRITE_CONFIRMATION = (
+    ROOT
+    / "skills"
+    / "job-collection"
+    / "references"
+    / "prewrite-confirmation.md"
+)
+INIT_WORKFLOW = (
+    ROOT / "skills" / "job-collection" / "references" / "init-workflow.md"
+)
+CAREER_PROFILE_SKILL = ROOT / "skills" / "career-profile" / "SKILL.md"
+CAREER_PROFILE_CONVERSATION = (
+    ROOT / "skills" / "career-profile" / "references" / "conversation-guide.md"
+)
+CAREER_PROFILE_SCHEMA = (
+    ROOT / "skills" / "career-profile" / "references" / "profile-schema.md"
+)
+JOB_PREFERENCE_WORKFLOW = (
+    ROOT
+    / "skills"
+    / "career-profile"
+    / "references"
+    / "job-preference-workflow.md"
+)
 EXPECTED_ENTERPRISE_FIELDS = [
     "信息更新时间",
     "投递进度",
@@ -76,6 +100,51 @@ class JobCollectionConfigTest(unittest.TestCase):
         for path in (FIELD_CONTRACT, EXCEL_INSERT):
             content = path.read_text(encoding="utf-8")
             self.assertIn("`待确认`、`感兴趣`、`已投递`、`已拒绝`", content, path)
+
+    def test_prewrite_confirmation_separates_hard_and_soft_preferences(self):
+        skill = JOB_COLLECTION_SKILL.read_text(encoding="utf-8")
+        contract = PREWRITE_CONFIRMATION.read_text(encoding="utf-8")
+        for marker in (
+            "`target_cities` 是城市硬条件",
+            "`selected_industries` 是目标行业硬条件",
+            "`target_job_preferences` 是岗位软偏好",
+            "`hard_filtered`",
+            "`auto_write`",
+            "`prewrite_confirmation`",
+            "`awaiting_confirmation`",
+            "保留该来源旧游标",
+        ):
+            self.assertIn(marker, contract)
+        self.assertIn("写入前集中请用户确认", skill)
+        self.assertIn("不能与 `投递进度=待确认` 混淆", skill)
+
+    def test_career_profile_owns_all_preference_questions_and_job_collection_only_mirrors(self):
+        career = CAREER_PROFILE_SKILL.read_text(encoding="utf-8")
+        workflow = JOB_PREFERENCE_WORKFLOW.read_text(encoding="utf-8")
+        schema = CAREER_PROFILE_SCHEMA.read_text(encoding="utf-8")
+        job = JOB_COLLECTION_SKILL.read_text(encoding="utf-8")
+        init = INIT_WORKFLOW.read_text(encoding="utf-8")
+        questions = (
+            "你目前是什么学历、读什么专业，预计哪一年毕业？",
+            "你之前实习、兼职或正式工作接触过哪些岗位方向？",
+            "哪些你愿意考虑，哪些你不想考虑？",
+            "哪些是你确认完全不考虑的？",
+            "哪些城市的招聘信息可以直接保留？",
+            "你希望保留哪些招聘类型？",
+            "行业上你希望怎么筛选？",
+            "有没有希望优先关注的公司",
+        )
+
+        self.assertIn("固定迁移原 `job-collection` 的偏好提问", career)
+        positions = [workflow.index(question) for question in questions]
+        self.assertEqual(positions, sorted(positions))
+        self.assertIn("# 岗位选择偏好｜<显示名>", schema)
+        self.assertIn("岗位选择偏好｜<显示名>", job)
+        self.assertIn("不得询问毕业年份、专业、岗位经历", job)
+        self.assertIn("不提问任何求职偏好", job)
+        self.assertIn("不再负责下面任何字段的提问、解释或确认", init)
+        self.assertIn("机器可读运行镜像", init)
+        self.assertIn("target_cities 与 city_filter_mode", init)
 
     def test_default_env_file_is_update_safe(self):
         with tempfile.TemporaryDirectory() as directory:

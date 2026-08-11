@@ -1,6 +1,8 @@
 import { timingSafeEqual } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 
+import { normalizeProgressFields } from "./progress-model.js";
+
 
 function secretsMatch(actual, expected) {
   const left = Buffer.from(String(actual ?? ""));
@@ -58,7 +60,9 @@ export async function handleSyncRequest(request, deps) {
   );
   if (existingRecords.length === 0) {
     const fields = {
-      "当前阶段": "已投递",
+      "最近完成节点": "投递完成",
+      "下一环节": "待反馈",
+      "流程结果": "进行中",
       "公司": payload.company,
       "投递岗位": "",
       "投递日期": String(payload.transitioned_at).slice(0, 10),
@@ -79,8 +83,7 @@ export async function handleSyncRequest(request, deps) {
   const updatedRecordIds = [];
   for (const existing of existingRecords) {
     const fields = {
-      ...existing.fields,
-      "当前阶段": existing.fields["当前阶段"] || "已投递",
+      ...normalizeProgressFields(existing.fields),
       "公司": payload.company,
       "投递岗位": existing.fields["投递岗位"] ?? "",
       "投递日期":

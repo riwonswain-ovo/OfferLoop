@@ -84,11 +84,30 @@ class OfferLoopInstallerTest(unittest.TestCase):
             for name in self.installer.SKILL_NAMES:
                 self.assertTrue((root / name / "SKILL.md").is_file())
                 self.assertFalse((root / name / "tests").exists())
+            runtime = root / self.installer.SUPPORT_NAME
+            self.assertTrue((runtime / "references" / "profile-gate.md").is_file())
+            self.assertTrue((runtime / "scripts" / "profile_gate.py").is_file())
             manifest = json.loads(
                 (root / self.installer.MANIFEST_NAME).read_text(encoding="utf-8")
             )
             self.assertEqual(manifest["agent"], "claude-code")
             self.assertNotIn(directory, json.dumps(manifest))
+
+    def test_install_includes_native_feishu_task_sync_contract(self):
+        with tempfile.TemporaryDirectory() as directory:
+            environment = {"HOME": directory, "PATH": ""}
+            self.installer.install_agent("codex", environ=environment)
+            reminder = Path(directory) / ".codex" / "skills" / "recruiting-reminder"
+            skill = (reminder / "SKILL.md").read_text(encoding="utf-8")
+            contract = (
+                reminder / "references" / "task-sync-contract.md"
+            ).read_text(encoding="utf-8")
+
+            self.assertIn("原生飞书任务与每日卡片", skill)
+            self.assertIn("飞书任务GUID", skill)
+            self.assertIn("client_token", contract)
+            self.assertIn("offerloop-task-reconcile", contract)
+            self.assertNotIn("OFFERLOOP_CALLBACK_RELAY_SECRET", contract)
 
     def test_conflict_is_safe_and_upgrade_creates_backup(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -110,7 +129,7 @@ class OfferLoopInstallerTest(unittest.TestCase):
             self.assertEqual(upgraded["status"], "upgraded")
             backups = list(
                 (root.parent / ".offerloop-backups").glob(
-                    "*/offerloop-setup/SKILL.md"
+                    "*/offerloop-setup-retired/SKILL.md"
                 )
             )
             self.assertEqual(len(backups), 1)
@@ -152,7 +171,7 @@ class OfferLoopInstallerTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
             external_root = home / ".agents" / "skills"
-            duplicate = external_root / "offerloop-setup"
+            duplicate = external_root / "job-collection"
             duplicate.mkdir(parents=True)
             (duplicate / "SKILL.md").write_text("old shared copy\n", encoding="utf-8")
             hermes_home = home / ".hermes"
@@ -177,7 +196,7 @@ class OfferLoopInstallerTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
             external_root = home / ".agents" / "skills"
-            duplicate = external_root / "offerloop-setup"
+            duplicate = external_root / "job-collection"
             duplicate.mkdir(parents=True)
             (duplicate / "SKILL.md").write_text("old shared copy\n", encoding="utf-8")
             hermes_home = home / ".hermes"
@@ -195,11 +214,11 @@ class OfferLoopInstallerTest(unittest.TestCase):
             self.assertEqual(report["status"], "upgraded")
             self.assertFalse(duplicate.exists())
             self.assertTrue(
-                (hermes_home / "skills" / "offerloop-setup" / "SKILL.md").is_file()
+                (hermes_home / "skills" / "job-collection" / "SKILL.md").is_file()
             )
             backups = list(
                 (external_root.parent / ".offerloop-backups").glob(
-                    "*/hermes-external/*/offerloop-setup/SKILL.md"
+                    "*/hermes-external/*/job-collection/SKILL.md"
                 )
             )
             self.assertEqual(len(backups), 1)
@@ -250,16 +269,18 @@ class OfferLoopInstallerTest(unittest.TestCase):
 
             rendered = output.getvalue()
             self.assertEqual(exit_code, 0)
-            self.assertIn("12 个 Skill 已处理完成", rendered)
+            self.assertIn("9 个长期 Skill 已处理完成", rendered)
             self.assertIn("欢迎使用 OfferLoop", rendered)
-            self.assertIn("求职基础能力", rendered)
+            self.assertIn("求职与画像", rendered)
             self.assertIn("求职训练能力", rendered)
             for name in self.installer.SKILL_NAMES:
                 self.assertIn(name, rendered)
             self.assertIn("安装只添加 Skill", rendered)
             self.assertIn("结束当前 Agent 会话并新开会话", rendered)
+            self.assertIn("先检查 02｜用户画像中的画像文档", rendered)
+            self.assertIn("一次只问我一个问题", rendered)
+            self.assertIn("每次确认后自动保存", rendered)
             self.assertIn("三个入口帮我选择", rendered)
-            self.assertIn("如果我要求，再展开介绍 12 个 Skill", rendered)
 
     def test_verify_is_read_only_and_requires_a_complete_install(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -375,7 +396,7 @@ class OfferLoopInstallerTest(unittest.TestCase):
                     len(group["skills"])
                     for group in first["welcome"]["groups"]
                 ),
-                12,
+                9,
             )
             self.assertNotIn("welcome", second)
 
@@ -463,7 +484,7 @@ class OfferLoopInstallerTest(unittest.TestCase):
         )
 
     def test_version_reports_installer_and_offerloop_versions(self):
-        self.assertEqual(self.installer.INSTALLER_VERSION, "1.1")
+        self.assertEqual(self.installer.INSTALLER_VERSION, "2.0")
         self.assertEqual(self.installer.offerloop_version(), "0.1.0-alpha.8")
 
     def test_workbuddy_install_is_complete_and_idempotent(self):
@@ -489,7 +510,7 @@ class OfferLoopInstallerTest(unittest.TestCase):
             imported = home / ".workbuddy" / "skills" / "skill_123"
             imported.mkdir(parents=True)
             (imported / "SKILL.md").write_text(
-                "---\nname: offerloop-setup\n"
+                "---\nname: job-collection\n"
                 "description: old imported copy\n---\n",
                 encoding="utf-8",
             )
@@ -512,7 +533,7 @@ class OfferLoopInstallerTest(unittest.TestCase):
                     home
                     / ".workbuddy"
                     / "skills"
-                    / "offerloop-setup"
+                    / "job-collection"
                     / "SKILL.md"
                 ).is_file()
             )

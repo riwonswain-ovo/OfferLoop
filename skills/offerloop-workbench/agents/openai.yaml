@@ -1,4 +1,0 @@
-interface:
-  display_name: "OfferLoop Workbench"
-  short_description: "按需部署和维护 OfferLoop 飞书可视化工作台"
-  default_prompt: "Use $offerloop-workbench to deploy and verify my optional OfferLoop Feishu workbench."

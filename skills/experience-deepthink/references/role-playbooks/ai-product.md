@@ -1,13 +1,13 @@
 # AI 产品岗位经历深挖
 
 本流程在 `product.md` 通用产品底座上运行，适用于目标岗位核心职责是把 AI 能力设计成产品并
-推动落地的经历。经历确有 AI/算法应用时同时读取 `../ai-technology-application.md`。一次只
+推动落地的经历。经历确有 AI/算法应用时同时读取 `../project-playbooks/ai-technology-application.md`。一次只
 追问一个最高价值缺口，不向用户展示整套清单。
 
 经历涉及 Agent、Skill、工具调用、工作流编排、多智能体或任务路由时，同时读取
-`../ai-agent-skill-products.md`；只把通用 AI 工具用于整理、写作或辅助分析时不加载。
-经历涉及审核、风控、质检、合规判断或材料预审时读取 `../ai-audit-products.md`；Agent 会查询
-私有业务数据或改变外部状态时读取 `../ai-action-agent-products.md`。
+`../project-playbooks/ai-agent-skill-products.md`；只把通用 AI 工具用于整理、写作或辅助分析时不加载。
+经历涉及审核、风控、质检、合规判断或材料预审时读取 `../project-playbooks/ai-audit-products.md`；Agent 会查询
+私有业务数据或改变外部状态时读取 `../project-playbooks/ai-action-agent-products.md`。
 
 ## 能力主线
 
@@ -117,10 +117,10 @@ AI 使用对话并不自动证明聊天框是合适产品形态。完成标准�
 关键产品判断、评测能否支持上线、技术改进是否产生业务增量。概念知识只在解释真实决策时追问，
 不进行模型原理考试。
 
-Agent / Skill 类经历按 `../ai-agent-skill-products.md` 继续深化，不能停留在“搭了智能体”
+Agent / Skill 类经历按 `../project-playbooks/ai-agent-skill-products.md` 继续深化，不能停留在“搭了智能体”
 “写了 Prompt”“接了工具”或“做了多个 Skill”。必须确认任务为何需要这种形态、运行与路由
 机制、每层职责、质量标准、失败处理、个人产品判断和可验证结果。
 
-审核 / 风控 / 质检类经历按 `../ai-audit-products.md` 深化；会创建、修改、发送、发布、审批、
-分配或关闭业务对象的 Agent 按 `../ai-action-agent-products.md` 深化。两类同时命中时，优先
+审核 / 风控 / 质检类经历按 `../project-playbooks/ai-audit-products.md` 深化；会创建、修改、发送、发布、审批、
+分配或关闭业务对象的 Agent 按 `../project-playbooks/ai-action-agent-products.md` 深化。两类同时命中时，优先
 追问错误代价最高的判断或最不可逆的动作。

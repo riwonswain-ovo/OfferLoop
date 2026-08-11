@@ -183,6 +183,12 @@ export interface WorkbenchHomeResponse {
   stageCounts: WorkbenchStageCount[];
   upcomingEvents: WorkbenchDataset;
   calendarSourceUrl: string;
+  dailyCheckin: {
+    status: 'enabled' | 'paused' | 'disabled' | 'unverified';
+    sendTime: '21:30';
+    timezone: 'Asia/Shanghai';
+    pauseReason?: string;
+  };
 }
 
 export interface WorkbenchHomeStageCountsResponse {

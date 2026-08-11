@@ -160,9 +160,7 @@ class OfferLoopSetupTest(unittest.TestCase):
             self.assertEqual(
                 set(result["skills"]),
                 {
-                    "offerloop-setup",
-                    "offerloop-workspace",
-                    "offerloop-workbench",
+                    "career-profile",
                     "job-collection",
                     "recruiting-reminder",
                     "experience-deepthink",
@@ -170,8 +168,7 @@ class OfferLoopSetupTest(unittest.TestCase):
                     "interview-prep",
                     "mock-lab",
                     "talk-review",
-                    "pm-sense",
-                    "aptitude-lab",
+                    "competency-lab",
                 },
             )
 
@@ -189,7 +186,7 @@ class OfferLoopSetupTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "confirmation"):
                 configure.enable_coaching(path)
             migrated = configure.enable_coaching(path, confirmed=True)
-            self.assertEqual(migrated["schema_version"], 4)
+            self.assertEqual(migrated["schema_version"], 5)
             self.assertEqual(migrated["lark_profile"], "offerloop")
             self.assertIn("artifact_storage", migrated)
             self.assertEqual(
@@ -951,6 +948,31 @@ class OfferLoopSetupTest(unittest.TestCase):
             self.assertEqual(saved["notifications"]["target_name"], "秋招进度群")
             self.assertEqual(saved["notifications"]["identity"], "bot")
 
+    def test_enabling_daily_checkin_clears_stale_pause_reason(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = configure.config_file({"XDG_CONFIG_HOME": directory})
+            configure.write_private_json(
+                path,
+                {
+                    "daily_checkin": {
+                        "status": "paused",
+                        "chat_id": "oc_example",
+                        "owner_open_id": "ou_example",
+                        "send_time": "21:30",
+                        "timezone": "Asia/Shanghai",
+                        "pause_reason": "missing scope",
+                    },
+                },
+            )
+
+            result = configure.update_daily_checkin_config(
+                path,
+                {"status": "enabled"},
+            )
+
+            self.assertEqual(result["daily_checkin"]["status"], "enabled")
+            self.assertNotIn("pause_reason", result["daily_checkin"])
+
     def test_preflight_reports_workspace_locator_readiness_without_values(self):
         with tempfile.TemporaryDirectory() as directory:
             path = configure.config_file({"XDG_CONFIG_HOME": directory})
@@ -1031,11 +1053,68 @@ class OfferLoopSetupTest(unittest.TestCase):
             self.assertEqual(manifest["template_id"], template_id)
             self.assertTrue(manifest["required_environment"])
             if template_id == "offerloop-workbench":
-                self.assertNotIn("optional_environment", manifest)
+                self.assertEqual(
+                    manifest.get("optional_environment"),
+                    ["DAILY_CHECKIN_STATUS", "DAILY_CHECKIN_PAUSE_REASON"],
+                )
             self.assertFalse(any((root / name).exists() for name in forbidden))
             self.assertEqual(
                 [path for path in root.rglob("*") if path.is_symlink()], []
             )
+
+    def test_progress_sync_template_uses_native_tasks_without_card_callback(self):
+        root = (
+            ROOT
+            / "skills"
+            / "offerloop-setup"
+            / "assets"
+            / "progress-sync-template"
+        )
+        manifest = json.loads((root / "template.json").read_text(encoding="utf-8"))
+        required = set(manifest["required_environment"])
+        self.assertIn("REMINDER_TASKLIST_GUID", required)
+        self.assertNotIn("FEISHU_CALLBACK_VERIFICATION_TOKEN", required)
+        self.assertNotIn("OFFERLOOP_CALLBACK_RELAY_SECRET", required)
+
+        service = (
+            root
+            / "server"
+            / "modules"
+            / "job-progress-sync"
+            / "job-progress-sync.service.ts"
+        ).read_text(encoding="utf-8")
+        module = (
+            root
+            / "server"
+            / "modules"
+            / "job-progress-sync"
+            / "job-progress-sync.module.ts"
+        ).read_text(encoding="utf-8")
+        self.assertIn("ensureReminderTaskMapping", service)
+        self.assertIn("/task/v2/tasks?user_id_type=open_id", service)
+        self.assertIn("type: 'open_url'", service)
+        self.assertNotIn("handleCardActionCallback", service)
+        self.assertNotIn("JobProgressSyncCallbackController", module)
+        self.assertFalse(
+            (
+                root
+                / "server"
+                / "modules"
+                / "job-progress-sync"
+                / "job-progress-sync.callback.controller.ts"
+            ).exists()
+        )
+
+        deploy = (
+            ROOT
+            / "skills"
+            / "offerloop-setup"
+            / "references"
+            / "one-click-deploy.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("offerloop-task-reconcile", deploy)
+        self.assertNotIn("apps/offerloop-card-ingress", deploy)
+        self.assertNotIn("CARD_INGRESS_PUBLIC_URL", deploy)
 
     def test_workbench_template_locks_the_known_good_calendar_contract(self):
         root = (

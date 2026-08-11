@@ -2,11 +2,12 @@ import { HttpModule } from '@nestjs/axios';
 import { Module } from '@nestjs/common';
 
 import { JobProgressSyncOpenApiController } from './job-progress-sync.openapi.controller';
+import { JobProgressSyncAutomation } from './job-progress-sync.automation';
 import { JobProgressSyncService } from './job-progress-sync.service';
 
 @Module({
   imports: [HttpModule],
   controllers: [JobProgressSyncOpenApiController],
-  providers: [JobProgressSyncService],
+  providers: [JobProgressSyncService, JobProgressSyncAutomation],
 })
 export class JobProgressSyncModule {}

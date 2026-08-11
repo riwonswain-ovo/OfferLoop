@@ -1,0 +1,4 @@
+interface:
+  display_name: "岗位能力训练"
+  short_description: "从岗位要求与面试短板生成每日三题和专项刻意练习"
+  default_prompt: "使用 $competency-lab 读取我的岗位能力地图和未解决面试观察，生成今天的三道专项训练题。"

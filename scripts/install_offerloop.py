@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, timezone
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -17,25 +18,31 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILLS_SOURCE = ROOT / "skills"
+SUPPORT_SOURCE = SKILLS_SOURCE / "offerloop-workspace"
+SUPPORT_NAME = ".offerloop-runtime"
+ADMIN_SCRIPTS_SOURCE = SKILLS_SOURCE / "offerloop-setup" / "scripts"
 VERSION_FILE = ROOT / "VERSION"
-INSTALLER_VERSION = "1.1"
+INSTALLER_VERSION = "2.0"
 SKILL_NAMES = (
-    "offerloop-setup",
+    "career-profile",
     "job-collection",
     "recruiting-reminder",
-    "offerloop-workspace",
-    "offerloop-workbench",
     "experience-deepthink",
     "resume-tailor",
+    "competency-lab",
     "interview-prep",
     "mock-lab",
     "talk-review",
-    "pm-sense",
-    "aptitude-lab",
 )
 LEGACY_SKILL_RENAMES = {
     "experience-deepthink": "resume-deepthink",
+    "competency-lab": "pm-sense",
 }
+RETIRED_USER_SKILLS = (
+    "offerloop-setup",
+    "offerloop-workspace",
+    "offerloop-workbench",
+)
 STANDARD_AGENTS = ("codex", "claude-code", "hermes-agent", "workbuddy")
 ALL_AGENTS = STANDARD_AGENTS
 RESULT_STATUSES = (
@@ -60,24 +67,18 @@ MANIFEST_NAME = ".offerloop-install.json"
 WELCOME = {
     "headline": "欢迎使用 OfferLoop",
     "summary": (
-        "OfferLoop 包含 12 个可以独立或组合使用的 Skill。"
-        "用户不需要记住名称，只需描述当前想解决的问题。"
+        "OfferLoop 包含 9 个可以独立或组合使用的长期 Skill。"
+        "首次使用先通过聊天建立最小用户画像，之后只需描述当前想解决的问题。"
     ),
     "groups": [
         {
-            "name": "求职基础能力",
+            "name": "求职与画像",
             "skills": [
                 {
-                    "name": "offerloop-setup",
-                    "title": "安装与配置",
-                    "purpose": "首次配置、环境检查、飞书授权和完整部署",
-                    "example": "检查一下 OfferLoop 是否配置完整。",
-                },
-                {
-                    "name": "offerloop-workspace",
-                    "title": "求职知识库",
-                    "purpose": "管理必需的知识库、三张 Base 和训练产物",
-                    "example": "检查我的 OfferLoop 知识库是否完整。",
+                    "name": "career-profile",
+                    "title": "求职者自我画像",
+                    "purpose": "通过自然对话认识自己、建立岗位迁移边界并学习个人语言",
+                    "example": "最近找工作有点焦虑，我想先和你聊聊自己。",
                 },
                 {
                     "name": "job-collection",
@@ -90,12 +91,6 @@ WELCOME = {
                     "title": "笔试面试提醒",
                     "purpose": "从招聘邮件识别安排，并在确认后同步笔面试中心和日历",
                     "example": "检查最近 7 天的笔试面试邮件，先不要写入。",
-                },
-                {
-                    "name": "offerloop-workbench",
-                    "title": "可选工作台",
-                    "purpose": "按需部署妙搭工作台和 OAuth",
-                    "example": "为我的 OfferLoop 搭建飞书工作台。",
                 },
             ],
         },
@@ -115,16 +110,10 @@ WELCOME = {
                     "example": "根据这个岗位和我选的三段经历，制作一页 PDF 简历。",
                 },
                 {
-                    "name": "pm-sense",
-                    "title": "产品思维训练",
-                    "purpose": "训练产品与场景题，完善口语回答并沉淀素材",
-                    "example": "让我先回答一道产品场景题，再帮我完善。",
-                },
-                {
-                    "name": "aptitude-lab",
-                    "title": "笔试训练",
-                    "purpose": "训练行测与校招通用能力题，逐题诊断错因、方法和速度",
-                    "example": "先给我做一组拼多多笔试混合诊断。",
+                    "name": "competency-lab",
+                    "title": "岗位能力训练",
+                    "purpose": "根据岗位能力画像和面试短板生成专项训练",
+                    "example": "根据模拟面试暴露的短板给我三道训练题。",
                 },
                 {
                     "name": "interview-prep",
@@ -149,12 +138,13 @@ WELCOME = {
     ],
     "workflows": [
         "招聘信息同步 → 真实投递 → 邮件识别 → 笔试面试安排",
-        "经历深挖 → Resume Tailor → 面试准备 → 模拟面试 → 真实面试复盘",
+        "用户画像 → 经历深挖 → Resume Tailor → 面试准备 → 模拟面试 → 能力训练 → 复测",
     ],
     "next_prompt": (
-        "我刚安装 OfferLoop。请先用“找岗位、管笔面试、做求职训练”"
-        "三个入口帮我选择；如果我要求，再展开介绍 12 个 Skill。"
-        "先做只读检查，不要创建或修改飞书资源。"
+        "我刚安装 OfferLoop。请先检查 02｜用户画像中的画像文档。"
+        "如果文档缺失、为空或只有模板占位内容，请用 career-profile 一次只问我一个问题，"
+        "并在每次确认后自动保存；写入至少一条有效信息后，再用“找岗位、管笔面试、"
+        "做求职训练”三个入口帮我选择。"
     ),
     "privacy_notice": (
         "安装只添加 Skill；尚未读取飞书、邮箱或简历，也没有创建或修改线上数据。"
@@ -268,7 +258,7 @@ def validate_sources() -> None:
     }
     if not set(SKILL_NAMES).issubset(discovered):
         raise ValueError(
-            "repository must contain exactly the twelve supported OfferLoop Skills"
+            "repository must contain all nine supported OfferLoop Skills"
         )
     for name in SKILL_NAMES:
         skill_file = SKILLS_SOURCE / name / "SKILL.md"
@@ -315,6 +305,26 @@ def tree_digest(root: Path) -> str:
     return digest.hexdigest()
 
 
+def runtime_source_digest() -> str:
+    """Digest the virtual hidden runtime assembled from management sources."""
+    entries: list[tuple[str, Path]] = []
+    entries.extend(
+        (relative.as_posix(), path)
+        for path, relative in _included_files(SUPPORT_SOURCE)
+    )
+    entries.extend(
+        ((Path("scripts") / relative).as_posix(), path)
+        for path, relative in _included_files(ADMIN_SCRIPTS_SOURCE)
+    )
+    digest = hashlib.sha256()
+    for relative, path in sorted(entries, key=lambda item: item[0]):
+        digest.update(relative.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
 def _loose_frontmatter_name(skill_file: Path) -> str | None:
     try:
         text = skill_file.read_text(encoding="utf-8")
@@ -355,6 +365,7 @@ def _manifest_payload(agent: str, digests: dict[str, str]) -> dict:
         "agent": agent,
         "offerloop_version": offerloop_version(),
         "skills": {name: {"sha256": digests[name]} for name in SKILL_NAMES},
+        "runtime": {"sha256": runtime_source_digest()},
         "installed_at": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -534,6 +545,8 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
     source_digests = {
         name: tree_digest(SKILLS_SOURCE / name) for name in SKILL_NAMES
     }
+    support_digest = runtime_source_digest()
+    support_destination = root / SUPPORT_NAME
     hermes_duplicates = (
         _hermes_external_duplicates(home, root, source)
         if agent == "hermes-agent"
@@ -547,10 +560,12 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
         (root / MANIFEST_NAME).is_file()
         or any((root / name).exists() for name in SKILL_NAMES)
         or any((root / name).exists() for name in LEGACY_SKILL_RENAMES.values())
+        or any((root / name).exists() for name in RETIRED_USER_SKILLS)
         or bool(runtime_duplicates)
     )
     operations = []
     conflicts = []
+    retired_existing = [name for name in RETIRED_USER_SKILLS if (root / name).exists()]
     for name in SKILL_NAMES:
         destination = root / name
         legacy_destination = root / LEGACY_SKILL_RENAMES.get(name, "")
@@ -577,6 +592,22 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
             operations.append((name, "conflict"))
             conflicts.append(name)
 
+    support_status = (
+        "installed"
+        if not support_destination.exists()
+        else "already_installed"
+        if support_destination.is_dir()
+        and tree_digest(support_destination) == support_digest
+        else "upgraded"
+        if upgrade
+        else "conflict"
+    )
+    if support_status == "conflict":
+        conflicts.append(SUPPORT_NAME)
+
+    if retired_existing and not upgrade:
+        conflicts.extend(retired_existing)
+
     if conflicts:
         next_action = "检查同名目录；确认属于旧版 OfferLoop 后使用 --upgrade"
         if agent == "hermes-agent" and hermes_duplicates:
@@ -601,7 +632,7 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
         }
 
     if dry_run:
-        statuses = {status for _, status in operations}
+        statuses = {status for _, status in operations} | {support_status}
         status = "already_installed"
         if "upgraded" in statuses:
             status = "upgraded"
@@ -617,10 +648,14 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
                 {"name": name, "status": item_status}
                 for name, item_status in operations
             ],
+            "runtime": {"name": SUPPORT_NAME, "status": support_status},
         }
         return result
 
-    if all(status == "already_installed" for _, status in operations):
+    if (
+        all(status == "already_installed" for _, status in operations)
+        and support_status == "already_installed"
+    ):
         if not (root / MANIFEST_NAME).is_file():
             root.mkdir(parents=True, exist_ok=True)
             _write_manifest(root, agent, source_digests)
@@ -632,6 +667,7 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
             "skills": [
                 {"name": name, "status": status} for name, status in operations
             ],
+            "runtime": {"name": SUPPORT_NAME, "status": support_status},
         }
 
     root.mkdir(parents=True, exist_ok=True)
@@ -650,6 +686,23 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
             )
             if tree_digest(staged) != source_digests[name]:
                 raise RuntimeError(f"{name}: staged copy failed integrity validation")
+        staged_support = stage / SUPPORT_NAME
+        if support_status != "already_installed":
+            shutil.copytree(
+                SUPPORT_SOURCE,
+                staged_support,
+                symlinks=False,
+                ignore=_ignore_copy,
+            )
+            shutil.copytree(
+                ADMIN_SCRIPTS_SOURCE,
+                staged_support / "scripts",
+                symlinks=False,
+                ignore=_ignore_copy,
+                dirs_exist_ok=True,
+            )
+            if tree_digest(staged_support) != support_digest:
+                raise RuntimeError("runtime support copy failed integrity validation")
         external_backups: list[tuple[Path, Path]] = []
         try:
             for new_name, legacy_name in LEGACY_SKILL_RENAMES.items():
@@ -665,6 +718,20 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
                 backup.parent.mkdir(parents=True, exist_ok=True)
                 _move_directory(legacy, backup)
                 external_backups.append((backup, legacy))
+
+            for retired_name in RETIRED_USER_SKILLS:
+                retired = root / retired_name
+                if not retired.exists():
+                    continue
+                backup = (
+                    root.parent
+                    / ".offerloop-backups"
+                    / timestamp
+                    / f"{retired_name}-retired"
+                )
+                backup.parent.mkdir(parents=True, exist_ok=True)
+                _move_directory(retired, backup)
+                external_backups.append((backup, retired))
 
             for name, candidates in runtime_duplicates.items():
                 for index, (external_root, candidate) in enumerate(candidates, 1):
@@ -703,6 +770,27 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
                         if backup and backup.exists() and not destination.exists():
                             _move_directory(backup, destination)
                         raise
+            if support_status != "already_installed":
+                support_backup = None
+                if support_destination.exists():
+                    support_backup = (
+                        root.parent
+                        / ".offerloop-backups"
+                        / timestamp
+                        / SUPPORT_NAME
+                    )
+                    support_backup.parent.mkdir(parents=True, exist_ok=True)
+                    _move_directory(support_destination, support_backup)
+                try:
+                    _move_directory(staged_support, support_destination)
+                except Exception:
+                    if (
+                        support_backup
+                        and support_backup.exists()
+                        and not support_destination.exists()
+                    ):
+                        _move_directory(support_backup, support_destination)
+                    raise
         except Exception:
             for backup, candidate in reversed(external_backups):
                 if backup.exists() and not candidate.exists():
@@ -710,9 +798,9 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
                     _move_directory(backup, candidate)
             raise
 
-    statuses = {status for _, status in operations}
+    statuses = {status for _, status in operations} | {support_status}
     overall = "already_installed"
-    if "upgraded" in statuses:
+    if "upgraded" in statuses or (upgrade and retired_existing):
         overall = "upgraded"
     elif "installed" in statuses:
         overall = "installed"
@@ -732,13 +820,14 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
                     "interview-prep",
                     "mock-lab",
                     "talk-review",
-                    "pm-sense",
+                    "competency-lab",
                 }
                 and status == "installed"
                 for name, status in operations
             )
         ),
         "skills": [{"name": name, "status": status} for name, status in operations],
+        "runtime": {"name": SUPPORT_NAME, "status": support_status},
     }
     return result
 
@@ -769,6 +858,8 @@ def verify_agent(agent: str, *, environ=None) -> dict:
                 and manifest.get("offerloop_version") == offerloop_version()
                 and manifest.get("agent") == agent
                 and manifest.get("skills") == expected_skills
+                and manifest.get("runtime")
+                == {"sha256": runtime_source_digest()}
             ):
                 manifest_status = "ready"
             else:
@@ -833,6 +924,23 @@ def _print_welcome() -> None:
     print(f"“{WELCOME['next_prompt']}”")
 
 
+def deploy_workbench(destination: Path, *, dry_run: bool = False) -> dict:
+    script = (
+        SKILLS_SOURCE
+        / "offerloop-workbench"
+        / "scripts"
+        / "materialize_workbench.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "offerloop_materialize_workbench", script
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError("workbench materializer is unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.materialize(destination, dry_run=dry_run)
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -842,7 +950,18 @@ def main(argv=None) -> int:
         help="target Agent; repeat to install for more than one Agent",
     )
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--setup",
+        action="store_true",
+        help="idempotently install the nine long-lived Skills",
+    )
     parser.add_argument("--upgrade", action="store_true")
+    parser.add_argument(
+        "--deploy-workbench",
+        type=Path,
+        metavar="MIAODA_PROJECT",
+        help="idempotently overlay the native-Agent workbench template",
+    )
     parser.add_argument(
         "--verify",
         action="store_true",
@@ -870,9 +989,33 @@ def main(argv=None) -> int:
                 f"(OfferLoop {offerloop_version()})"
             )
         return 0
+    if args.deploy_workbench:
+        if args.agent or args.setup or args.upgrade or args.verify:
+            parser.error(
+                "--deploy-workbench cannot be combined with Skill installation modes"
+            )
+        try:
+            report = deploy_workbench(
+                args.deploy_workbench,
+                dry_run=args.dry_run,
+            )
+        except (OSError, ValueError, RuntimeError) as exc:
+            if args.as_json:
+                print(json.dumps(_safe_error_payload(exc, None), indent=2))
+            else:
+                print(f"OfferLoop workbench deployment failed: {exc}", file=sys.stderr)
+            return 1
+        if args.as_json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            action = "would overlay" if args.dry_run else "overlaid"
+            print(f"OfferLoop workbench: {action} {report['files']} files")
+        return 0
     if not args.agent:
         parser.error("at least one --agent is required")
-    if args.verify and (args.dry_run or args.upgrade):
+    if args.setup and args.upgrade:
+        parser.error("--setup and --upgrade are mutually exclusive")
+    if args.verify and (args.dry_run or args.upgrade or args.setup):
         parser.error("--verify cannot be combined with --dry-run or --upgrade")
 
     current_agent = None
@@ -957,13 +1100,13 @@ def main(argv=None) -> int:
         if not args.dry_run and any(
             report["status"] in completed for report in reports
         ):
-            print(f"OfferLoop 的 {len(SKILL_NAMES)} 个 Skill 已处理完成。")
+            print(f"OfferLoop 的 {len(SKILL_NAMES)} 个长期 Skill 已处理完成。")
             if show_welcome:
                 _print_welcome()
             else:
                 print(
                     "下一步：结束当前 Agent 会话并新开会话，然后调用 "
-                    "offerloop-setup 运行只读预检。"
+                    "安装器 --verify 运行只读核验。"
                 )
     if args.verify:
         return 0 if payload["verified"] else 1

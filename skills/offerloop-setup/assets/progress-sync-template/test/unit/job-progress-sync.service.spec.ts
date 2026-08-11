@@ -15,6 +15,13 @@ const TEST_ENV: Record<string, string> = {
   SOURCE_TABLE_ID: 'source-table',
   PROGRESS_BASE_TOKEN: 'progress-base',
   PROGRESS_TABLE_ID: 'progress-table',
+  REMINDER_BASE_TOKEN: 'reminder-base',
+  REMINDER_TABLE_ID: 'reminder-table',
+  REMINDER_BASE_URL: 'https://example.com/reminders',
+  REMINDER_TASKLIST_GUID: 'tasklist-guid',
+  DAILY_CHECKIN_CHAT_ID: 'oc_daily',
+  DAILY_CHECKIN_OWNER_OPEN_ID: 'ou_owner',
+  DAILY_CHECKIN_STATUS: 'enabled',
 };
 
 function installTestEnv(): void {
@@ -116,7 +123,6 @@ describe('JobProgressSyncService', (): void => {
         投递岗位: '',
         投递日期: Date.parse('2026-07-17T00:00:00+08:00'),
         '岗位 JD': '',
-        投递简历版本: '',
         公告链接: 'https://example.com/notice',
         投递链接: 'https://example.com/apply',
         '企业清单 record_id': 'rec_source',
@@ -160,7 +166,6 @@ describe('JobProgressSyncService', (): void => {
                   投递岗位: 'AI 产品经理',
                   投递日期: Date.parse('2026-07-10T00:00:00+08:00'),
                   '岗位 JD': '负责 AI 产品规划',
-                  投递简历版本: '互联网产品经理岗 - 简历',
                   公告链接: 'https://old.example/notice',
                   投递链接: 'https://old.example/apply',
                   '企业清单 record_id': 'rec_source',
@@ -195,7 +200,6 @@ describe('JobProgressSyncService', (): void => {
         投递岗位: 'AI 产品经理',
         投递日期: Date.parse('2026-07-10T00:00:00+08:00'),
         '岗位 JD': '负责 AI 产品规划',
-        投递简历版本: '互联网产品经理岗 - 简历',
         公告链接: 'https://new.example/notice',
         投递链接: 'https://new.example/apply',
         '投递记录 ID': 'progress:rec_progress',
@@ -286,4 +290,294 @@ describe('JobProgressSyncService', (): void => {
       },
     });
   });
+
+  it('sends the daily card after a complete single-owner member check', async (): Promise<void> => {
+    const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
+      const url: string = String(config.url ?? '');
+      if (url.endsWith('/auth/v3/tenant_access_token/internal')) {
+        return { code: 0, tenant_access_token: 'tenant-token', expire: 7200 };
+      }
+      if (url.includes('/im/v1/chats/oc_daily/members')) {
+        return {
+          code: 0,
+          data: {
+            items: [{ member_id: 'ou_owner', name: 'Owner' }],
+            member_total: 1,
+            has_more: false,
+            trigger_security_conf_limit: false,
+          },
+        };
+      }
+      if (url.includes('/reminder-base/tables/reminder-table/records/search')) {
+        return {
+          code: 0,
+          data: {
+            items: [{
+              record_id: 'rec_event',
+              fields: {
+                公司: '示例公司',
+                岗位: 'AI 产品经理',
+                环节: '一面',
+                开始时间: Date.now(),
+                完成状态: '待完成',
+              },
+            }],
+            has_more: false,
+          },
+        };
+      }
+      if (url.includes('/im/v1/messages?receive_id_type=chat_id')) {
+        return { code: 0, data: { message_id: 'om_daily' } };
+      }
+      throw new Error(`unexpected request: ${url}`);
+    });
+
+    await expect(mock.service.sendDailyCheckin()).resolves.toEqual({
+      status: 'sent',
+      messageId: 'om_daily',
+      eventCount: 1,
+    });
+    const sendCall: InternalAxiosRequestConfig | undefined = mock.calls.find(
+      (config: InternalAxiosRequestConfig): boolean =>
+        String(config.url ?? '').includes('/im/v1/messages?receive_id_type=chat_id'),
+    );
+    expect(sendCall).toBeDefined();
+    const payload = parseRequestData(sendCall as InternalAxiosRequestConfig) as {
+      receive_id: string;
+      msg_type: string;
+      content: string;
+    };
+    expect(payload.receive_id).toBe('oc_daily');
+    expect(payload.msg_type).toBe('interactive');
+    expect(JSON.parse(payload.content)).toMatchObject({
+      schema: '2.0',
+      header: { title: { content: 'OfferLoop 求职进展确认' } },
+    });
+    expect(payload.content).toContain('打开飞书任务');
+    expect(payload.content).toContain('"type":"open_url"');
+    expect(payload.content).not.toContain('"type":"callback"');
+  });
+
+  it('fails closed when the member list contains multiple humans', async (): Promise<void> => {
+    const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
+      const url: string = String(config.url ?? '');
+      if (url.endsWith('/auth/v3/tenant_access_token/internal')) {
+        return { code: 0, tenant_access_token: 'tenant-token', expire: 7200 };
+      }
+      if (url.includes('/im/v1/chats/oc_daily/members')) {
+        return {
+          code: 0,
+          data: {
+            items: [{ member_id: 'ou_owner' }, { member_id: 'ou_other' }],
+            member_total: 2,
+            has_more: false,
+            trigger_security_conf_limit: false,
+          },
+        };
+      }
+      throw new Error(`unexpected request: ${url}`);
+    });
+
+    await expect(mock.service.sendDailyCheckin()).rejects.toThrow(
+      'daily check-in requires exactly one human member',
+    );
+    expect(mock.calls.some(
+      (config: InternalAxiosRequestConfig): boolean =>
+        String(config.url ?? '').includes('/im/v1/messages'),
+    )).toBe(false);
+  });
+
+  it('reconciles a completed native Feishu task into reminder and progress Bases', async (): Promise<void> => {
+    let reminderSearchCount = 0;
+    const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
+      const url: string = String(config.url ?? '');
+      if (url.endsWith('/auth/v3/tenant_access_token/internal')) {
+        return { code: 0, tenant_access_token: 'tenant-token', expire: 7200 };
+      }
+      if (url.includes('/reminder-table/records/search')) {
+        reminderSearchCount += 1;
+        return reminderSearchCount === 1
+          ? {
+            code: 0,
+            data: {
+              items: [{
+                record_id: 'recEvent',
+                fields: {
+                  完成状态: '待完成',
+                  环节: '一面',
+                  求职记录ID: 'recProgress',
+                  飞书任务GUID: 'task-main',
+                  未参加任务GUID: 'task-missed',
+                  开始时间: Date.parse('2026-08-11T14:30:00+08:00'),
+                },
+              }],
+              has_more: false,
+            },
+          }
+          : { code: 0, data: { items: [], has_more: false } };
+      }
+      if (url.includes('/task/v2/tasks/task-main')) {
+        return { code: 0, data: { task: { guid: 'task-main', status: 'done' } } };
+      }
+      if (url.includes('/task/v2/tasks/task-missed')) {
+        return { code: 0, data: { task: { guid: 'task-missed', status: 'todo' } } };
+      }
+      if (url.endsWith('/progress-table/records/recProgress')) {
+        if (String(config.method).toUpperCase() === 'GET') {
+          return {
+            code: 0,
+            data: {
+              record: {
+                record_id: 'recProgress',
+                fields: {
+                  最近完成节点: '笔试完成',
+                  下一环节: '一面',
+                  流程结果: '进行中',
+                },
+              },
+            },
+          };
+        }
+        return { code: 0, data: { record: { record_id: 'recProgress', fields: {} } } };
+      }
+      if (url.endsWith('/reminder-table/records/recEvent')) {
+        return { code: 0, data: { record: { record_id: 'recEvent', fields: {} } } };
+      }
+      throw new Error(`unexpected request: ${url}`);
+    });
+
+    await expect(mock.service.reconcileTaskStates()).resolves.toEqual({
+      scanned: 1,
+      provisioned: 0,
+      completed: 1,
+      missed: 0,
+      postponed: 0,
+      skipped: 0,
+    });
+    const reminderUpdate = mock.calls.find(
+      (config: InternalAxiosRequestConfig): boolean =>
+        String(config.method).toUpperCase() === 'PUT'
+        && String(config.url ?? '').endsWith('/reminder-table/records/recEvent')
+        && JSON.stringify(parseRequestData(config)).includes('已完成'),
+    );
+    const progressUpdate = mock.calls.find(
+      (config: InternalAxiosRequestConfig): boolean =>
+        String(config.method).toUpperCase() === 'PUT'
+        && String(config.url ?? '').endsWith('/progress-table/records/recProgress'),
+    );
+    expect(parseRequestData(reminderUpdate as InternalAxiosRequestConfig)).toEqual({
+      fields: { 完成状态: '已完成' },
+    });
+    expect(parseRequestData(progressUpdate as InternalAxiosRequestConfig)).toEqual({
+      fields: { 最近完成节点: '一面完成', 下一环节: '待反馈' },
+    });
+  });
+
+  it('idempotently provisions native Feishu tasks for an unmapped reminder', async (): Promise<void> => {
+    const dueAt: number = Date.parse('2026-08-15T10:00:00+08:00');
+    const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
+      const url: string = String(config.url ?? '');
+      const method: string = String(config.method ?? '').toUpperCase();
+      if (url.endsWith('/auth/v3/tenant_access_token/internal')) {
+        return { code: 0, tenant_access_token: 'tenant-token', expire: 7200 };
+      }
+      if (url.includes('/reminder-table/records/search')) {
+        return {
+          code: 0,
+          data: {
+            items: [{
+              record_id: 'recUnmapped',
+              fields: {
+                完成状态: '待完成',
+                环节: '一面',
+                公司: '示例公司',
+                岗位: 'AI 产品经理',
+                开始时间: dueAt,
+              },
+            }],
+            has_more: false,
+          },
+        };
+      }
+      if (url.endsWith('/task/v2/tasks?user_id_type=open_id') && method === 'POST') {
+        return {
+          code: 0,
+          data: {
+            task: {
+              guid: 'task-created',
+              status: 'todo',
+              url: 'https://applink.feishu.cn/client/todo/detail?guid=task-created',
+            },
+          },
+        };
+      }
+      if (url.includes('/task/v2/tasks/task-created/subtasks') && method === 'POST') {
+        return {
+          code: 0,
+          data: { subtask: { guid: 'task-missed-created', status: 'todo' } },
+        };
+      }
+      if (url.endsWith('/reminder-table/records/recUnmapped') && method === 'PUT') {
+        return {
+          code: 0,
+          data: { record: { record_id: 'recUnmapped', fields: {} } },
+        };
+      }
+      if (url.includes('/task/v2/tasks/task-created?')) {
+        return {
+          code: 0,
+          data: { task: { guid: 'task-created', status: 'todo', due: { timestamp: String(dueAt) } } },
+        };
+      }
+      if (url.includes('/task/v2/tasks/task-missed-created?')) {
+        return {
+          code: 0,
+          data: { task: { guid: 'task-missed-created', status: 'todo' } },
+        };
+      }
+      throw new Error(`unexpected request: ${method} ${url}`);
+    });
+
+    await expect(mock.service.reconcileTaskStates()).resolves.toEqual({
+      scanned: 1,
+      provisioned: 1,
+      completed: 0,
+      missed: 0,
+      postponed: 0,
+      skipped: 0,
+    });
+    const createTaskCall = mock.calls.find(
+      (config: InternalAxiosRequestConfig): boolean =>
+        String(config.url ?? '').endsWith('/task/v2/tasks?user_id_type=open_id')
+        && String(config.method).toUpperCase() === 'POST',
+    );
+    const createTaskPayload = parseRequestData(
+      createTaskCall as InternalAxiosRequestConfig,
+    ) as Record<string, unknown>;
+    expect(createTaskPayload).toMatchObject({
+      summary: '面试｜示例公司｜AI 产品经理｜一面',
+      due: { timestamp: String(dueAt), is_all_day: false },
+      members: [{ id: 'ou_owner', type: 'user', role: 'assignee' }],
+      tasklists: [{ tasklist_guid: 'tasklist-guid' }],
+    });
+    expect(createTaskPayload.client_token).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u,
+    );
+    const mappingUpdate = mock.calls.find(
+      (config: InternalAxiosRequestConfig): boolean =>
+        String(config.url ?? '').endsWith('/reminder-table/records/recUnmapped')
+        && String(config.method).toUpperCase() === 'PUT',
+    );
+    expect(parseRequestData(mappingUpdate as InternalAxiosRequestConfig)).toEqual({
+      fields: {
+        飞书任务GUID: 'task-created',
+        未参加任务GUID: 'task-missed-created',
+        飞书任务链接: {
+          link: 'https://applink.feishu.cn/client/todo/detail?guid=task-created',
+          text: '打开飞书任务',
+        },
+      },
+    });
+  });
+
 });

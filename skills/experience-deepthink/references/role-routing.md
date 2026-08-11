@@ -1,7 +1,8 @@
-# 经历深挖岗位路由
+# 经历深挖岗位路由 V3
 
-本文件只负责选择深挖路线。所有路线共享 `conversation-workflow.md` 的事实约束、五层钻取、
-连续一题一答和 `output-schema.md`，不得因分流生成互不兼容的文档结构。
+本文件只负责选择深挖路线。所有路线共享 `conversation-workflow.md` 的事实约束、连续一题一答、
+`detail-reconstruction-schema.md` 的事实主档结构和 `interview-transcript-generation.md` 的表达结构，
+不得因分流生成互不兼容的文档。
 
 ## 路由输入
 
@@ -27,11 +28,13 @@
 
 - `role-playbooks/product.md`
 - `role-playbooks/ai-product.md`
-- 经历确有 AI/算法应用时加载 `ai-technology-application.md`
+- 经历确有 AI/算法应用时加载 `project-playbooks/ai-technology-application.md`
 - 经历确有 Agent、Skill、工具调用、工作流编排、多智能体或任务路由时加载
-  `ai-agent-skill-products.md`
-- 经历确有审核、风控、质检、合规判断或材料预审时加载 `ai-audit-products.md`
-- Agent 会查询私有业务数据或改变外部业务状态时加载 `ai-action-agent-products.md`
+  `project-playbooks/ai-agent-skill-products.md`
+- 经历确有审核、风控、质检、合规判断或材料预审时加载
+  `project-playbooks/ai-audit-products.md`
+- Agent 会查询私有业务数据或改变外部业务状态时加载
+  `project-playbooks/ai-action-agent-products.md`
 
 “经历中使用 AI”本身不能把通用产品岗位改判为 AI 产品；目标岗位职责才决定主路线。
 
@@ -45,10 +48,29 @@
 
 - `role-playbooks/product.md`
 - `role-playbooks/strategy-product.md`
-- 策略依赖 AI/算法且经历确有相关应用时，再加载 `ai-technology-application.md`
+- 策略依赖 AI/算法且经历确有相关应用时，再加载
+  `project-playbooks/ai-technology-application.md`
 
 不要把战略分析、策略运营、公司战略、产品规划或一次性业务判断仅因出现“策略”二字归入本
 路线。
+
+### 运营、商业化与分析路线
+
+- 运营：加载 `role-playbooks/operations.md`，重点核验用户分层、策略执行、渠道/内容/活动机制、
+  运营节奏和复盘归因。
+- 商业化：加载 `role-playbooks/commercialization.md`，重点核验收入机制、客户/供给结构、转化链路、
+  短期收益、长期影响和风险边界。
+- PMO：加载 `role-playbooks/pmo.md`，重点核验目标拆解、依赖管理、风险治理、推进机制和组织影响。
+- 战略分析：加载 `role-playbooks/strategy-analysis.md`，重点核验问题定义、证据质量、战略选项、
+  决策影响以及建议权与决策权边界。
+- 商业分析：加载 `role-playbooks/business-analysis.md`，重点核验指标口径、拆解逻辑、归因、洞察到
+  动作的闭环。
+- 数据分析：加载 `role-playbooks/data-analysis.md`，重点核验数据质量、方法选择、统计边界、验证和
+  业务落地。
+
+当岗位是商业化产品、商业化运营、增长变现、C 端产品、市场、GTM、产品运营、策略运营或上述
+方向的复合岗位时，按相关小节加载 `role-playbooks/multi-role-specializations.md`。它只补充交叉
+证据假设，不替代更具体的岗位 playbook。
 
 ### 通用路线
 
@@ -59,6 +81,9 @@
 
 - 同时命中 AI 产品与策略产品时，根据 JD 中占比最高、最影响招聘判断的职责确定主路线，另一
   条作为条件视角；不要重复询问共同事实。
+- 同时命中运营、商业化、PMO、战略分析、商业分析、数据分析等多个方向时，保留用户的完整
+  岗位名称，以核心职责确定主路线，其他路线作为条件视角，并按需加载
+  `role-playbooks/multi-role-specializations.md`。
 - JD 与岗位名称冲突时以 JD 和用户确认为准。
 - 深挖中出现新事实足以改变路线时，简短说明依据并让用户确认，再调整后续重点；已确认事实
   继续保留。
@@ -69,9 +94,23 @@
 开始专项追问前内部明确：
 
 - 通用底座：始终启用；
-- 主路线：AI 产品、策略产品或通用；
+- 主路线：AI 产品、策略产品、运营、商业化、PMO、战略分析、商业分析、数据分析或通用；
 - 条件视角：AI 技术应用、商业化等按事实加载；
 - 路由依据：岗位/JD/用户确认中的哪项事实；
 - 当前最值得补齐的一个证据缺口。
 
 路由结果用于选择下一题，不作为最终文档的新章节或运行元数据。
+
+
+## V3 通用底座
+
+无论走哪条岗位路线，都始终启用：
+
+- 因果审计；
+- 规则来源审计；
+- 所有权审计；
+- 指标语义与归因审计；
+- 实验/反事实审计；
+- 状态/异常/外部性审计。
+
+岗位路线只调整专业追问重心，不改变《细节复原稿》的 8 章结构和《面试逐字稿》的 12 题结构。

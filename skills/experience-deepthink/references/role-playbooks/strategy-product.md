@@ -24,7 +24,7 @@
 
 追问输入数据、用户/供给特征、行为信号、标签或规则来源、口径与质量；还原指标树、漏斗或
 假设树，说明如何从异常现象定位到可干预环节。涉及模型时按事实加载
-`../ai-technology-application.md`。
+`../project-playbooks/ai-technology-application.md`。
 
 完成标准：策略依据可验证，相关性、因果性和数据质量边界没有混写。
 

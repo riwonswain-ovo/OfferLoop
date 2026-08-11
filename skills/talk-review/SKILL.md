@@ -10,30 +10,49 @@ description: 接收用户上传或指定的真实面试 ASR，询问本次面试
 
 运行相对路径前先从当前 `SKILL.md` 定位 Skill 根目录。
 
+## 用户画像前置门禁
+
+本 Skill 的第一项动作是完整读取
+`../.offerloop-runtime/references/profile-gate.md` 并执行用户画像前置门禁。必须在读取本 Skill
+其他参考、索取或读取 ASR/简历、关联事件或开始复盘前完成。画像为 `missing` 或 `empty` 时
+不得启动本 Skill，转由 `career-profile` 一次只问一个问题并自动保存；门禁通过后才返回本次
+真实面试复盘任务。
+
+## 开工前材料路由
+
+| 场景 | 必须读取 | 缺失时 |
+|---|---|---|
+| 真实面试复盘 | ASR、用户画像、关联简历、相关经历材料 | ASR 或明确关联材料未读时停止正式评价 |
+| 关联面试事件 | 公司、岗位、环节和候选事件 | 唯一候选也展示关联结果；多候选让用户选择 |
+
+开始实质复盘前简短列出实际读取材料。私有空间中唯一匹配的材料自动读取，不要求用户重复提供。
+
 ## 前置读取
 
 1. 完整读取 `references/review-rubric.md`。
 2. 完整读取 `references/recruiter-analysis.md`。
 3. 完整读取 `references/role-evidence-review.md`，并只启用目标岗位对应的评价镜头。
-4. 目标岗位是 AI 产品、AIGC、大模型、Agent、模型/数据平台、AI+行业产品，或本场问题主要
+4. 完整读取 `../.offerloop-runtime/references/voice-contract.md`。ASR 是高价值真实口语样本；先
+   保留原话并完成复盘，再按用户确认决定是否向 `career-profile` 提出语言画像候选更新。
+5. 目标岗位是 AI 产品、AIGC、大模型、Agent、模型/数据平台、AI+行业产品，或本场问题主要
    验证 AI 产品设计与落地时，完整读取 `references/ai-product-interview-review.md`。岗位实际
    偏其他职能时不因标题含“AI”强制加载。
-5. 本场进一步围绕 Coding Agent、应用搭建、技术原型、Spec、API/数据库、测试、部署或生产
+6. 本场进一步围绕 Coding Agent、应用搭建、技术原型、Spec、API/数据库、测试、部署或生产
    交付时，同时读取 `references/ai-coding-interview-review.md`；只偶然提到工具不触发。
-6. 需要从飞书读取或保存材料时，定位兄弟 `offerloop-workspace`，完整读取其
-   `references/artifact-contract.md`，并读取 `lark-wiki`、`lark-doc` Skill。
-7. 需要关联或回填面试事件时，定位兄弟 `recruiting-reminder`，完整读取其
+7. 需要从飞书读取或保存材料时，完整读取同级隐藏目录 `../.offerloop-runtime/references/artifact-contract.md`，脚本使用 `../.offerloop-runtime/scripts/artifact_contract.py`，并读取 `lark-wiki`、`lark-doc` Skill。
+8. 需要关联或回填面试事件时，定位兄弟 `recruiting-reminder`，完整读取其
    `references/event-contract.md`，并读取 `lark-base` Skill。
-8. 需要首次创建飞书节点时，先展示目标并取得确认。
+9. 创建或更新飞书节点时遵循共享产物契约的自动保存规则；用户明确说“不保存”时跳过，明确要求
+   另建文档时才创建独立版本。
 
-schema v4、依赖或权限未就绪时路由到 `offerloop-setup`，不要自行扩大权限。
+schema v5、依赖或权限未就绪时路由到安装器 `--setup`，不要自行扩大权限。
 
 ## 启动顺序
 
 严格按以下顺序推进，不要在前一步未完成时提前评价：
 
 1. 请用户上传本次面试的 ASR 文档。用户改为指定
-   `05｜面试复盘/ASR 待复盘` 中的文档时，列出候选并让用户选择。收到后只确认可读性和
+   `08｜真实面试复盘/ASR 待复盘` 中的文档时，列出候选并让用户选择。收到后只确认可读性和
    是否为目标面试，不开始复盘。
 2. 询问本次面试关联的当前简历和/或 `experience-deepthink` 经历材料。允许同时提供多份
    相关经历；由用户明确指定，不扫描无关材料。飞书简历按标题精确匹配。
@@ -66,7 +85,8 @@ schema v4、依赖或权限未就绪时路由到 `offerloop-setup`，不要自�
 
 1. **求职者面试复盘**：完整采用 `references/review-rubric.md` 的方法和内容范围，先覆盖
    全部问题的简要诊断，再选择最影响结果的 3–5 组问题进行深度复盘；分析真实口语、回答
-   内容、证据、岗位匹配和追问表现，并给出自然口语参考回答与分级训练计划。
+   内容、证据、岗位匹配和追问表现，并给出自然口语参考回答与分级训练计划。参考回答先修复
+   内容，再按已确认个人语言画像改写；ASR 中的错误和无意义口头禅不得机械复制。
 2. **招聘者视角评估**：完整采用 `references/recruiter-analysis.md` 的方法和内容范围，
    包括动态岗位评价视角、事实重建、风险扫描、关键案例深度解码、候选人能力画像、招聘倾向
    和面试官元分析。
@@ -101,9 +121,14 @@ schema v4、依赖或权限未就绪时路由到 `offerloop-setup`，不要自�
 
 ## 保存与回填
 
-1. 两份正式文档分别生成独立 `run_id` 和 Markdown，共享来源说明并互相标明关联关系。完成
-   或明确提前结束都保存到 `05｜面试复盘/已完成复盘`，用状态区分
-   `completed` / `incomplete`。
+1. 两份正式文档分别生成独立 `run_id` 和 Markdown，共享来源说明并互相标明关联关系。求职者
+   文档标题固定为 `面试复盘｜<公司>｜<岗位>｜<环节>｜<日期>`；招聘者文档使用
+   `recruiter-assessment` 产物类型，标题固定为
+   `招聘者评估｜<公司>｜<岗位>｜<环节>｜<日期>`。完成、暂停或明确提前结束都自动保存到
+   `08｜真实面试复盘/已完成复盘`，用状态区分 `completed` / `incomplete`。ASR 原稿标题使用
+   `面试ASR｜<公司>｜<岗位>｜<环节>｜<日期>`，保留在 `ASR 待复盘`。两份正式文档均使用
+   `validate-markdown --content-only` 校验，用户可见正文不设置“产物信息”目录；完成状态、
+   `run_id` 和其他内部运行元数据只保留在运行上下文或文档属性中。
 2. 原始上传文档不移动、不改写、不删除。
 3. 已确认事件通过 `event_lookup.py backfill --kind review` 将求职者面试复盘回填到
    “面试复盘文档”；招聘者视角评估作为关联文档，不重复占用同一事件字段。面试类事件同步
@@ -111,7 +136,8 @@ schema v4、依赖或权限未就绪时路由到 `offerloop-setup`，不要自�
 4. 部分失败保留已写记录，按精确 record ID 和同一 `run_id` 补偿。
 5. 独立复盘只保存两份知识库文档，不创建 Base 事件。
 6. 将真实问题、追问和后续训练任务保留在求职者复盘中。
-7. 任一文档保存失败时交付该文档的完整 Markdown 和原 `run_id`，不得因此丢弃另一份已成功
+7. 将可追溯的能力缺口输出为 `AbilityObservation`，单次表现默认 `candidate`；Loop Runtime 自动创建 `competency-lab` 训练待办，并触发对应 `岗位能力地图｜<岗位方向>` 的增量更新，用户无需重复描述。
+8. 任一文档保存失败时交付该文档的完整 Markdown 和原 `run_id`，不得因此丢弃另一份已成功
    保存的文档。
 
 ## AI 产品专项来源边界

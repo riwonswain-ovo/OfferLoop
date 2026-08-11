@@ -19,9 +19,7 @@ SKILLS_ROOT = SKILL_ROOT.parent
 STATUS_MODEL_PATH = Path(__file__).with_name("status_model.py")
 
 BUNDLED_SKILLS = (
-    "offerloop-setup",
-    "offerloop-workspace",
-    "offerloop-workbench",
+    "career-profile",
     "job-collection",
     "recruiting-reminder",
     "experience-deepthink",
@@ -29,33 +27,25 @@ BUNDLED_SKILLS = (
     "interview-prep",
     "mock-lab",
     "talk-review",
-    "pm-sense",
-    "aptitude-lab",
+    "competency-lab",
 )
 REQUIRED_BUNDLED_BY_CAPABILITY = {
-    "workspace": {"offerloop-setup", "offerloop-workspace"},
-    "collection": {"offerloop-setup", "offerloop-workspace", "job-collection"},
+    "workspace": {"career-profile"},
+    "collection": {"career-profile", "job-collection"},
     "reminder": {
-        "offerloop-setup",
-        "offerloop-workspace",
         "recruiting-reminder",
     },
     "coaching": {
-        "offerloop-setup",
+        "career-profile",
         "experience-deepthink",
         "resume-tailor",
         "interview-prep",
         "mock-lab",
         "talk-review",
-        "pm-sense",
-        "aptitude-lab",
+        "competency-lab",
     },
-    "workbench": {
-        "offerloop-setup",
-        "offerloop-workspace",
-        "offerloop-workbench",
-    },
-    "integration": {"offerloop-setup", "offerloop-workspace", "job-collection"},
+    "workbench": set(),
+    "integration": {"job-collection"},
 }
 EXTERNAL_SKILLS_BY_CAPABILITY = {
     "collection": (),
@@ -622,7 +612,7 @@ def _capability_report(source, capability, skills_roots=None):
     if config_state == "missing":
         common_status = "needs_action"
         common_summary = "尚未登记 OfferLoop 公共定位"
-        common_action = "运行 offerloop-setup 配置所选能力的非敏感定位信息"
+        common_action = "运行 OfferLoop 安装器 --setup 配置所选能力的非敏感定位信息"
     elif config_state == "invalid":
         common_status = "blocked"
         common_summary = "OfferLoop 公共配置不是有效 JSON"
@@ -843,7 +833,7 @@ def _capability_report(source, capability, skills_roots=None):
                 "可选工作台入口已登记"
                 if workbench_url not in (None, "")
                 else "可选工作台尚未部署或登记",
-                "运行 offerloop-workbench 创建、发布并验收工作台"
+                "运行 scripts/install_offerloop.py --deploy-workbench 创建、发布并验收工作台"
                 if workbench_url in (None, "")
                 else "",
             )
@@ -857,14 +847,16 @@ def _capability_report(source, capability, skills_roots=None):
             else None
         )
         expected = {
-            "resume_deepthink",
+            "user_profile",
+            "experience_deepthink",
+            "current_resumes",
+            "competency_training",
             "interview_prep",
             "mock_lab",
             "talk_review",
-            "pm_sense",
         }
         storage_valid = (
-            config.get("schema_version") == 4
+            config.get("schema_version") == 5
             and isinstance(readiness, dict)
             and expected.issubset(readiness)
             and all(isinstance(readiness.get(name), bool) for name in expected)
@@ -874,12 +866,12 @@ def _capability_report(source, capability, skills_roots=None):
         storage_required = capability == "full"
         if all_ready:
             storage_status = "ready"
-            storage_summary = "五项训练能力的飞书材料均已登记"
+            storage_summary = "七项画像与训练能力的飞书材料均已登记"
             storage_action = ""
         elif storage_required or storage_configured:
             storage_status = "needs_action"
             storage_summary = "Chat 训练可用，但飞书产物配置仍有目录待启用"
-            storage_action = "确认升级 schema v4，并按需创建和登记训练目录"
+            storage_action = "确认升级 schema v5，并按需创建和登记训练目录"
         else:
             storage_status = "ready"
             storage_summary = "Chat 训练可直接开始；飞书保存尚未启用（可选）"

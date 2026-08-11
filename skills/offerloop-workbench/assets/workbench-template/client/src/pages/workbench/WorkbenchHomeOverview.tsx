@@ -142,7 +142,7 @@ const HOME_CAPABILITIES: HomeCapability[] = [
     title: 'PM Sense',
     description: '训练产品判断与结构化表达',
     icon: Target,
-    skill: 'pm-sense',
+    skill: 'competency-lab',
     prompt:
       '请开始一次 PM Sense 训练。先让我从今日题目中选择一道，'
       + '不要提前给答案，等我独立作答后再逐轮追问。',
@@ -342,11 +342,12 @@ const WorkbenchHomeOverview: React.FC<WorkbenchHomeOverviewProps> = ({
     [data],
   );
   const interviewStageCount: number = [
-    '群面',
-    '一面',
-    '二面',
-    '三面',
-    'HR面',
+    '待面试',
+    '待群面',
+    '待一面',
+    '待二面',
+    '待三面',
+    '待HR面',
   ].reduce(
     (sum: number, stage: string): number =>
       sum + (stageCounts.get(stage) ?? 0),
@@ -395,8 +396,8 @@ const WorkbenchHomeOverview: React.FC<WorkbenchHomeOverviewProps> = ({
 
   const metrics: Array<[string, number]> = [
     ['发现机会', data?.opportunityCount ?? 0],
-    ['已投递', stageCounts.get('已投递') ?? 0],
-    ['笔试中', stageCounts.get('笔试') ?? 0],
+    ['待反馈', stageCounts.get('待反馈') ?? 0],
+    ['待笔试', stageCounts.get('待笔试') ?? 0],
     ['面试中', interviewStageCount],
     ['Offer', stageCounts.get('Offer') ?? 0],
     ['已结束', stageCounts.get('已结束') ?? 0],
@@ -453,6 +454,19 @@ const WorkbenchHomeOverview: React.FC<WorkbenchHomeOverviewProps> = ({
           <div className="mb-3.5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
             {error}
           </div>
+        ) : null}
+
+        {data?.dailyCheckin.status === 'paused' ? (
+          <section className="mb-3.5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+            <div className="flex items-center gap-2 font-medium">
+              <CircleAlert className="size-4" />
+              每日进展确认已暂停
+            </div>
+            <p className="mt-1 pl-6 text-amber-800">
+              {data.dailyCheckin.pauseReason
+                || '群成员安全检查尚未通过，完成重新授权后才会在每天 21:30 发送。'}
+            </p>
+          </section>
         ) : null}
 
         {interviewsState === 'loading' ? (

@@ -39,11 +39,18 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertNotIn("检查 `current_resumes`", skill)
         self.assertIn("references/role-routing.md", skill)
         self.assertIn("AI 产品与策略产品同时命中", skill)
-        self.assertIn("AI 产品与策略产品加载各自专项路线", skill)
-        self.assertIn("references/ai-agent-skill-products.md", skill)
-        self.assertIn("references/ai-audit-products.md", skill)
-        self.assertIn("references/ai-action-agent-products.md", skill)
-        self.assertIn("references/ai-interview-evidence-pressure.md", skill)
+        self.assertIn("确定通用或专项路线", skill)
+        self.assertIn(
+            "references/project-playbooks/ai-agent-skill-products.md", skill
+        )
+        self.assertIn("references/project-playbooks/ai-audit-products.md", skill)
+        self.assertIn(
+            "references/project-playbooks/ai-action-agent-products.md", skill
+        )
+        self.assertIn(
+            "references/supporting-guides/ai-interview-evidence-pressure.md",
+            skill,
+        )
 
         routing = (root / "references" / "role-routing.md").read_text(
             encoding="utf-8"
@@ -80,7 +87,10 @@ class RepositoryContractTest(unittest.TestCase):
             self.assertIn(expected_text, ai_product)
 
         agent_skill_products = (
-            root / "references" / "ai-agent-skill-products.md"
+            root
+            / "references"
+            / "project-playbooks"
+            / "ai-agent-skill-products.md"
         ).read_text(encoding="utf-8")
         for expected_text in (
             "任务价值与形态选择",
@@ -116,7 +126,7 @@ class RepositoryContractTest(unittest.TestCase):
             self.assertIn(expected_text, agent_skill_products)
 
         ai_audit = (
-            root / "references" / "ai-audit-products.md"
+            root / "references" / "project-playbooks" / "ai-audit-products.md"
         ).read_text(encoding="utf-8")
         for expected_text in (
             "审核五问",
@@ -129,7 +139,10 @@ class RepositoryContractTest(unittest.TestCase):
             self.assertIn(expected_text, ai_audit)
 
         action_agent = (
-            root / "references" / "ai-action-agent-products.md"
+            root
+            / "references"
+            / "project-playbooks"
+            / "ai-action-agent-products.md"
         ).read_text(encoding="utf-8")
         for expected_text in (
             "产品形态与人机介入",
@@ -143,7 +156,10 @@ class RepositoryContractTest(unittest.TestCase):
             self.assertIn(expected_text, action_agent)
 
         rag = (
-            root / "references" / "ai-rag-knowledge-products.md"
+            root
+            / "references"
+            / "project-playbooks"
+            / "ai-rag-knowledge-products.md"
         ).read_text(encoding="utf-8")
         for expected_text in (
             "Agentic RAG 真实性门",
@@ -166,49 +182,91 @@ class RepositoryContractTest(unittest.TestCase):
             self.assertIn(expected_text, strategy_product)
 
     def test_experience_deepthink_output_keeps_reusable_evidence_and_stories(self):
-        schema = (
-            SKILLS / "experience-deepthink" / "references" / "output-schema.md"
+        references = SKILLS / "experience-deepthink" / "references"
+        detail_schema = (references / "detail-reconstruction-schema.md").read_text(
+            encoding="utf-8"
+        )
+        transcript_schema = (
+            references / "interview-transcript-generation.md"
         ).read_text(encoding="utf-8")
-        template = schema.split("```markdown", 1)[1].split("```", 1)[0]
+        self.assertFalse((references / "output-schema.md").exists())
+        detail_templates = re.findall(
+            r"```markdown\n(.*?)```", detail_schema, re.DOTALL
+        )
+        transcript_templates = re.findall(
+            r"```markdown\n(.*?)```", transcript_schema, re.DOTALL
+        )
+        self.assertEqual(len(detail_templates), 1)
+        self.assertEqual(len(transcript_templates), 1)
+        detail_template = detail_templates[0]
+        transcript_template = transcript_templates[0]
         self.assertEqual(
-            re.findall(r"^## .+$", template, re.MULTILINE),
+            re.findall(r"^## .+$", detail_template, re.MULTILINE),
             [
-                "## 一、经历全景与基础口述稿",
-                "## 二、故事素材",
-                "## 三、待补充与建议深挖方向",
+                "## 一、项目概述",
+                "## 二、项目背景与优化方向",
+                "## 三、项目目标与数据指标",
+                "## 四、方案及动作",
+                "## 五、实验与收益",
+                "## 六、项目未来的优化方向",
+                "## 七、在这个项目中的收获",
+                "## 八、项目中当时未充分了解的细节",
             ],
         )
+        self.assertEqual(
+            re.findall(r"^## .+$", transcript_template, re.MULTILINE),
+            [
+                "## 一、介绍项目整体",
+                "## 二、介绍项目背景",
+                "## 三、介绍项目目标",
+                "## 四、介绍项目动作",
+                "## 五、介绍项目结果",
+                "## 六、项目中的收获是什么",
+                "## 七、讲一个项目中遇到的失败",
+                "## 八、讲一个项目中遇到的冲突",
+                "## 九、讲一个项目中做的核心决策",
+                "## 十、讲一个项目中和其他团队的协作",
+                "## 十一、重来一次最想改进哪个部分",
+                "## 十二、这个项目未来还有哪些优化方向",
+            ],
+        )
+        self.assertEqual(
+            re.findall(r"^# .+$", detail_template, re.MULTILINE),
+            ["# 细节复原稿｜<经历名称>｜<完整岗位方向>"],
+        )
+        self.assertEqual(
+            re.findall(r"^# .+$", transcript_template, re.MULTILINE),
+            ["# 面试逐字稿｜<经历名称>｜<完整岗位方向>"],
+        )
         for heading in (
-            "背景 3 分钟口述稿",
-            "目标 3 分钟口述稿",
-            "方案与行动路径 3 分钟口述稿",
-            "结果 3 分钟口述稿",
-            "团队成果与个人贡献",
-            "数据口径",
-            "事实边界",
-            "失败故事",
-            "冲突故事",
-            "决策故事",
-            "协作故事",
-            "重来一次想改进哪个部分",
+            "团队负责 vs 我负责",
+            "个人贡献边界",
+            "当前缺失的信息",
+            "如果当时由我负责，如何验证",
         ):
-            self.assertIn(heading, template)
-        self.assertNotIn("## 产物信息", template)
-        self.assertNotIn("## 二、事实、贡献与证据边界", template)
-        self.assertNotIn("维护记录", template)
-        self.assertIn("相同经历名称和岗位方向只维护一份正式文档", schema)
-        self.assertIn("不生成固定题型题库", schema)
-        self.assertIn("岗位方向不受预设分类限制", schema)
-        self.assertIn("严格按金字塔原理组织", schema)
-        self.assertIn("AI 经历条件约束", schema)
-        self.assertIn("端到端技术链路", schema)
+            self.assertIn(heading, detail_template)
+        for heading in (
+            "失败",
+            "冲突",
+            "核心决策",
+            "其他团队的协作",
+            "重来一次",
+            "未来还有哪些优化方向",
+        ):
+            self.assertIn(heading, transcript_template)
+        self.assertNotIn("## 产物信息", detail_template + transcript_template)
+        self.assertNotIn("run_id", detail_template + transcript_template)
+        self.assertIn("不为了完整度补造", detail_schema)
+        self.assertIn("逐字稿只能读取《细节复原稿》", transcript_schema)
         for internal_only_field in (
             "信息来源可靠性与交叉验证（如适用）：",
             "可复用方法、适用条件与失效边界：",
             "短期结果、长期影响与护栏指标（如适用）：",
             "投入、回收周期、规模与机会成本（如适用）：",
         ):
-            self.assertNotIn(internal_only_field, template)
+            self.assertNotIn(
+                internal_only_field, detail_template + transcript_template
+            )
 
         workflow = (
             SKILLS
@@ -220,6 +278,7 @@ class RepositoryContractTest(unittest.TestCase):
             SKILLS
             / "experience-deepthink"
             / "references"
+            / "supporting-guides"
             / "experience-evidence-radar.md"
         ).read_text(encoding="utf-8")
         commercialization = (
@@ -243,17 +302,17 @@ class RepositoryContractTest(unittest.TestCase):
             / "thinking-and-answer-logic.md"
         ).read_text(encoding="utf-8")
         for expected in (
-            "证据冲突与交叉验证",
-            "方法沉淀与经历查漏",
-            "不向用户展示完整雷达",
-            "AI 技术应用专项深挖",
-            "ai-technology-application.md",
+            "Project State 与 Evidence Ledger",
+            "因果结论审计",
+            "Rule Trace",
+            "Experiment Deep Dive",
+            "证据冲突与未知处理",
         ):
             self.assertIn(expected, workflow)
         for expected in (
-            "不是面试题库",
-            "每次最多选择一个",
-            "不诱导补造故事",
+            "每次最多选一个",
+            "不顺序遍历",
+            "雷达只用于选下一题，不写入正式文档",
         ):
             self.assertIn(expected, radar)
         for expected in (
@@ -271,12 +330,11 @@ class RepositoryContractTest(unittest.TestCase):
         ):
             self.assertIn(expected, strategy)
         for expected in (
-            "从岗位决定深挖重点",
-            "从考察意图决定回答角度",
-            "先给结论",
-            "选择二至四个支撑角度",
-            "不新增、删除或重命名最终文档",
-            "AI 技术应用（跨岗位条件视角）",
+            "选下一题",
+            "五类内容必须分离",
+            "完全服从 `detail-reconstruction-schema.md` 与",
+            "事实复原阶段不追求口语漂亮",
+            "绝不能在表达阶段新增事实",
         ):
             self.assertIn(expected, thinking)
 
@@ -284,6 +342,7 @@ class RepositoryContractTest(unittest.TestCase):
             SKILLS
             / "experience-deepthink"
             / "references"
+            / "project-playbooks"
             / "ai-technology-application.md"
         ).read_text(encoding="utf-8")
         for expected in (
@@ -302,13 +361,16 @@ class RepositoryContractTest(unittest.TestCase):
         skill = (
             SKILLS / "experience-deepthink" / "SKILL.md"
         ).read_text(encoding="utf-8")
-        self.assertIn("references/ai-technology-application.md", skill)
+        self.assertIn(
+            "references/project-playbooks/ai-technology-application.md", skill
+        )
         self.assertIn("是否触发由经历内容决定", skill)
 
         glossary = (
             SKILLS
             / "experience-deepthink"
             / "references"
+            / "supporting-guides"
             / "ai-concept-glossary.md"
         ).read_text(encoding="utf-8")
         for expected in (
@@ -413,6 +475,7 @@ class RepositoryContractTest(unittest.TestCase):
             "逐题训练",
         ):
             self.assertIn(expected, skill)
+        self.assertNotIn("首次创建线上节点前展示目标并取得确认", skill)
         for expected in (
             "通用面试协议",
             "用户选择的面试模式",
@@ -425,6 +488,19 @@ class RepositoryContractTest(unittest.TestCase):
             "interview-modes/group-discussion.md",
         ):
             self.assertIn(expected, protocol)
+        self.assertNotIn("## 产物信息", protocol)
+        for heading in (
+            "## 模拟设置",
+            "## 材料来源",
+            "## 总体表现",
+            "## 逐题记录与评价",
+            "## 岗位能力覆盖",
+            "## 证据与表达风险",
+            "## 改进后的回答素材",
+            "## 建议回流项",
+            "## 后续训练计划",
+        ):
+            self.assertIn(heading, protocol)
         product_role = (
             root / "references" / "role-playbooks" / "product.md"
         ).read_text(encoding="utf-8")
@@ -587,18 +663,15 @@ class RepositoryContractTest(unittest.TestCase):
 
     def test_expected_skills_are_discoverable(self):
         expected = {
-            "offerloop-setup",
-            "offerloop-workspace",
-            "offerloop-workbench",
+            "career-profile",
             "job-collection",
             "recruiting-reminder",
             "experience-deepthink",
             "resume-tailor",
+            "competency-lab",
             "interview-prep",
             "mock-lab",
             "talk-review",
-            "pm-sense",
-            "aptitude-lab",
         }
         discovered = {
             path.parent.name for path in SKILLS.glob("*/SKILL.md") if path.is_file()
@@ -627,18 +700,23 @@ class RepositoryContractTest(unittest.TestCase):
         )
         self.assertNotIn("information-collection", reminder)
 
-    def test_business_skills_point_to_offerloop_setup(self):
+    def test_business_skills_point_to_hidden_runtime_or_installer(self):
         for name in (
+            "career-profile",
             "job-collection",
             "recruiting-reminder",
             "experience-deepthink",
+            "resume-tailor",
+            "competency-lab",
             "interview-prep",
             "mock-lab",
             "talk-review",
-            "pm-sense",
         ):
             text = (SKILLS / name / "SKILL.md").read_text(encoding="utf-8")
-            self.assertIn("offerloop-setup", text, name)
+            self.assertTrue(
+                ".offerloop-runtime" in text or "安装器" in text,
+                name,
+            )
 
     def test_business_skills_define_opt_in_feishu_notifications(self):
         for name in ("job-collection", "recruiting-reminder"):
@@ -661,129 +739,221 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertIn("标记 `conflict`，不覆盖任一边", reminder)
         self.assertNotIn("以子表 `完成状态` 为准回写主表", reminder)
 
-    def test_setup_guides_notification_choices_and_bot_installation(self):
-        setup = (SKILLS / "offerloop-setup" / "SKILL.md").read_text(encoding="utf-8")
+    def test_setup_guides_daily_checkin_safety_and_bot_permissions(self):
         onboarding = (
             SKILLS / "offerloop-setup" / "references" / "onboarding.md"
         ).read_text(encoding="utf-8")
         for expected in (
-            "私聊还是群聊",
-            "目标用户姓名或目标群名称",
-            "bot 还是 user",
-            "im +chat-search",
-            "im +chat-members-list",
-        ):
-            self.assertIn(expected, setup)
-        for expected in (
-            "启用机器人能力",
-            "发布应用版本",
-            "安装或更新应用",
-            "加入目标群",
-            "im:message:send_as_bot",
+            "完整分页读取成员",
+            "只有一个真人",
+            "配置所有者",
+            "im:chat.members:read",
+            "`paused`",
         ):
             self.assertIn(expected, onboarding)
 
-    def test_setup_first_run_welcome_introduces_all_twelve_skills(self):
-        setup = (SKILLS / "offerloop-setup" / "SKILL.md").read_text(
-            encoding="utf-8"
-        )
-        metadata = (
-            SKILLS / "offerloop-setup" / "agents" / "openai.yaml"
-        ).read_text(encoding="utf-8")
+    def test_installer_welcome_introduces_the_nine_long_lived_skills(self):
         welcome = (
             SKILLS / "offerloop-setup" / "references" / "welcome.md"
         ).read_text(encoding="utf-8")
-        self.assertIn("references/welcome.md", setup)
-        self.assertIn("all twelve OfferLoop skills", metadata)
-        self.assertIn("不要在入口介绍前要求目标岗位", setup)
-        self.assertIn("安装只添加了 Skill", welcome)
+        self.assertIn("安装只添加本地 Skill", welcome)
         for name in (
-            "offerloop-setup",
-            "offerloop-workspace",
-            "offerloop-workbench",
+            "career-profile",
             "job-collection",
             "recruiting-reminder",
             "experience-deepthink",
             "resume-tailor",
-            "pm-sense",
+            "competency-lab",
             "interview-prep",
             "mock-lab",
             "talk-review",
-            "aptitude-lab",
         ):
             self.assertIn(f"`{name}`", welcome)
+        for retired in ("`offerloop-setup`", "`offerloop-workspace`", "`pm-sense`"):
+            self.assertNotIn(retired, welcome)
+
+    def test_all_offerloop_business_skills_enforce_the_profile_gate_first(self):
+        gated_skills = (
+            "job-collection",
+            "recruiting-reminder",
+            "experience-deepthink",
+            "resume-tailor",
+            "competency-lab",
+            "interview-prep",
+            "mock-lab",
+            "talk-review",
+        )
+        for name in gated_skills:
+            skill = (SKILLS / name / "SKILL.md").read_text(encoding="utf-8")
+            self.assertIn("profile-gate.md", skill, name)
+            self.assertIn("本 Skill 的第一项动作", skill, name)
+            self.assertIn("不得启动", skill, name)
+            self.assertIn("一次只问一个问题并自动保存", skill, name)
+
+        career = (SKILLS / "career-profile" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("自身不重复执行门禁", career)
+        self.assertIn("每确认一条有效认识，立即", career)
+        self.assertIn("第一条有效认识写入后", career)
+
+        gate = (
+            SKILLS
+            / "offerloop-workspace"
+            / "references"
+            / "profile-gate.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("8 个 OfferLoop", gate)
+        self.assertIn("至少存在一条用户明确提供并已确认的有效认识", gate)
+        self.assertIn("状态就是 `ready`", gate)
+        self.assertIn("不适用于安装器", gate)
+        self.assertTrue(
+            (
+                SKILLS
+                / "offerloop-workspace"
+                / "scripts"
+                / "profile_gate.py"
+            ).is_file()
+        )
+
+    def test_career_profile_centers_self_understanding_transfer_and_voice(self):
+        root = SKILLS / "career-profile"
+        skill = (root / "SKILL.md").read_text(encoding="utf-8")
+        schema = (root / "references" / "profile-schema.md").read_text(
+            encoding="utf-8"
+        )
+        conversation = (root / "references" / "conversation-guide.md").read_text(
+            encoding="utf-8"
+        )
+        voice = (
+            SKILLS / "offerloop-workspace" / "references" / "voice-contract.md"
+        ).read_text(encoding="utf-8")
+
+        for marker in ("帮助用户认识自己", "岗位选择偏好与可迁移边界", "学习用户的真实语言"):
+            self.assertIn(marker, skill)
+        for marker in ("岗位选择偏好｜<显示名>", "当前的自我认识", "已确认的语言画像"):
+            self.assertIn(marker, schema)
+        for removed_field in ("当前训练重点：", "不喜欢或禁用的表达：", "工作环境偏好："):
+            self.assertNotIn(removed_field, schema)
+        self.assertIn("不要从履历盘点、求职问卷或焦虑事件开场", conversation)
+        self.assertIn(
+            "如果暂时不用从“求职者”的角度介绍自己，你觉得自己是一个什么样的人？",
+            conversation,
+        )
+        self.assertNotIn("最近找工作这件事里", conversation)
+        self.assertIn("不问“哪段经历最能证明你适合”", conversation)
+        workflow = (root / "references" / "job-preference-workflow.md").read_text(
+            encoding="utf-8"
+        )
+        personality = (
+            root / "references" / "personality-exploration-workflow.md"
+        ).read_text(encoding="utf-8")
+        language = (
+            root / "references" / "language-profile-workflow.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("哪些城市的招聘信息可以直接保留", workflow)
+        self.assertIn("你希望保留哪些招聘类型", workflow)
+        self.assertIn("行业上你希望怎么筛选", workflow)
+        self.assertIn("后续问题不固定", personality)
+        self.assertIn("整轮最多 10 个问题", personality)
+        self.assertIn("包含固定第一问", personality)
+        self.assertIn("排解情绪", personality)
+        self.assertIn("完全由你自己写", language)
+        self.assertIn("每次只问一个", language)
+        self.assertIn("不使用抽象风格问卷", language)
+        self.assertIn("主任务\n结束后最多提出一条", language)
+        self.assertIn("情绪与困惑记录", schema)
+        self.assertIn("自然口语", schema)
+        self.assertIn("书面表达", schema)
+        self.assertIn("典型改写记录", schema)
+        self.assertIn("待确认与继续观察", schema)
+        self.assertIn("城市筛选模式：指定城市 / 全国", schema)
+        self.assertIn("城市缺失不等于全国", schema)
+        self.assertIn("用户对 Agent 草稿的实际改写", voice)
+        self.assertIn("不得静默固化新风格", voice)
+
+    def test_job_collection_uses_transferability_before_specialist_confirmation(self):
+        contract = (
+            SKILLS
+            / "job-collection"
+            / "references"
+            / "prewrite-confirmation.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("经管专业、产品实习和项目推动经历", contract)
+        self.assertIn("PMO 迁移路径", contract)
+        self.assertIn("全部岗位都属于岗位选择偏好文档中“用户明确", contract)
+        self.assertIn("未经用户确认的岗位不能按此条处理", contract)
+        self.assertIn("不得写“用户不能做”", contract)
+
+        field_contract = (
+            SKILLS / "job-collection" / "references" / "field-contract.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("03｜定制简历", field_contract)
+        self.assertIn("01｜互联网产品经理简历", field_contract)
+        self.assertNotIn("02｜简历合集", field_contract)
+
+    def test_user_voice_contract_is_consumed_by_generated_personal_content(self):
+        consumers = (
+            "experience-deepthink",
+            "resume-tailor",
+            "competency-lab",
+            "interview-prep",
+            "mock-lab",
+            "talk-review",
+        )
+        for name in consumers:
+            skill = (SKILLS / name / "SKILL.md").read_text(encoding="utf-8")
+            self.assertIn("voice-contract.md", skill, name)
+
+        intake = (
+            SKILLS / "resume-tailor" / "references" / "intake-and-selection.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("不要求现场提供 3 个特点", intake)
 
     def test_workspace_collaboration_boundaries_are_documented(self):
-        setup = (SKILLS / "offerloop-setup" / "SKILL.md").read_text(encoding="utf-8")
+        onboarding = (
+            SKILLS / "offerloop-setup" / "references" / "onboarding.md"
+        ).read_text(encoding="utf-8")
         collection = (SKILLS / "job-collection" / "SKILL.md").read_text(
             encoding="utf-8"
         )
-        reminder = (SKILLS / "recruiting-reminder" / "SKILL.md").read_text(
+        contract = (SKILLS / "offerloop-workspace" / "references" / "homepage-contract.md").read_text(
             encoding="utf-8"
         )
-        workspace = (SKILLS / "offerloop-workspace" / "SKILL.md").read_text(
-            encoding="utf-8"
-        )
-        self.assertIn("知识库生命周期", setup)
-        self.assertIn("offerloop-workspace", setup)
-        self.assertIn("offerloop-workspace", collection)
-        self.assertIn("工作台错误都不回滚", collection)
-        self.assertIn("offerloop-workspace", reminder)
-        self.assertIn("不要替其他 Skill 读取来源、邮箱", workspace)
-        self.assertIn("不负责搭建可选的飞书工作台", workspace)
+        self.assertIn("不再要求用户调用一次性 Skill", onboarding)
+        self.assertIn("企业清单和求职进展已作为唯一 Base 对象", collection)
+        self.assertIn("Base 是求职事实真源", contract)
+        self.assertIn("不得复制 Base 或记录", onboarding)
+        self.assertIn("原生 Agent 深链接", onboarding)
 
     def test_readme_and_migration_describe_the_current_workspace(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        migration = (ROOT / "MIGRATION.md").read_text(encoding="utf-8")
-        self.assertNotIn("Skills-3", readme)
         for expected in (
-            "offerloop-workspace",
-            "offerloop-workbench",
-            "OfferLoop 求职空间",
+            "9 个长期 Skill",
+            "三张飞书业务 Base",
             "求职进展",
             "笔面试中心",
+            "能力成长",
+            "不恢复本机 Agent Worker",
         ):
             self.assertIn(expected, readme)
-        self.assertIn("旧双 Base", migration)
-        self.assertIn("永久保留", migration)
+        self.assertNotIn("Skills-11", readme)
+        self.assertNotIn("`pm-sense`：", readme)
 
     def test_readme_has_safe_explicit_install_and_upgrade_paths(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertNotIn(
-            "npx skills add riwonswain-ovo/OfferLoop-development",
-            readme,
-        )
-        self.assertIn("gh auth status -h github.com", readme)
         self.assertIn(
-            "gh repo view riwonswain-ovo/OfferLoop-development",
+            "python3 scripts/install_offerloop.py --agent codex --setup",
             readme,
         )
-        self.assertIn(
-            "python3 scripts/install_offerloop.py --agent codex --dry-run",
-            readme,
-        )
+        self.assertIn("--upgrade", readme)
         self.assertIn(
             "python3 scripts/install_offerloop.py --agent codex --verify",
             readme,
         )
-        self.assertIn(
-            "py -3 scripts/install_offerloop.py --agent codex --verify",
-            readme,
-        )
-        self.assertIn("标准 `SKILL.md`", readme)
-        self.assertIn("可恢复备份", readme)
-        for agent in ("codex", "claude-code", "hermes-agent", "workbuddy"):
-            self.assertIn(f"`{agent}`", readme)
-        for product_name in ("Claude Code", "Hermes", "WorkBuddy"):
-            self.assertIn(product_name, readme)
-        self.assertIn("不在工作台内部嵌入 Agent", readme)
-        self.assertIn("打开 Agent 新任务并预填 Prompt", readme)
-        self.assertNotIn("当前只支持 Codex", readme)
-        self.assertNotIn("不会新建第二个妙搭应用", readme)
-        self.assertIn("~/.config/offerloop/", readme)
-        self.assertIn("~/.local/state/offerloop/", readme)
-        self.assertIn("macOS、Linux 与 PowerShell", readme)
-        self.assertIn("尚未与公开仓库同步", readme)
+        self.assertIn("--deploy-workbench", readme)
+        self.assertIn("幂等", readme)
+        self.assertIn("不会复制三张 Base", readme)
 
     def test_workbench_task_links_do_not_require_the_private_repository(self):
         task_link = (
@@ -802,72 +972,29 @@ class RepositoryContractTest(unittest.TestCase):
     def test_readme_follows_the_new_user_journey(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         sections = (
-            "## 1. 安装前准备",
-            "## 2. 如何安装",
-            "## 3. 认识十二个 Skill",
-            "## 4. 旧用户如何升级",
-            "## 5. 其他说明",
+            "## 9 个长期 Skill",
+            "## 三条闭环",
+            "## 安装与升级",
+            "## 固定知识库结构",
+            "## Loop Runtime",
+            "## 工作台边界",
         )
         positions = [readme.index(section) for section in sections]
         self.assertEqual(positions, sorted(positions))
 
-        skill_headings = (
-            "### `offerloop-setup`",
-            "### `job-collection`",
-            "### `recruiting-reminder`",
-            "### `offerloop-workspace`",
-            "### `offerloop-workbench`",
-            "### `experience-deepthink`",
-            "### `resume-tailor`",
-            "### `pm-sense`",
-            "### `aptitude-lab`",
-            "### `interview-prep`",
-            "### `mock-lab`",
-            "### `talk-review`",
-        )
-        required_parts = (
-            "#### 作用",
-            "#### 第一次运行前需要准备",
-            "#### 第一次运行流程",
-            "#### 第一次运行后的输出",
-            "#### 后续每次运行带来的增量",
-            "#### 案例",
-        )
-        start_of_upgrade = readme.index("## 4. 旧用户如何升级")
-        for index, heading in enumerate(skill_headings):
-            start = readme.index(heading)
-            end = (
-                readme.index(skill_headings[index + 1])
-                if index + 1 < len(skill_headings)
-                else start_of_upgrade
-            )
-            skill_section = readme[start:end]
-            for part in required_parts:
-                self.assertIn(part, skill_section, heading)
-
     def test_setup_docs_match_capability_preflight_and_recovery(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        setup = (SKILLS / "offerloop-setup" / "SKILL.md").read_text(
-            encoding="utf-8"
-        )
         onboarding = (
             SKILLS / "offerloop-setup" / "references" / "onboarding.md"
         ).read_text(encoding="utf-8")
         for text in (readme, onboarding):
-            self.assertNotIn("当前版本限制", text)
-            self.assertIn("核心空间", text)
-            self.assertIn("三张 Base", text)
+            self.assertIn("三张", text)
+            self.assertIn("Base", text)
             self.assertIn("工作台", text)
-            self.assertIn("可选", text)
-            self.assertIn("lark-shared", text)
-            self.assertIn("lark-apps", text)
-        for text in (readme, onboarding):
-            self.assertIn("npx @larksuite/cli@latest install", text)
-        self.assertIn("npx skills add larksuite/cli -g -a codex", readme)
-        self.assertNotIn("npx skills add larksuite/cli -g -a codex -y", readme)
-        self.assertIn("npx skills add larksuite/cli -g -a", onboarding)
-        self.assertIn("目标已登记时运行期只需要", setup)
-        self.assertIn("线上条件一律保持 `unverified`", setup)
+            self.assertIn("Agent Worker", text)
+        self.assertIn("--setup", onboarding)
+        self.assertIn("--verify", onboarding)
+        self.assertIn("`.offerloop-runtime`", onboarding)
 
     def test_no_scaffold_placeholders_remain(self):
         for skill_file in SKILLS.glob("*/SKILL.md"):
@@ -876,19 +1003,20 @@ class RepositoryContractTest(unittest.TestCase):
     def test_coaching_skills_use_feishu_markdown_artifact_contract(self):
         names = (
             "experience-deepthink",
+            "resume-tailor",
+            "competency-lab",
             "interview-prep",
             "mock-lab",
             "talk-review",
-            "pm-sense",
         )
         for name in names:
             skill = (SKILLS / name / "SKILL.md").read_text(encoding="utf-8")
-            self.assertIn("artifact-contract.md", skill, name)
-            self.assertIn("Markdown", skill, name)
-            self.assertIn("lark-doc", skill, name)
-            self.assertIn("run_id", skill, name)
-        product = (SKILLS / "pm-sense" / "SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("不生成小红书", product)
+            self.assertIn("completed", skill, name)
+            self.assertIn("incomplete", skill, name)
+            self.assertIn("知识库", skill, name)
+        product = (SKILLS / "competency-lab" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("岗位能力画像", product)
+        self.assertIn("未解决", product)
         mock = (SKILLS / "mock-lab" / "SKILL.md").read_text(encoding="utf-8")
         self.assertIn("不得读取或依赖本地 `mock-interview`", mock)
         for name in names:
@@ -920,29 +1048,23 @@ class RepositoryContractTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("# OfferLoop 使用指南", template)
         self.assertIn("OFFERLOOP:OPTIONAL:WORKBENCH", template)
-        self.assertIn("## OfferLoop 的 12 个 Skill", template)
+        self.assertIn("## 9 个长期 Skill", template)
         for name in (
-            "offerloop-setup",
-            "offerloop-workspace",
-            "offerloop-workbench",
+            "career-profile",
             "job-collection",
             "recruiting-reminder",
             "experience-deepthink",
             "resume-tailor",
-            "pm-sense",
+            "competency-lab",
             "interview-prep",
             "mock-lab",
             "talk-review",
-            "aptitude-lab",
         ):
             self.assertIn(f"`{name}`", template)
         self.assertNotIn("OFFERLOOP:MANAGED", template)
         self.assertNotIn("请在飞书 UI 中插入", template)
 
     def test_workspace_contract_uses_core_data_and_training_layout(self):
-        workspace = (
-            SKILLS / "offerloop-workspace" / "SKILL.md"
-        ).read_text(encoding="utf-8")
         homepage = (
             SKILLS / "offerloop-workspace" / "references" / "homepage-contract.md"
         ).read_text(encoding="utf-8")
@@ -951,22 +1073,22 @@ class RepositoryContractTest(unittest.TestCase):
             "企业清单",
             "求职进展",
             "笔面试中心",
-            "02｜简历合集",
-            "03｜经历深挖",
-            "04｜面试准备",
-            "05｜面试复盘",
+            "02｜用户画像",
+            "03｜定制简历",
+            "04｜经历深挖",
+            "05｜岗位能力与训练",
+            "岗位能力画像",
+            "专项训练",
+            "06｜面试准备",
+            "07｜模拟面试",
+            "08｜真实面试复盘",
             "ASR 待复盘",
             "已完成复盘",
-            "06｜产品 Sense",
-            "07｜模拟面试",
         )
-        for text in (workspace, homepage):
-            for title in expected:
-                self.assertIn(title, text)
-            self.assertNotIn("01｜当前简历", text)
-            self.assertNotIn("02｜当前简历", text)
-            self.assertNotIn("06｜训练与题库", text)
-            self.assertNotIn("待学会题库", text)
+        for title in expected:
+            self.assertIn(title, homepage)
+        self.assertIn("原 Base 的知识库快捷节点", homepage)
+        self.assertIn("不得复制 Base", homepage)
 
     def test_workbench_keeps_the_confirmed_five_page_and_external_agent_contract(self):
         root = (
@@ -1031,13 +1153,15 @@ class RepositoryContractTest(unittest.TestCase):
             SKILLS / "offerloop-workspace" / "references" / "artifact-contract.md"
         ).read_text(encoding="utf-8")
         self.assertIn("`resume-tailor`", artifact_contract)
-        self.assertIn("不生成 `run_id`", artifact_contract)
+        self.assertIn("`run_id` 仅用于会话内幂等", artifact_contract)
+        self.assertIn("不进入标题", artifact_contract)
 
     def test_ai_product_job_search_specialization_routes_across_five_skills(self):
         expected_files = (
             SKILLS
             / "experience-deepthink"
             / "references"
+            / "supporting-guides"
             / "ai-interview-evidence-pressure.md",
             SKILLS
             / "resume-tailor"
@@ -1126,6 +1250,7 @@ class RepositoryContractTest(unittest.TestCase):
             SKILLS
             / "experience-deepthink"
             / "references"
+            / "project-playbooks"
             / "ai-coding-product-delivery.md",
             SKILLS
             / "resume-tailor"
@@ -1184,6 +1309,7 @@ class RepositoryContractTest(unittest.TestCase):
             SKILLS
             / "experience-deepthink"
             / "references"
+            / "supporting-guides"
             / "ai-concept-glossary.md"
         ).read_text(encoding="utf-8")
         self.assertIn("### AI Coding", glossary)
@@ -1248,11 +1374,9 @@ class RepositoryContractTest(unittest.TestCase):
         security = (ROOT / "SECURITY.md").read_text(encoding="utf-8")
         for agent in ("codex", "claude-code", "hermes-agent"):
             self.assertIn(f'"{agent}"', acceptance)
-        self.assertIn("four Agents, twelve Skills", acceptance)
-        self.assertNotIn("four Agents, ten Skills", acceptance)
+        self.assertIn("four Agents, nine Skills", acceptance)
         self.assertNotIn("four Agents, eleven Skills", acceptance)
-        self.assertIn("版本升级为 4", end_to_end)
-        self.assertNotIn("版本升级为 3", end_to_end)
+        self.assertIn("版本升级为 5", end_to_end)
         self.assertIn("install_offerloop.py", acceptance)
         self.assertIn("already_installed", acceptance)
         self.assertIn("--verify", acceptance)
@@ -1268,9 +1392,11 @@ class RepositoryContractTest(unittest.TestCase):
         installer = (ROOT / "scripts" / "install_offerloop.py").read_text(
             encoding="utf-8"
         )
-        self.assertIn("exactly the twelve supported OfferLoop Skills", installer)
-        self.assertNotIn("exactly the ten supported OfferLoop Skills", installer)
-        self.assertNotIn("exactly the eleven supported OfferLoop Skills", installer)
+        self.assertIn('"career-profile"', installer)
+        self.assertIn('"competency-lab"', installer)
+        self.assertIn('RETIRED_USER_SKILLS = (', installer)
+        self.assertIn('"offerloop-workbench"', installer)
+        self.assertIn('SUPPORT_NAME = ".offerloop-runtime"', installer)
         for expected in (
             '"codex"',
             '"claude-code"',

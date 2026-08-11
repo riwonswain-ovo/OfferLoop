@@ -29,6 +29,10 @@
     "REMINDER_BASE_TOKEN",
     "REMINDER_TABLE_ID"
   ],
+  "optional_environment": [
+    "DAILY_CHECKIN_STATUS",
+    "DAILY_CHECKIN_PAUSE_REASON"
+  ],
   "protected_destination_paths": [
     ".git",
     ".spark",

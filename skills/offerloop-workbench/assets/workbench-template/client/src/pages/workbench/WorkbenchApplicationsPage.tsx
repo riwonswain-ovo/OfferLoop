@@ -174,8 +174,15 @@ const WorkbenchApplicationsPage: React.FC = () => {
   const groupedRecords: Map<string, WorkbenchRecord[]> = useMemo(() => {
     const grouped: Map<string, WorkbenchRecord[]> = new Map();
     (dataset?.records ?? []).forEach((record: WorkbenchRecord): void => {
-      const stage: string =
-        cellToText(record.fields['当前阶段']) || '已投递';
+      const result: string = cellToText(record.fields['流程结果']) || '进行中';
+      const next: string = cellToText(record.fields['下一环节']) || '待反馈';
+      const stage: string = result === 'Offer'
+        ? 'Offer'
+        : ['未通过', '主动放弃', '岗位关闭'].includes(result)
+          ? '已结束'
+          : next === '待反馈'
+            ? '待反馈'
+            : `待${next}`;
       grouped.set(stage, [...(grouped.get(stage) ?? []), record]);
     });
     return grouped;
@@ -242,7 +249,10 @@ const WorkbenchApplicationsPage: React.FC = () => {
         ) : null}
 
         <section className="shrink-0 overflow-x-auto rounded-xl border bg-background shadow-sm">
-          <div className="grid min-w-[780px] grid-cols-9">
+          <div
+            className="grid min-w-[1100px]"
+            style={{ gridTemplateColumns: `repeat(${PROGRESS_STAGE_ORDER.length}, minmax(96px, 1fr))` }}
+          >
             {PROGRESS_STAGE_ORDER.map((stage: string, index: number) => (
               <div
                 key={stage}
@@ -309,7 +319,7 @@ const WorkbenchApplicationsPage: React.FC = () => {
             )}>
               <div className="flex min-h-0 min-w-max flex-1">
                 {PROGRESS_STAGE_ORDER.map((stage: string, index: number) => {
-                  const visual: StageVisual = STAGE_VISUALS[index];
+                  const visual: StageVisual = STAGE_VISUALS[index % STAGE_VISUALS.length];
                   const records: WorkbenchRecord[] =
                     groupedRecords.get(stage) ?? [];
                   const visibleRecords: WorkbenchRecord[] =
