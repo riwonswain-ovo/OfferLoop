@@ -1,7 +1,7 @@
 # OfferLoop 迁移与回滚
 
-新用户直接从 `offerloop-setup` 开始。已有独立版 `job-collection` 或
-`recruiting-reminder` 用户先备份配置和旧 Base，不要把凭证内容复制到聊天。
+新用户直接运行仓库自带的 `scripts/install_offerloop.py --setup`。已有独立版
+`job-collection` 或 `recruiting-reminder` 用户先备份配置和旧 Base，不要把凭证内容复制到聊天。
 
 ## 1. 迁移本地配置
 
@@ -20,7 +20,7 @@
 
 文件不存在时跳过。新文件权限设置为 `0600`；确认新位置可读前不要删除旧文件。
 
-## 2. 升级并核验十一个 Skill
+## 2. 升级并核验九个 Skill
 
 先按 README 完成 GitHub 私库认证并进入最新的开发仓库目录。以下以 Codex 为例：
 
@@ -32,19 +32,21 @@ python3 scripts/install_offerloop.py --agent codex --verify
 
 Windows 将 `python3` 替换为 `py -3`；其他 Agent 替换 `--agent` 参数。只有确认同名目录属于
 旧版 OfferLoop 后才使用 `--upgrade`，安装器会先把旧副本移出 Skills 发现范围并保留可恢复
-备份。核验应确认以下十一个 Skill：
+备份。核验应确认以下九个长期 Skill：
 
-- `offerloop-setup`
+- `career-profile`
 - `job-collection`
 - `recruiting-reminder`
-- `offerloop-workspace`
-- `offerloop-workbench`
 - `experience-deepthink`
 - `resume-tailor`
+- `competency-lab`
 - `interview-prep`
 - `mock-lab`
 - `talk-review`
-- `pm-sense`
+
+旧 `offerloop-setup`、`offerloop-workspace` 和 `offerloop-workbench` 已迁入安装器与隐藏的
+`.offerloop-runtime`，不再作为用户可见 Skill 安装。旧 `pm-sense` 的产品经理训练能力迁入
+`competency-lab`；旧 `aptitude-lab` 的通用能力训练也由 `competency-lab` 统一承接。
 
 先运行本地预检；预检不读邮件正文、不访问业务 Base。
 
@@ -54,8 +56,8 @@ Windows 将 `python3` 替换为 `py -3`；其他 Agent 替换 `--agent` 参数�
 “经历深挖”。使用仓库安装器升级时，旧 Skill 目录会先移动到 Skills 发现范围之外的可恢复
 备份，再安装新名称；不会删除飞书中的旧文档。
 
-schema v4 的内部 locator 键 `resume_deepthink` 为兼容既有配置继续保留。已有用户仍复用原飞书
-目录，不自动移动或重命名线上节点；新初始化目录显示为 `03｜经历深挖`。
+schema v4 的内部 locator 键 `resume_deepthink` 会迁移映射到 `experience_deepthink`。已有用户
+仍复用原飞书目录，不删除、复制或静默移动线上文档；新初始化目录显示为 `04｜经历深挖`。
 
 旧文档首次被新 Skill 使用时，按“经历名称 + 完整岗位方向”识别。唯一候选可迁移为持续维护的
 主文档；存在多个候选时必须由用户选择，不自动合并或删除。
@@ -85,8 +87,8 @@ OfferLoop 管理，可由用户自行保留或另行归档。
 6. 小流量验证即时进展同步、人工字段保护、同公司多岗位、改期和日历更新。
 7. 验收通过后才切换日常写入；旧双 Base 和旧配置永久保留为回滚入口。
 
-飞书工作台不属于核心迁移前置条件。只有用户明确选择时才运行 `offerloop-workbench`；未部署或
-失败不影响知识库、三张 Base、日历和训练产物。
+飞书工作台不属于核心迁移前置条件。只有用户明确选择时才运行安装器的
+`--deploy-workbench`；未部署或失败不影响知识库、三张 Base、日历和训练产物。
 
 历史已投递记录无法可靠恢复投递日期时保持空白，不使用迁移日期冒充。轮次不明的旧面试
 只进入统一主表，不猜一面或二面。
@@ -97,10 +99,10 @@ OfferLoop 管理，可由用户自行保留或另行归档。
 
 ```bash
 python3 skills/offerloop-setup/scripts/configure.py \
-  --enable-coaching --confirm-schema-v4
+  --enable-coaching --confirm-schema-v5
 ```
 
-该操作保留全部既有公共配置和兼容 locator，迁移 `artifact_storage` 并升级为 schema v4；
+该操作保留全部既有公共配置和兼容 locator，迁移 `artifact_storage` 并升级为 schema v5；
 不创建或移动飞书节点。当前简历、训练目录和 ASR 目录在对应 Skill 首次运行时经确认
 懒创建或登记。
 拒绝升级不影响招聘同步、提醒和原有工作区。

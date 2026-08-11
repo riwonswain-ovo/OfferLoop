@@ -19,6 +19,7 @@ AGENT_SPECIFIC_PHRASES = (
     "codex_app",
     "mcp__",
 )
+IGNORED_DIRECTORIES = {"assets", "private-sources"}
 
 
 def load_installer():
@@ -40,7 +41,7 @@ def main() -> int:
     for path in SKILLS.rglob("*"):
         if not path.is_file() or path.suffix not in {".md", ".py", ".yml", ".yaml"}:
             continue
-        if "assets" in path.parts:
+        if IGNORED_DIRECTORIES.intersection(path.parts):
             continue
         text = path.read_text(encoding="utf-8")
         if ABSOLUTE_USER_PATH.search(text):

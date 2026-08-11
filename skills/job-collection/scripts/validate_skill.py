@@ -66,13 +66,20 @@ def validate_frontmatter(errors: list[str]) -> None:
 
 
 def validate_references(errors: list[str]) -> None:
-    pattern = re.compile(r"references/[A-Za-z0-9_./-]+\.md")
+    pattern = re.compile(
+        r"(?:\.\./\.offerloop-runtime/)?references/[A-Za-z0-9_./-]+\.md"
+    )
     for path in text_files():
         if path == ROOT / "scripts/validate_skill.py":
             continue
         content = path.read_text(encoding="utf-8")
         for reference in pattern.findall(content):
-            if not (ROOT / reference).is_file():
+            if reference.startswith("../.offerloop-runtime/"):
+                runtime_reference = reference.removeprefix("../.offerloop-runtime/")
+                target = ROOT.parent / "offerloop-workspace" / runtime_reference
+            else:
+                target = ROOT / reference
+            if not target.is_file():
                 errors.append(f"{path.relative_to(ROOT)}: missing reference {reference}")
 
 

@@ -11,11 +11,8 @@ description: 招聘信息源同步助手。仅读取用户提供的飞书多维�
 
 ## 用户画像前置门禁
 
-本 Skill 的第一项动作是完整读取
-`../.offerloop-runtime/references/profile-gate.md` 并执行用户画像前置门禁。必须在询问同步输入、
-读取本 Skill 其他参考、访问招聘信息源、运行脚本或写入 Base 前完成。画像为 `missing` 或
-`empty` 时不得启动本 Skill，转由 `career-profile` 一次只问一个问题并自动保存；门禁通过后
-才返回本次招聘信息同步任务。
+本 Skill 的第一项动作是完整读取 `../.offerloop-runtime/references/profile-gate.md` 并执行用户画像前置门禁。必须在询问同步输入、读取其他参考、访问招聘信息源、运行脚本或写入 Base 前完成。
+画像为 `missing` 或 `empty` 时不得启动，转由 `career-profile` 一次只问一个问题并自动保存；门禁通过后才返回本次同步任务。
 
 ## 开工前材料路由
 

@@ -28,14 +28,38 @@ OfferLoop 是一套围绕求职事实、材料沉淀和能力成长运行的闭�
 
 三张 Base 保存企业、投递和笔面试事实；知识库保存用户画像、简历、经历、训练和复盘文档。Loop Runtime 只保存工作流实例、幂等记录、能力观察和待办，不取代业务真源。
 
-## 安装与升级
+## 安装与升级（开发版）
+
+当前开发版尚未与公开仓库同步。先确认 GitHub 账号能够访问私有开发仓库，再克隆代码：
 
 ```bash
+gh auth status -h github.com
+gh repo view riwonswain-ovo/OfferLoop-development
+gh repo clone riwonswain-ovo/OfferLoop-development
+cd OfferLoop-development
+```
+
+macOS 和 Linux 先预演，再安装并核验：
+
+```bash
+python3 scripts/install_offerloop.py --agent codex --dry-run
+python3 scripts/install_offerloop.py --agent codex
+python3 scripts/install_offerloop.py --agent codex --verify
 python3 scripts/install_offerloop.py --agent codex --setup
 python3 scripts/install_offerloop.py --agent codex --upgrade
-python3 scripts/install_offerloop.py --agent codex --verify
 python3 scripts/install_offerloop.py --deploy-workbench /path/to/miaoda-project
 ```
+
+Windows 使用：
+
+```powershell
+py -3 scripts/install_offerloop.py --agent codex --dry-run
+py -3 scripts/install_offerloop.py --agent codex
+py -3 scripts/install_offerloop.py --agent codex --verify
+```
+
+`--agent` 支持 `codex`、`claude-code`、`hermes-agent` 和 `workbuddy`。首次建立飞书空间时使用
+`--setup`；已有安装升级时使用 `--upgrade`。
 
 安装与升级均为幂等操作：不会复制三张 Base、知识库节点或已有文档。安装器会安装 9 个用户 Skill，并把管理脚本放入隐藏的 `.offerloop-runtime`。
 
