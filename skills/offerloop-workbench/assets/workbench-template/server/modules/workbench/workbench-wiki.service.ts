@@ -234,7 +234,7 @@ export class WorkbenchWikiService {
       return `${OFFERLOOP_WIKI_HOST}/sheets/${source.obj_token}`;
     }
     if (source.obj_type === 'bitable') {
-      return `${OFFERLOOP_WIKI_HOST}/base/${source.obj_token}`;
+      return `${OFFERLOOP_WIKI_HOST}/wiki/${source.node_token}`;
     }
     return undefined;
   }

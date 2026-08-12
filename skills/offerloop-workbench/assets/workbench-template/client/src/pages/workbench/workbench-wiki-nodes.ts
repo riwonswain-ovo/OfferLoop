@@ -1,5 +1,11 @@
 import type { WorkbenchWikiNode } from '@shared/api.interface';
 
+const EMBEDDABLE_WIKI_OBJECT_TYPES: ReadonlySet<string> = new Set([
+  'docx',
+  'sheet',
+  'bitable',
+]);
+
 const normalizeWikiTitle = (title: string): string =>
   title.trim().replace(/\|/gu, '｜').replace(/\s+/gu, '');
 
@@ -40,3 +46,7 @@ export const isWikiFolderNode = (node: WorkbenchWikiNode): boolean =>
   node.hasChildren ||
   node.children.length > 0 ||
   isStructuralWikiTitle(node.title);
+
+export const isEmbeddableWikiNode = (node: WorkbenchWikiNode): boolean =>
+  Boolean(node.documentUrl) &&
+  EMBEDDABLE_WIKI_OBJECT_TYPES.has(node.objectType);

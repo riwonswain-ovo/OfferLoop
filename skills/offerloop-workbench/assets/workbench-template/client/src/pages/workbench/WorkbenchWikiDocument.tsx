@@ -21,6 +21,7 @@ import {
   getWorkbenchWikiDocumentPreview,
 } from '@client/src/api';
 import { useExternalScript } from '@client/src/lib/external-script';
+import { isEmbeddableWikiNode } from './workbench-wiki-nodes';
 import {
   Alert,
   AlertDescription,
@@ -99,6 +100,7 @@ const WorkbenchWikiDocument: React.FC<WorkbenchWikiDocumentProps> = ({
   node,
   onBack,
 }) => {
+  const isEmbeddable: boolean = isEmbeddableWikiNode(node);
   const mountRef = useRef<HTMLDivElement>(null);
   const embedFailureHandledRef = useRef<boolean>(false);
   const previewRequestIdRef = useRef<number>(0);
@@ -107,7 +109,7 @@ const WorkbenchWikiDocument: React.FC<WorkbenchWikiDocumentProps> = ({
   const [authorizationUrl, setAuthorizationUrl] = useState<string>('');
   const [retryCount, setRetryCount] = useState<number>(0);
   const [embedEnabled, setEmbedEnabled] = useState<boolean>(
-    Boolean(node.documentUrl),
+    isEmbeddable,
   );
   const [preview, setPreview] =
     useState<WorkbenchWikiDocumentPreviewResponse | null>(null);
@@ -124,9 +126,9 @@ const WorkbenchWikiDocument: React.FC<WorkbenchWikiDocumentProps> = ({
     setPreviewLoading(false);
     setAuthorizationUrl('');
     setError('');
-    setLoading(Boolean(node.documentUrl));
-    setEmbedEnabled(Boolean(node.documentUrl));
-  }, [node.documentUrl, node.nodeToken]);
+    setLoading(isEmbeddable);
+    setEmbedEnabled(isEmbeddable);
+  }, [isEmbeddable, node.documentUrl, node.nodeToken]);
 
   useEffect(() => {
     if (node.objectType !== 'docx' || embedEnabled) {
@@ -176,7 +178,7 @@ const WorkbenchWikiDocument: React.FC<WorkbenchWikiDocumentProps> = ({
     }
     if (scriptStatus === 'error') {
       setLoading(false);
-      setError('飞书文档组件加载失败，请刷新后重试。');
+      setError('飞书内容组件加载失败，请刷新后重试。');
       embedFailureHandledRef.current = true;
       setEmbedEnabled(false);
       return;
@@ -223,7 +225,7 @@ const WorkbenchWikiDocument: React.FC<WorkbenchWikiDocumentProps> = ({
         }
         mountTimeout = window.setTimeout((): void => {
           failEmbedding(
-            '飞书文档加载时间过长。你可以重新加载，或先在飞书中打开。',
+            '飞书内容加载时间过长。你可以重新加载，或先在飞书中打开。',
           );
         }, 15_000);
 
@@ -265,13 +267,13 @@ const WorkbenchWikiDocument: React.FC<WorkbenchWikiDocumentProps> = ({
           },
           onAuthError: (authError: unknown): void => {
             const detail = summarizeComponentError(authError);
-            logger.error(`飞书文档组件鉴权失败：${detail}`);
-            failEmbedding(`飞书文档组件鉴权失败：${detail}`);
+            logger.error(`飞书内容组件鉴权失败：${detail}`);
+            failEmbedding(`飞书内容组件鉴权失败：${detail}`);
           },
           onError: (componentError: unknown): void => {
             const detail = summarizeComponentError(componentError);
-            logger.error(`飞书文档组件运行失败：${detail}`);
-            failEmbedding(`飞书文档组件运行失败：${detail}`);
+            logger.error(`飞书内容组件运行失败：${detail}`);
+            failEmbedding(`飞书内容组件运行失败：${detail}`);
           },
           onMountSuccess: (): void => {
             if (!cancelled) {
@@ -283,17 +285,17 @@ const WorkbenchWikiDocument: React.FC<WorkbenchWikiDocumentProps> = ({
           },
           onMountTimeout: (): void => {
             failEmbedding(
-              '飞书文档加载时间过长。你可以重新加载，或先在飞书中打开。',
+              '飞书内容加载时间过长。你可以重新加载，或先在飞书中打开。',
             );
           },
         });
         await instance.start();
       } catch (renderError: unknown) {
-        logger.error('打开飞书知识库文档失败', renderError);
+        logger.error('打开飞书知识库内容失败', renderError);
         failEmbedding(
           renderError instanceof Error
             ? renderError.message
-            : '飞书文档暂时无法打开',
+            : '飞书内容暂时无法打开',
         );
       }
     };
@@ -362,7 +364,7 @@ const WorkbenchWikiDocument: React.FC<WorkbenchWikiDocumentProps> = ({
         </div>
       </header>
 
-      {!node.documentUrl ? (
+      {!isEmbeddable ? (
         <div className="flex flex-1 items-center justify-center p-6">
           <Alert className="max-w-xl">
             <AlertTitle>该类型暂不支持内嵌阅读</AlertTitle>
@@ -381,19 +383,19 @@ const WorkbenchWikiDocument: React.FC<WorkbenchWikiDocumentProps> = ({
             <div className="absolute inset-0 flex items-center justify-center bg-background/90">
               <div className="flex items-center gap-3 text-sm text-muted-foreground">
                 <LoaderCircle className="size-5 animate-spin text-primary" />
-                正在打开飞书文档…
+                正在打开飞书内容…
               </div>
             </div>
           ) : null}
           {authorizationUrl ? (
             <div className="absolute inset-0 flex items-center justify-center bg-background p-6">
               <div className="max-w-md space-y-4 text-center">
-                <h2 className="text-lg font-semibold">需要连接飞书文档</h2>
+                <h2 className="text-lg font-semibold">需要连接飞书</h2>
                 <p className="text-sm text-muted-foreground">
-                  首次使用时完成一次飞书授权，之后即可在工作台内查看并编辑文档。
+                  首次使用时完成一次飞书授权，之后即可在工作台内查看飞书内容。
                 </p>
                 <Button asChild>
-                  <a href={authorizationUrl}>连接飞书文档</a>
+                  <a href={authorizationUrl}>连接飞书</a>
                 </Button>
               </div>
             </div>
@@ -441,7 +443,7 @@ const WorkbenchWikiDocument: React.FC<WorkbenchWikiDocumentProps> = ({
           {!preview && !previewLoading && (error || previewError) ? (
             <div className="absolute inset-0 flex items-center justify-center bg-background p-6">
               <Alert variant="destructive" className="max-w-lg">
-                <AlertTitle>文档打开失败</AlertTitle>
+                <AlertTitle>飞书内容打开失败</AlertTitle>
                 <AlertDescription className="space-y-3">
                   <p>{error}</p>
                   {previewError ? <p>{previewError}</p> : null}

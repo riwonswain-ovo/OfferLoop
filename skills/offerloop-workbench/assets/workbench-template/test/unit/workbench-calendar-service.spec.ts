@@ -24,6 +24,7 @@ describe('WorkbenchCalendarService', () => {
   });
 
   afterEach(() => {
+    jest.restoreAllMocks();
     Object.keys(env).forEach((key: string): void => {
       delete process.env[key];
     });
@@ -165,5 +166,100 @@ describe('WorkbenchCalendarService', () => {
       jsApiList: ['DocsComponent'],
     });
     expect(componentAuth.response.auth?.signature).toMatch(/^[0-9a-f]{40}$/u);
+  });
+
+  it('reuses access tokens and deduplicates concurrent refreshes', async () => {
+    const now = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
+    const get = jest.fn((url: string) => {
+      if (url.endsWith('/authen/v1/user_info')) {
+        return of({
+          data: { code: 0, data: { open_id: 'ou_test' } },
+        });
+      }
+      if (url.includes('/events/instance_view')) {
+        return of({ data: { code: 0, data: { items: [] } } });
+      }
+      throw new Error(`Unexpected GET ${url}`);
+    });
+    let refreshRequestCount = 0;
+    const post = jest.fn((url: string, body?: { [key: string]: string }) => {
+      if (url.endsWith('/jssdk/ticket/get')) {
+        return of({
+          data: { code: 0, data: { ticket: 'docs-ticket' } },
+        });
+      }
+      if (url.endsWith('/calendar/v4/calendars/primary')) {
+        return of({
+          data: {
+            code: 0,
+            data: {
+              calendars: [{ calendar: { calendar_id: 'primary-calendar' } }],
+            },
+          },
+        });
+      }
+      if (url.endsWith('/authen/v2/oauth/token')) {
+        const refreshing: boolean = body?.grant_type === 'refresh_token';
+        if (refreshing) {
+          refreshRequestCount += 1;
+        }
+        return of({
+          status: 200,
+          data: {
+            code: 0,
+            access_token: refreshing ? 'refreshed-access' : 'initial-access',
+            expires_in: 7200,
+            refresh_token: refreshing ? 'refresh-token-2' : 'refresh-token-1',
+            refresh_token_expires_in: 604800,
+          },
+        });
+      }
+      throw new Error(`Unexpected POST ${url}`);
+    });
+    const service: WorkbenchCalendarService = new WorkbenchCalendarService({
+      get,
+      post,
+    } as unknown as HttpService);
+
+    const disconnected: CalendarLoadResult =
+      await service.getCalendar('', 'miaoda-user');
+    const authorizationUrl: URL = new URL(
+      String(disconnected.response.authorizationUrl),
+    );
+    const oauth: CalendarOAuthResult = await service.completeOAuth(
+      'authorization-code',
+      String(authorizationUrl.searchParams.get('state')),
+      `${service.getStateCookieName()}=${disconnected.stateCookie}`,
+    );
+    const tokenCookieHeader: string = oauth.tokenCookieParts
+      .map(
+        (part: string, index: number): string =>
+          `${service.getTokenCookieNames()[index]}=${part}`,
+      )
+      .join('; ');
+
+    await Promise.all([
+      service.getCalendar(tokenCookieHeader, 'miaoda-user'),
+      service.getDocumentComponentAuth(
+        tokenCookieHeader,
+        'miaoda-user',
+        'https://example.com/app/app_test',
+      ),
+    ]);
+    expect(refreshRequestCount).toBe(0);
+
+    now.mockReturnValue(1_000_000 + 7_201 * 1000);
+    const [calendar, componentAuth] = await Promise.all([
+      service.getCalendar(tokenCookieHeader, 'miaoda-user'),
+      service.getDocumentComponentAuth(
+        tokenCookieHeader,
+        'miaoda-user',
+        'https://example.com/app/app_test',
+      ),
+    ]);
+
+    expect(refreshRequestCount).toBe(1);
+    expect(calendar.response.connected).toBe(true);
+    expect(componentAuth.response.connected).toBe(true);
   });
 });

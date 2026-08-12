@@ -34,6 +34,7 @@ const TOKEN_COOKIE_NAMES = [
 const TOKEN_COOKIE_CHUNK_SIZE = 3000;
 const STATE_COOKIE = 'offerloop-calendar-oauth-state-v3';
 const STATE_LIFETIME_MS = 10 * 60 * 1000;
+const ACCESS_TOKEN_SAFETY_WINDOW_MS = 5 * 60 * 1000;
 const RECRUITING_EVENT_PATTERN =
   /(笔试|测评|机试|面试|群面|[一二三四五]面|HR\s*面)/iu;
 
@@ -91,6 +92,8 @@ interface FeishuJsApiTicket {
 
 interface CalendarTokenSession {
   userId: string;
+  accessToken?: string;
+  accessTokenExpiresAt?: number;
   refreshToken: string;
   refreshTokenExpiresAt: number;
 }
@@ -130,6 +133,10 @@ interface DocumentComponentAuthLoadResult {
 @Injectable()
 export class WorkbenchCalendarService {
   private readonly logger = new Logger(WorkbenchCalendarService.name);
+  private readonly refreshTokenPromises = new Map<
+    string,
+    Promise<CalendarTokenBundle>
+  >();
 
   constructor(private readonly httpService: HttpService) {}
 
@@ -147,7 +154,7 @@ export class WorkbenchCalendarService {
 
     let tokenBundle: CalendarTokenBundle;
     try {
-      tokenBundle = await this.refreshTokenSession(session);
+      tokenBundle = await this.getTokenBundle(session);
     } catch (error: unknown) {
       this.logger.warn(
         '个人日历授权已失效，需要重新连接',
@@ -155,7 +162,6 @@ export class WorkbenchCalendarService {
       );
       return {
         ...this.createAuthorizationResult(userId),
-        clearTokenCookies: true,
       };
     }
 
@@ -241,7 +247,7 @@ export class WorkbenchCalendarService {
 
     let tokenBundle: CalendarTokenBundle;
     try {
-      tokenBundle = await this.refreshTokenSession(session);
+      tokenBundle = await this.getTokenBundle(session);
     } catch (error: unknown) {
       this.logger.warn(
         '飞书文档用户授权已失效，需要重新连接',
@@ -249,7 +255,6 @@ export class WorkbenchCalendarService {
       );
       return {
         ...this.createDocumentAuthorizationResult(userId),
-        clearTokenCookies: true,
       };
     }
 
@@ -350,19 +355,55 @@ export class WorkbenchCalendarService {
     };
   }
 
-  private async refreshTokenSession(
+  private getTokenBundle(
+    session: CalendarTokenSession,
+  ): Promise<CalendarTokenBundle> {
+    if (
+      session.accessToken
+      && Number(session.accessTokenExpiresAt ?? 0)
+        > Date.now() + ACCESS_TOKEN_SAFETY_WINDOW_MS
+    ) {
+      return Promise.resolve({
+        accessToken: session.accessToken,
+        session,
+      });
+    }
+    return this.refreshTokenSession(session);
+  }
+
+  private refreshTokenSession(
     session: CalendarTokenSession,
   ): Promise<CalendarTokenBundle> {
     if (Date.now() >= session.refreshTokenExpiresAt) {
-      throw new ServiceUnavailableException('个人日历刷新授权已过期');
+      return Promise.reject(
+        new ServiceUnavailableException('个人日历刷新授权已过期'),
+      );
     }
-    const token: FeishuOAuthTokenResponse = await this.requestOAuthToken({
-      grant_type: 'refresh_token',
-      client_id: this.requireEnv('FEISHU_APP_ID'),
-      client_secret: this.requireEnv('FEISHU_APP_SECRET'),
-      refresh_token: session.refreshToken,
-    });
-    return this.createTokenBundle(token, session.userId);
+    const pending: Promise<CalendarTokenBundle> | undefined =
+      this.refreshTokenPromises.get(session.refreshToken);
+    if (pending) {
+      return pending;
+    }
+
+    const refreshToken: string = session.refreshToken;
+    const refreshPromise: Promise<CalendarTokenBundle> =
+      this.requestOAuthToken({
+        grant_type: 'refresh_token',
+        client_id: this.requireEnv('FEISHU_APP_ID'),
+        client_secret: this.requireEnv('FEISHU_APP_SECRET'),
+        refresh_token: refreshToken,
+      })
+        .then(
+          (token: FeishuOAuthTokenResponse): CalendarTokenBundle =>
+            this.createTokenBundle(token, session.userId),
+        )
+        .finally((): void => {
+          if (this.refreshTokenPromises.get(refreshToken) === refreshPromise) {
+            this.refreshTokenPromises.delete(refreshToken);
+          }
+        });
+    this.refreshTokenPromises.set(refreshToken, refreshPromise);
+    return refreshPromise;
   }
 
   private async requestOAuthToken(
@@ -414,6 +455,9 @@ export class WorkbenchCalendarService {
       accessToken: String(token.access_token),
       session: {
         userId,
+        accessToken: String(token.access_token),
+        accessTokenExpiresAt:
+          now + Number(token.expires_in ?? 7200) * 1000,
         refreshToken: String(token.refresh_token),
         refreshTokenExpiresAt:
           now + Number(token.refresh_token_expires_in ?? 604800) * 1000,

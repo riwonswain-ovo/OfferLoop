@@ -63,6 +63,20 @@ describe('WorkbenchWikiService', () => {
                     obj_type: 'docx',
                     title: '04｜面试复盘',
                   },
+                  {
+                    has_child: false,
+                    node_token: 'companies-node',
+                    obj_token: 'companies-base',
+                    obj_type: 'bitable',
+                    title: '求职企业清单',
+                  },
+                  {
+                    has_child: false,
+                    node_token: 'tracking-node',
+                    obj_token: 'tracking-sheet',
+                    obj_type: 'sheet',
+                    title: '投递跟踪表',
+                  },
                 ],
                 has_more: false,
               },
@@ -100,7 +114,7 @@ describe('WorkbenchWikiService', () => {
       await service.getDirectory();
 
     expect(directory.spaceName).toBe('OfferLoop 求职空间');
-    expect(directory.nodes).toHaveLength(2);
+    expect(directory.nodes).toHaveLength(4);
     expect(directory.nodes[0].documentUrl).toBe(
       'https://my.feishu.cn/docx/guide-doc',
     );
@@ -108,6 +122,16 @@ describe('WorkbenchWikiService', () => {
     expect(directory.nodes[1].children[0].wikiUrl).toBe(
       'https://my.feishu.cn/wiki/child-node',
     );
+    expect(directory.nodes[2]).toMatchObject({
+      objectType: 'bitable',
+      wikiUrl: 'https://my.feishu.cn/wiki/companies-node',
+      documentUrl: 'https://my.feishu.cn/wiki/companies-node',
+    });
+    expect(directory.nodes[3]).toMatchObject({
+      objectType: 'sheet',
+      wikiUrl: 'https://my.feishu.cn/wiki/tracking-node',
+      documentUrl: 'https://my.feishu.cn/sheets/tracking-sheet',
+    });
 
     const preview = await service.getDocumentPreview('guide-node');
     expect(preview.content).toBe('OfferLoop 使用指南正文');
