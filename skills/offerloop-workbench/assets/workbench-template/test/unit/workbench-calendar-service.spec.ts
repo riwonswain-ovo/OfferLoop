@@ -153,16 +153,19 @@ describe('WorkbenchCalendarService', () => {
     expect(response.events).toHaveLength(1);
     expect(response.events[0].eventId).toBe('exam-event');
 
+    process.env.WORKBENCH_PUBLIC_URL =
+      'https://ccn3d1ndeqey.aiforce.cloud/app/app_test';
     const componentAuth = await service.getDocumentComponentAuth(
       tokenCookieHeader,
       'miaoda-user',
-      'https://example.com/app/app_test?docsPoc=1&document=wiki-node',
+      'https://ccn3d1ndeqey.feishuapp.com/app/app_test'
+        + '?docsPoc=1&document=wiki-node',
     );
     expect(componentAuth.response.connected).toBe(true);
     expect(componentAuth.response.auth).toMatchObject({
       openId: 'ou_test',
       appId: 'cli_test',
-      url: 'https://example.com/app/app_test',
+      url: 'https://ccn3d1ndeqey.feishuapp.com/app/app_test',
       jsApiList: ['DocsComponent'],
     });
     expect(componentAuth.response.auth?.signature).toMatch(/^[0-9a-f]{40}$/u);
@@ -170,6 +173,8 @@ describe('WorkbenchCalendarService', () => {
 
   it('reuses access tokens and deduplicates concurrent refreshes', async () => {
     const now = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
+    const initialAccessToken: string = 'a'.repeat(3500);
+    const initialRefreshToken: string = 'r'.repeat(3500);
     const get = jest.fn((url: string) => {
       if (url.endsWith('/authen/v1/user_info')) {
         return of({
@@ -207,9 +212,11 @@ describe('WorkbenchCalendarService', () => {
           status: 200,
           data: {
             code: 0,
-            access_token: refreshing ? 'refreshed-access' : 'initial-access',
+            access_token: refreshing ? 'refreshed-access' : initialAccessToken,
             expires_in: 7200,
-            refresh_token: refreshing ? 'refresh-token-2' : 'refresh-token-1',
+            refresh_token: refreshing
+              ? 'refresh-token-2'
+              : initialRefreshToken,
             refresh_token_expires_in: 604800,
           },
         });
@@ -237,6 +244,14 @@ describe('WorkbenchCalendarService', () => {
           `${service.getTokenCookieNames()[index]}=${part}`,
       )
       .join('; ');
+
+    expect(oauth.tokenCookieParts.length).toBeGreaterThan(3);
+    expect(oauth.tokenCookieParts.length).toBeLessThanOrEqual(
+      service.getTokenCookieNames().length,
+    );
+    expect(oauth.tokenCookieParts.every(
+      (part: string): boolean => part.length <= 3000,
+    )).toBe(true);
 
     await Promise.all([
       service.getCalendar(tokenCookieHeader, 'miaoda-user'),

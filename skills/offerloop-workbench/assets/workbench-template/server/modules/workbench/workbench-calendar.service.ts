@@ -30,6 +30,8 @@ const TOKEN_COOKIE_NAMES = [
   'offerloop-calendar-session-v3-0',
   'offerloop-calendar-session-v3-1',
   'offerloop-calendar-session-v3-2',
+  'offerloop-calendar-session-v3-3',
+  'offerloop-calendar-session-v3-4',
 ];
 const TOKEN_COOKIE_CHUNK_SIZE = 3000;
 const STATE_COOKIE = 'offerloop-calendar-oauth-state-v3';
@@ -573,6 +575,7 @@ export class WorkbenchCalendarService {
     const allowedHosts: Set<string> = new Set([
       publicUrl.host,
       publicUrl.host.replace(/\.feishuapp\.com$/u, '.aiforce.cloud'),
+      publicUrl.host.replace(/\.aiforce\.cloud$/u, '.feishuapp.com'),
     ]);
     if (
       parsed.protocol !== 'https:'
