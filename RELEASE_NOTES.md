@@ -2,7 +2,7 @@
 
 发布日期：2026-08-13
 
-本版本把 OfferLoop 的公开安装边界收敛为“9 个求职 Skill + 可选配套飞书知识库”，不包含工作台、妙搭应用、公网服务、机器人或定时自动化。
+本版本把 OfferLoop 的公开安装入口收敛为“完整安装 9 个求职 Skill”与“只安装单个 Skill”两种方式，并支持用户按需接入配套飞书知识库。
 
 ## 新增
 
@@ -35,7 +35,7 @@ python3 scripts/setup_offerloop.py \
 
 - 旧版 `scripts/install_offerloop.py` 仍可管理本地 Skill，但不再代表飞书工作区已经完成初始化。
 - 已有用户升级时保留本地用户文件、三张 Base、知识库内容和非敏感 locator。
-- 完整模式的工作台状态默认为 `not_selected`，不影响核心安装结果。
+- 配套飞书知识库属于可选线上配置，下载和本地安装不会自动创建飞书资源。
 - 单 Skill 模式跳过全局画像门禁，默认在 Chat 中完成当前能力的交付。
 
 ## 验证
@@ -43,7 +43,7 @@ python3 scripts/setup_offerloop.py \
 - GitHub Actions 在 Ubuntu、macOS、Windows 上完成冷安装与幂等性检查。
 - Python 3.10 和 3.12 测试通过。
 - 9 个 Skill 均完成独立安装和验证覆盖。
-- Loop Runtime 31 项测试通过，工作台模板 36 项基线测试通过。
+- Loop Runtime 31 项测试通过，配套模板构建与基线测试通过。
 
 ## 验收说明
 

@@ -937,7 +937,7 @@ class RepositoryContractTest(unittest.TestCase):
             "求职进展",
             "笔面试中心",
             "能力成长",
-            "不恢复本机 Agent Worker",
+            "配套飞书知识库是**可选的线上配置**",
         ):
             self.assertIn(expected, readme)
         self.assertNotIn("Skills-11", readme)
@@ -954,7 +954,7 @@ class RepositoryContractTest(unittest.TestCase):
             "python3 scripts/install_offerloop.py --agent codex --verify",
             readme,
         )
-        self.assertIn("--deploy-workbench", readme)
+        self.assertIn("--mode single --skill mock-lab", readme)
         self.assertIn("幂等", readme)
         self.assertIn("不会复制三张 Base", readme)
 
@@ -975,12 +975,11 @@ class RepositoryContractTest(unittest.TestCase):
     def test_readme_follows_the_new_user_journey(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         sections = (
-            "## 9 个长期 Skill",
-            "## 三条闭环",
-            "## 安装与升级",
-            "## 固定知识库结构",
-            "## Loop Runtime",
-            "## 工作台边界",
+            "## ✨ OfferLoop 是什么",
+            "## 🚀 安装 OfferLoop",
+            "## 🧭 认识 9 个 Skill",
+            "## 🗂️ 配套飞书知识库（可选）",
+            "## 🔄 升级与迁移",
         )
         positions = [readme.index(section) for section in sections]
         self.assertEqual(positions, sorted(positions))
@@ -993,8 +992,11 @@ class RepositoryContractTest(unittest.TestCase):
         for text in (readme, onboarding):
             self.assertIn("三张", text)
             self.assertIn("Base", text)
-            self.assertIn("工作台", text)
-            self.assertIn("Agent Worker", text)
+        self.assertIn("配套飞书知识库", readme)
+        self.assertIn("可选", readme)
+        self.assertNotIn("工作台", readme)
+        self.assertIn("工作台", onboarding)
+        self.assertIn("Agent Worker", onboarding)
         self.assertIn("--setup", onboarding)
         self.assertIn("--verify", onboarding)
         self.assertIn("`.offerloop-runtime`", onboarding)
