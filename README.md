@@ -6,7 +6,7 @@
 
 **招聘机会 · 求职进展 · 笔面试提醒 · 经历深挖 · 定制简历 · 能力训练 · 面试准备与复盘**
 
-[![Release](https://img.shields.io/badge/Release-v0.1.0--alpha.10-7C3AED)](https://github.com/riwonswain-ovo/OfferLoop/releases/tag/v0.1.0-alpha.10)
+[![Release](https://img.shields.io/badge/Release-v0.1.0--alpha.11-7C3AED)](https://github.com/riwonswain-ovo/OfferLoop/releases/tag/v0.1.0-alpha.11)
 [![Skills](https://img.shields.io/badge/Skills-9-2563EB)](#-认识-9-个-skill)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![Agents](https://img.shields.io/badge/Agents-4-0F766E)](#支持的-agent)
