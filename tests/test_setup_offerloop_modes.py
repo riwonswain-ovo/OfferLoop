@@ -127,7 +127,7 @@ class OfferLoopSetupModesTest(unittest.TestCase):
                     "wiki_space_id": "space_id",
                     "workspace_home_node_token": "home_node",
                     "workspace_core_data_node_token": "core_node",
-                    "schema_version": 5,
+                    "schema_version": 6,
                 }
             )
             self.setup._write_private_json(config_path, config)

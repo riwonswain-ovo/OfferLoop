@@ -2,7 +2,7 @@
 
 OfferLoop 支持完整模式和单 Skill 模式。初始化、升级和验证由仓库中的
 `scripts/setup_offerloop.py` 与安装目录中的 `.offerloop-runtime` 承担。系统不再要求用户调用一次性 Skill。
-完整模式安装 9 个长期用户 Skill、三张 Base 和私有知识库，但不默认部署工作台。
+完整模式安装 9 个长期用户 Skill、三张 Base 和私有知识库。
 
 ## 安装命令
 
@@ -13,7 +13,7 @@ python3 scripts/setup_offerloop.py --agent codex --mode full --verify
 ```
 
 旧版 `python3 scripts/install_offerloop.py --agent codex --setup`、`--upgrade` 和 `--verify` 仍可
-管理本地 Skill，但不代表飞书工作区已完成。工作台只能由用户另行选择和部署。
+管理本地 Skill，但不代表飞书工作区已完成。
 
 重复执行必须幂等：保留原三张 Base 的 token、记录、知识库文档和用户配置，不创建重复节点。
 
@@ -56,4 +56,4 @@ python3 scripts/setup_offerloop.py --agent codex --mode full --verify
 - 求职进展闭环：邀请与完成分离，状态不得因重复或乱序事件倒退。
 - 能力成长闭环：面试产出待验证观察，能力训练读取未解决观察并产生复测项。
 
-生成式任务必须通过原生 Agent 深链接进入，不部署或恢复本机 Agent Worker。
+生成式任务通过原生 Agent 会话进入。

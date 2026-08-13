@@ -6,7 +6,7 @@
 
 **招聘机会 · 求职进展 · 笔面试提醒 · 经历深挖 · 定制简历 · 能力训练 · 面试准备与复盘**
 
-[![Release](https://img.shields.io/badge/Release-v0.1.0--alpha.9-7C3AED)](https://github.com/riwonswain-ovo/OfferLoop/releases/tag/v0.1.0-alpha.9)
+[![Release](https://img.shields.io/badge/Release-v0.1.0--alpha.10-7C3AED)](https://github.com/riwonswain-ovo/OfferLoop/releases/tag/v0.1.0-alpha.10)
 [![Skills](https://img.shields.io/badge/Skills-9-2563EB)](#-认识-9-个-skill)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![Agents](https://img.shields.io/badge/Agents-4-0F766E)](#支持的-agent)
@@ -104,6 +104,10 @@ python3 scripts/setup_offerloop.py --agent codex --mode full --verify
 ```
 
 如果暂时不配置飞书，本地 9 个 Skill 仍然已经安装完成；需要飞书长期沉淀的流程会在实际使用时先询问你的选择。
+
+只有本地安装、模式配置、三张 Base、知识库目录、schema v6 locator 和权限都通过时，完整模式才会
+报告 `ready`。`--record-workspace-verified` 本身不访问飞书，只能由 Agent 在真实线上验收通过后
+执行；安装命令不会复制三张 Base，也不会用示例 URL 冒充已经完成线上 setup。
 
 ### 方式 B：只下载一个 Skill
 

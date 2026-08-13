@@ -193,6 +193,34 @@ const EVENT_STAGE_TO_NEXT_STEP: Record<string, string> = {
   '面试（轮次待确认）': '面试',
 };
 
+const NEXT_STEP_TO_PROGRESS_STATUS: Record<string, string> = {
+  '待反馈': '待反馈',
+  '笔试': '待笔试',
+  '面试': '待面试',
+  '群面': '待群面',
+  '一面': '待一面',
+  '二面': '待二面',
+  '三面': '待三面',
+  'HR面': '待 HR 面',
+  'OC': '待 OC',
+};
+
+const LEGACY_STAGE_TO_PROGRESS_STATUS: Record<string, string> = {
+  '已投递': '待反馈',
+  '笔试': '待笔试',
+  '群面': '待群面',
+  '一面': '待一面',
+  '二面': '待二面',
+  '三面': '待三面',
+  'HR面': '待 HR 面',
+  'Offer': 'Offer',
+  '已结束': '状态待确认',
+};
+
+const MANUAL_PROGRESS_STATUSES: Set<string> = new Set([
+  'Offer', '未通过', '主动放弃', '岗位关闭', '状态待确认',
+]);
+
 const COMPLETED_NODE_RANK: Record<string, number> = {
   '投递完成': 1,
   '笔试完成': 2,
@@ -216,6 +244,20 @@ function stableClientToken(sourceRecordId: string): string {
   const hex: string = bytes.toString('hex');
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}`
     + `-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+function progressStatusFor(fields: Record<string, unknown>): string {
+  const current: string = readText(fields['进展状态']);
+  if (current) {
+    return current;
+  }
+  const result: string = readText(fields['流程结果']);
+  if (['Offer', '未通过', '主动放弃', '岗位关闭'].includes(result)) {
+    return result;
+  }
+  return LEGACY_STAGE_TO_PROGRESS_STATUS[readText(fields['当前阶段'])]
+    ?? NEXT_STEP_TO_PROGRESS_STATUS[readText(fields['下一环节'])]
+    ?? '待反馈';
 }
 
 function stableTaskClientToken(
@@ -616,7 +658,11 @@ export class JobProgressSyncService {
 
     if (existingRecords.length === 0) {
       const fields: Record<string, unknown> = {
+        '进展状态': '待反馈',
+        '最近完成节点': '投递完成',
         '当前阶段': '已投递',
+        '下一环节': '待反馈',
+        '流程结果': '进行中',
         '公司': company,
         '投递岗位': '',
         '投递日期': submittedDate,
@@ -633,6 +679,7 @@ export class JobProgressSyncService {
     let updated: boolean = false;
     for (const existing of existingRecords) {
       const existingComparable: Record<string, unknown> = {
+        '进展状态': progressStatusFor(existing.fields),
         '当前阶段': readText(existing.fields['当前阶段']) || '已投递',
         '公司': readText(existing.fields['公司']),
         '投递岗位': readText(existing.fields['投递岗位']),
@@ -822,9 +869,11 @@ export class JobProgressSyncService {
     const progressRecord: FeishuRecord | null = progressRecordId
       ? await this.getProgressRecord(progressRecordId)
       : null;
-    const flowResult: string = readText(progressRecord?.fields['流程结果']);
-    if (flowResult && flowResult !== '进行中') {
-      throw new BadRequestException(`progress flow is already ${flowResult}`);
+    const progressStatus: string = progressRecord
+      ? progressStatusFor(progressRecord.fields)
+      : '';
+    if (MANUAL_PROGRESS_STATUSES.has(progressStatus)) {
+      throw new BadRequestException(`progress status is ${progressStatus}`);
     }
     const alreadyUpdated: boolean = currentCompletionStatus === targetCompletionStatus;
     if (!alreadyUpdated) {
@@ -851,7 +900,10 @@ export class JobProgressSyncService {
     const nextStep: string = EVENT_STAGE_TO_NEXT_STEP[
       readText(pendingRecords[0]?.fields['环节'])
     ] ?? '待反馈';
-    const progressFields: Record<string, unknown> = { '下一环节': nextStep };
+    const progressFields: Record<string, unknown> = {
+      '进展状态': NEXT_STEP_TO_PROGRESS_STATUS[nextStep] ?? '状态待确认',
+      '下一环节': nextStep,
+    };
     if (action === 'completed') {
       progressFields['最近完成节点'] = chooseLaterCompletedNode(
         readText(progressRecord.fields['最近完成节点']),

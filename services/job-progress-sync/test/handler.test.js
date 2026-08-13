@@ -142,14 +142,15 @@ test("creates a progress record for the first submitted event", async () => {
   });
   assert.deepEqual(created, [
     {
+      "进展状态": "待反馈",
       "最近完成节点": "投递完成",
       "下一环节": "待反馈",
       "流程结果": "进行中",
+      "当前阶段": "已投递",
       "公司": "示例公司",
       "投递岗位": "",
       "投递日期": "2026-07-17",
       "岗位 JD": "",
-      "投递简历版本": "",
       "公告链接": "https://example.com/notice",
       "投递链接": "https://example.com/apply",
       "企业清单 record_id": "rec_source",
@@ -171,7 +172,6 @@ test("repeat submission preserves user fields and later interview stage", async 
           "投递岗位": "AI 产品经理",
           "投递日期": "2026-07-10",
           "岗位 JD": "负责 AI 产品规划",
-          "投递简历版本": "互联网产品经理岗 - 简历",
           "原招聘信息": "https://old.example/source",
           "公告链接": "https://old.example/notice",
           "投递链接": "https://old.example/apply",
@@ -212,10 +212,7 @@ test("repeat submission preserves user fields and later interview stage", async 
   assert.equal(updates[0].fields["投递岗位"], "AI 产品经理");
   assert.equal(updates[0].fields["投递日期"], "2026-07-10");
   assert.equal(updates[0].fields["岗位 JD"], "负责 AI 产品规划");
-  assert.equal(
-    updates[0].fields["投递简历版本"],
-    "互联网产品经理岗 - 简历",
-  );
+  assert.equal(updates[0].fields["进展状态"], "待二面");
   assert.equal(updates[0].fields["公司"], "新公司名");
   assert.equal(updates[0].fields["公告链接"], "https://new.example/notice");
   assert.equal(updates[0].fields["投递链接"], "https://new.example/apply");
@@ -227,6 +224,7 @@ test("repeat submission preserves user fields and later interview stage", async 
 test("identical retry does not write the progress record again", async () => {
   let updateCount = 0;
   const existingFields = {
+    "进展状态": "待反馈",
     "最近完成节点": "投递完成",
     "下一环节": "待反馈",
     "流程结果": "进行中",
@@ -234,7 +232,6 @@ test("identical retry does not write the progress record again", async () => {
     "投递岗位": "",
     "投递日期": "2026-07-17",
     "岗位 JD": "",
-    "投递简历版本": "",
     "公告链接": "https://example.com/notice",
     "投递链接": "https://example.com/apply",
     "企业清单 record_id": "rec_source",

@@ -186,7 +186,7 @@ class OfferLoopSetupTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "confirmation"):
                 configure.enable_coaching(path)
             migrated = configure.enable_coaching(path, confirmed=True)
-            self.assertEqual(migrated["schema_version"], 5)
+            self.assertEqual(migrated["schema_version"], 6)
             self.assertEqual(migrated["lark_profile"], "offerloop")
             self.assertIn("artifact_storage", migrated)
             self.assertEqual(

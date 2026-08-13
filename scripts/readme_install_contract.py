@@ -92,7 +92,7 @@ def main() -> None:
         raise AssertionError("README must not expose internal development workflow")
     if "配套飞书知识库是**可选的线上配置**" not in readme:
         raise AssertionError("README must make the Feishu knowledge base optional")
-    if "工作台" in readme:
+    if "工作台" in readme or "offerloop-workbench" in readme:
         raise AssertionError("README must not mention the unreleased optional product")
     if "OfferLoop-development" in optional_app_task:
         raise AssertionError("shipped workbench must not require the private repository")

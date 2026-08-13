@@ -17,9 +17,10 @@
 ## 执行顺序
 
 1. 完整读取同目录的 `onboarding.md`、`one-click-deploy.md` 和
-   `verification-matrix.md`，但跳过其中所有工作台、妙搭、公网部署和自动化步骤。
+   `verification-matrix.md`，并读取 `progress-schema-v6.md`；但跳过其中所有工作台、妙搭、
+   公网部署和自动化步骤。
 2. 确认或创建三张独立 Base：`OfferLoop 企业清单`、`OfferLoop 求职进展`、
-   `OfferLoop 笔面试中心`。按 schema v5 创建字段、视图和必要的关联，保留已有有效数据。
+   `OfferLoop 笔面试中心`。按 schema v6 创建字段、视图和必要的关联，保留已有有效数据。
 3. 确认或创建私有知识库，并建立固定目录：
 
    ```text
@@ -37,7 +38,7 @@
 4. `01｜核心求职数据` 下只创建或复用三张 Base 的快捷入口。不要预建空用户画像文档；首次真实
    对话由 `career-profile` 在用户确认第一条内容后创建。
 5. 使用隐藏运行时的 `scripts/configure.py` 保存非敏感 locator，包括固定 lark profile、三张 Base
-   URL、知识空间 ID、首页节点、核心数据节点和 `schema_version=5`。凭证仍由 lark-cli 或系统密钥
+   URL、知识空间 ID、首页节点、核心数据节点和 `schema_version=6`。凭证仍由 lark-cli 或系统密钥
    存储管理。
 6. 按 `verification-matrix.md` 做只读线上验收。确认本地文件、三张 Base、知识库结构、locator 和
    权限全部通过后，运行

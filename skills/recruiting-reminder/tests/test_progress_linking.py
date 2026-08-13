@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from event_model import (
     decide_completion_status_sync,
     link_progress_records,
-    next_progress_stage,
+    next_progress_status,
     reconciled_completion_status,
     route_event,
 )
@@ -20,6 +20,7 @@ PROGRESS = [
         "fields": {
             "公司": "示例公司",
             "投递岗位": "AI 产品经理",
+            "进展状态": "待反馈",
             "当前阶段": "已投递",
         },
     },
@@ -28,6 +29,7 @@ PROGRESS = [
         "fields": {
             "公司": "示例公司",
             "投递岗位": "产品战略实习生",
+            "进展状态": "待一面",
             "当前阶段": "一面",
         },
     },
@@ -36,6 +38,7 @@ PROGRESS = [
         "fields": {
             "公司": "示例公司",
             "投递岗位": "已结束岗位",
+            "进展状态": "未通过",
             "当前阶段": "已结束",
         },
     },
@@ -92,14 +95,39 @@ class ProgressLinkingTest(unittest.TestCase):
         self.assertEqual(result["record_ids"], [])
         self.assertEqual(result["candidate_ids"], ["rec_product", "rec_strategy"])
 
-    def test_stage_advancement_is_monotonic_and_manual_terminal_stages_are_protected(self):
-        self.assertEqual(next_progress_stage("已投递", "笔试"), "笔试")
-        self.assertEqual(next_progress_stage("二面", "一面"), "二面")
-        self.assertEqual(next_progress_stage("Offer", "HR面"), "Offer")
-        self.assertEqual(next_progress_stage("已结束", "一面"), "已结束")
+    def test_manual_review_status_is_not_auto_linked(self):
+        event = route_event(
+            {
+                "event_type": "面试",
+                "raw_stage": "一面",
+                "source_mail_id": "mail-review",
+                "company": "示例公司",
+                "position": "待确认岗位",
+            }
+        )
+        records = [
+            {
+                "record_id": "rec_review",
+                "fields": {
+                    "公司": "示例公司",
+                    "投递岗位": "待确认岗位",
+                    "进展状态": "状态待确认",
+                },
+            }
+        ]
+
+        result = link_progress_records(event, records)
+
+        self.assertEqual(result["status"], "unmatched")
+
+    def test_status_advancement_is_monotonic_and_manual_statuses_are_protected(self):
+        self.assertEqual(next_progress_status("待反馈", "笔试"), "待笔试")
+        self.assertEqual(next_progress_status("待二面", "一面"), "待二面")
+        self.assertEqual(next_progress_status("Offer", "HR面"), "Offer")
+        self.assertEqual(next_progress_status("状态待确认", "一面"), "状态待确认")
         self.assertEqual(
-            next_progress_stage("一面", "面试（轮次待确认）"),
-            "一面",
+            next_progress_status("待一面", "面试（轮次待确认）"),
+            "待一面",
         )
 
     def test_main_status_change_propagates_to_child(self):
