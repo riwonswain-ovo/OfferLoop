@@ -73,6 +73,7 @@ def main() -> None:
         f"python3 {SETUP_SCRIPT} --agent codex --mode full",
         f"python3 {SETUP_SCRIPT} --agent codex --mode full --verify",
         f"python3 {SETUP_SCRIPT} --agent codex --mode single --skill mock-lab",
+        "python3 scripts/install_offerloop.py --agent codex --verify",
         "git sparse-checkout set scripts skills/mock-lab",
         "--record-workspace-verified",
     )
@@ -90,6 +91,22 @@ def main() -> None:
         )
     if "OfferLoop-development" not in readme or "Pull Request" not in readme:
         raise AssertionError("README must separate development and public release repositories")
+    for marker in (
+        "早期双 Skill 用户迁移到 9 个 Skill",
+        ".offerloop-backups/<时间戳>/",
+        "`needs_setup` 只表示可选的线上空间尚未接入",
+    ):
+        if marker not in readme:
+            raise AssertionError(f"README is missing legacy two-Skill migration guidance: {marker}")
+    for marker in (
+        "双 Skill 用户的最短迁移路径",
+        "scripts/install_offerloop.py --agent codex --verify",
+        "Schema v6 与旧内容兼容",
+    ):
+        if marker not in migration:
+            raise AssertionError(f"MIGRATION.md is missing current migration guidance: {marker}")
+    if "schema v5" in migration or "--confirm-schema-v5" in migration:
+        raise AssertionError("MIGRATION.md must not direct users to the retired schema v5 flow")
     if "工作台" in readme or "offerloop-workbench" in readme:
         raise AssertionError("README must not expose internal application experiments")
     if "OfferLoop-development" in workbench_task:

@@ -110,6 +110,28 @@ python3 scripts/setup_offerloop.py --agent codex --mode single --skill mock-lab 
 
 ### 升级
 
+#### 早期双 Skill 用户迁移到 9 个 Skill
+
+以前只安装过 `job-collection` 和 `recruiting-reminder` 的用户不要先删除旧目录，也不要重新创建
+已有 Base。先把最新版下载到新目录并保留原下载目录：
+
+```bash
+git clone https://github.com/riwonswain-ovo/OfferLoop.git OfferLoop-latest
+cd OfferLoop-latest
+python3 scripts/setup_offerloop.py --agent codex --mode full --dry-run
+```
+
+预演显示 `conflict` 是防覆盖保护。确认同名目录属于旧版 OfferLoop 后再执行：
+
+```bash
+python3 scripts/setup_offerloop.py --agent codex --mode full --upgrade
+python3 scripts/install_offerloop.py --agent codex --verify
+```
+
+安装器会安装 9 个 Skill，并把旧副本保存到 Agent 配置目录下的
+`.offerloop-backups/<时间戳>/`。`needs_setup` 只表示可选的线上空间尚未接入，不代表本地安装失败。
+旧配置、邮件去重状态、双 Base 兼容、飞书接管和回滚步骤见 [MIGRATION.md](MIGRATION.md)。
+
 先预演，再只升级当前选择的模式：
 
 ```bash

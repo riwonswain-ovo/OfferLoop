@@ -958,6 +958,23 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertIn("幂等", readme)
         self.assertIn("不会复制三张 Base", readme)
 
+    def test_legacy_two_skill_users_have_a_safe_nine_skill_migration_path(self):
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        migration = (ROOT / "MIGRATION.md").read_text(encoding="utf-8")
+        for text in (readme, migration):
+            self.assertIn("`job-collection`", text)
+            self.assertIn("`recruiting-reminder`", text)
+            self.assertIn("--mode full --dry-run", text)
+            self.assertIn("--mode full --upgrade", text)
+            self.assertIn("scripts/install_offerloop.py --agent codex --verify", text)
+            self.assertIn(".offerloop-backups/<时间戳>/", text)
+            self.assertIn("needs_setup", text)
+        self.assertIn("旧双 Base", migration)
+        self.assertIn("processed_emails.json", migration)
+        self.assertIn("Schema v6 与旧内容兼容", migration)
+        self.assertNotIn("schema v5", migration)
+        self.assertNotIn("--confirm-schema-v5", migration)
+
     def test_workbench_task_links_do_not_require_the_private_repository(self):
         task_link = (
             SKILLS
