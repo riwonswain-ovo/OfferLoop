@@ -1,4 +1,0 @@
-interface:
-  display_name: "简历深挖"
-  short_description: "按当前简历版本与投递方向深挖经历，保存专属训练文档"
-  default_prompt: "Use $resume-deepthink to confirm my target direction, select a current resume version, and produce its deep-dive interview document."

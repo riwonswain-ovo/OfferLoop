@@ -1,0 +1,132 @@
+{
+  "skill": "experience-deepthink",
+  "version": "0.6.0",
+  "test_cases": [
+    {
+      "id": "should-produce-dual-artifacts-01",
+      "type": "should_trigger",
+      "prompt": "这段项目我已经深挖完了，请整理最终产物。",
+      "expected_behavior": "若事实主线已稳定，交付两份独立 Markdown：细节复原稿按固定八章保存事实；面试逐字稿按固定 12 题组织表达，并且只能使用细节复原稿中的事实。若仍处于阶段一，则只维护细节复原稿。",
+      "notes": "双阶段双产物输出契约"
+    },
+    {
+      "id": "edge-dual-artifact-missing-story-01",
+      "type": "edge_case",
+      "prompt": "项目里没有明显冲突，但还是帮我把最终细节复原稿和逐字稿都写完整。",
+      "expected_behavior": "仍交付细节复原稿与面试逐字稿两份产物；冲突题保留具体待补项，不编造冲突。",
+      "notes": "双产物与故事真实性边界"
+    },
+    {
+      "id": "should-trigger-audit-01",
+      "type": "should_trigger",
+      "prompt": "我想深挖一段 AI 合同审核产品经历，目标是 AI 产品经理。我们做了规则库、风险分级和人工复核，但我总觉得讲得很浅。",
+      "expected_behavior": "调用 experience-deepthink，命中 AI 产品与审核专项；保持一题一答，优先用审核五问或抽查一条规则建立证据链。",
+      "notes": "AI 审核正例"
+    },
+    {
+      "id": "should-trigger-action-01",
+      "type": "should_trigger",
+      "prompt": "帮我深挖一个能根据聊天内容创建售后工单并自动分配负责人的 Agent 项目，我投智能体产品经理。",
+      "expected_behavior": "调用 experience-deepthink，命中行动型 Agent；优先追问业务对象、身份权限、状态、确认、审计或失败恢复中的一个高风险缺口。",
+      "notes": "行动 Agent 正例"
+    },
+    {
+      "id": "should-trigger-generation-01",
+      "type": "should_trigger",
+      "prompt": "我做了 Planner、Writer、Reviewer 三个 Agent 来生成投标文件，想把这段经历挖深。",
+      "expected_behavior": "调用 experience-deepthink，命中 Agent 与多角色内容生成视角；验证拆分必要性、结构化交接和有限审核闭环。",
+      "notes": "多角色生成正例"
+    },
+    {
+      "id": "should-trigger-agentic-rag-01",
+      "type": "should_trigger",
+      "prompt": "我简历写了 Agentic RAG 规范问答，但其实主要做了 Query Rewrite 和混合检索。帮我深挖看看怎么讲才真实。",
+      "expected_behavior": "调用 experience-deepthink，命中 RAG 与 Agentic RAG 真实性门；不接受标签，追问是否存在反馈驱动的换源、重检索、工具或验证。",
+      "notes": "Agentic RAG 标签审计"
+    },
+    {
+      "id": "should-trigger-confidence-01",
+      "type": "should_trigger",
+      "prompt": "客服 AI 在 confidence 超过 0.8 时自动回复，这是我负责的产品策略，帮我深挖这段经历。",
+      "expected_behavior": "调用 experience-deepthink，追问分数来源、校准数据、分桶实际正确率、阈值对错误和人工量的影响，不把 0.8 当通用标准。",
+      "notes": "Confidence 校准正例"
+    },
+    {
+      "id": "should-trigger-first-json-01",
+      "type": "should_trigger",
+      "prompt": "我做了一个多模态巡检 AI 产品，有 Figma 和架构图，但面试时总被问项目到底怎么落地，想继续深挖。",
+      "expected_behavior": "调用 experience-deepthink，优先寻找真实输入、首个结构化样本、字段来源、Schema 变化或实际成熟度证据。",
+      "notes": "真实性审计正例"
+    },
+    {
+      "id": "should-trigger-evidence-pressure-01",
+      "type": "should_trigger",
+      "prompt": "我已经把 AI 客服项目梳理得差不多了，准备投 AI 产品经理。简历想写“主导 Agent 上线，准确率提升 20%”，你再帮我看看这句话能不能经得住追问。",
+      "expected_behavior": "调用 experience-deepthink，在已有主线后加载 AI 面试证据压力；只选择该强主张，检查 Agent 机制、项目成熟度、指标口径、个人所有权和限制，不直接改整份简历。",
+      "notes": "AI 项目强主张压力检查"
+    },
+    {
+      "id": "edge-campus-maturity-01",
+      "type": "edge_case",
+      "prompt": "我是校招生，做的是课程项目，有 PRD、Figma 和一条 Dify Demo，没有真实用户。想深挖成 AI 产品项目。",
+      "expected_behavior": "调用 experience-deepthink，按校招深度验证场景判断、亲自交付和最小验证；明确成熟度为方案/原型/Demo，不强制生产数据，也不改写成上线项目。",
+      "notes": "校招深度与成熟度边界"
+    },
+    {
+      "id": "should-not-trigger-term-01",
+      "type": "should_not_trigger",
+      "prompt": "Agentic RAG 是什么意思？请给我一个 30 秒面试回答。",
+      "expected_behavior": "不进入经历深挖；这是独立术语准备，应由 interview-prep 或直接解释处理。",
+      "notes": "跨 Skill 诱饵：术语突袭"
+    },
+    {
+      "id": "should-not-trigger-resume-01",
+      "type": "should_not_trigger",
+      "prompt": "这是我的完整简历和字节跳动 JD，请直接帮我改成一页并优化所有项目 bullet。",
+      "expected_behavior": "不进入经历深挖；这是简历定制，应由 resume-tailor 处理，除非用户另行选择一段经历深挖。",
+      "notes": "跨 Skill 诱饵：简历定制"
+    },
+    {
+      "id": "should-not-trigger-mock-01",
+      "type": "should_not_trigger",
+      "prompt": "现在开始模拟 AI 产品经理面试，你当面试官连续问我 20 分钟。",
+      "expected_behavior": "不进入经历深挖；这是正式模拟，应由 mock-lab 处理。",
+      "notes": "跨 Skill 诱饵：模拟面试"
+    },
+    {
+      "id": "edge-chatgpt-helper-01",
+      "type": "edge_case",
+      "prompt": "帮我深挖运营实习。我只是用 ChatGPT 整理过周报，没有设计任何 AI 功能。",
+      "expected_behavior": "调用 experience-deepthink 走运营/通用路线，不加载 Agent、行动 Agent、审核或 RAG 专项。",
+      "notes": "边界：使用 AI 工具不等于 AI 产品"
+    },
+    {
+      "id": "edge-readonly-agent-01",
+      "type": "edge_case",
+      "prompt": "我想深挖一个查询公开旅游攻略的 Agent，它只返回建议，不登录账号，也不写入任何系统。",
+      "expected_behavior": "调用 experience-deepthink 并可加载 Agent/RAG 视角，但不加载行动型 Agent 的完整写入状态机路线。",
+      "notes": "边界：只读 Agent"
+    },
+    {
+      "id": "edge-rule-audit-01",
+      "type": "edge_case",
+      "prompt": "我做了一个完全按固定关键词和正则运行的内容审核工具，没有 LLM。帮我深挖这个产品项目。",
+      "expected_behavior": "调用 experience-deepthink 的产品与审核视角，但不得因为岗位或场景含审核就虚构 AI/Agent 机制；重点深挖规则、证据、误报漏报和产品价值。",
+      "notes": "边界：审核产品不一定是 AI"
+    },
+    {
+      "id": "should-trigger-ai-coding-delivery-01",
+      "type": "should_trigger",
+      "prompt": "我用 Codex 做了一个可访问的客服后台，想深挖成 AI 产品经理项目。PRD 是我写的，代码基本由 Agent 生成。",
+      "expected_behavior": "调用 experience-deepthink 并加载 AI Coding 产品交付视角；区分本人、Agent、模板和平台贡献，沿 Spec、系统边界、人工验收、部署与成熟度选择一个证据缺口追问。",
+      "notes": "AI Coding 交付正例"
+    },
+    {
+      "id": "edge-ai-code-helper-01",
+      "type": "edge_case",
+      "prompt": "深挖我的产品实习。我只让 ChatGPT 写过一个 Excel 清洗脚本，没有参与应用开发。",
+      "expected_behavior": "调用 experience-deepthink 走产品/通用路线，不加载 AI Coding 产品交付专项，也不把一次性代码辅助写成技术产品经历。",
+      "notes": "AI Coding 触发边界"
+    }
+  ]
+}

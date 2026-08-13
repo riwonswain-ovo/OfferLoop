@@ -1,0 +1,62 @@
+{
+  "skill": "talk-review",
+  "version": "0.2.0",
+  "test_cases": [
+    {
+      "id": "should-trigger-ai-pm-asr-01",
+      "type": "should_trigger",
+      "prompt": "这是我刚结束的 AI 产品经理面试 ASR 和对应简历，请帮我复盘。",
+      "expected_behavior": "调用 talk-review；确认 ASR 后加载 AI 产品复盘视角，区分现场原话、材料事实和推断。",
+      "notes": "AI 产品复盘正例"
+    },
+    {
+      "id": "should-trigger-followup-01",
+      "type": "should_trigger",
+      "prompt": "面试官连续三次问我的准确率怎么算，还问有没有测试集，请根据 ASR 分析。",
+      "expected_behavior": "重建实际追问链，判断现场可能未满足指标口径与物证请求；不能断言面试官认定数据造假。",
+      "notes": "追问行为解码"
+    },
+    {
+      "id": "edge-posthoc-fact-01",
+      "type": "edge_case",
+      "prompt": "ASR 里我没说测试集，其实项目里有，是我面试后想起来的。",
+      "expected_behavior": "事后事实只进入遗漏表达和下一次回答，不能改写成现场已说或加入招聘者正向证据。",
+      "notes": "证据可见性"
+    },
+    {
+      "id": "edge-maturity-conflict-01",
+      "type": "edge_case",
+      "prompt": "简历写上线，现场又说只是 Dify Demo，请帮我复盘。",
+      "expected_behavior": "标记成熟度冲突，分别引用简历和现场证据；建议核实事实并回流 resume-tailor/experience-deepthink。",
+      "notes": "成熟度冲突"
+    },
+    {
+      "id": "should-not-trigger-mock-01",
+      "type": "should_not_trigger",
+      "prompt": "没有 ASR，现在开始模拟 AI 产品经理面试。",
+      "expected_behavior": "不进入真实复盘；应由 mock-lab 处理。",
+      "notes": "跨 Skill 诱饵：模拟面试"
+    },
+    {
+      "id": "should-not-trigger-prep-01",
+      "type": "should_not_trigger",
+      "prompt": "我还没面试，先根据公司 JD 做一份 AI 产品一面准备。",
+      "expected_behavior": "不进入真实复盘；应由 interview-prep 处理。",
+      "notes": "跨 Skill 诱饵：面试准备"
+    },
+    {
+      "id": "should-trigger-ai-coding-review-01",
+      "type": "should_trigger",
+      "prompt": "ASR 里我说用 Codex 独立开发并生产上线，面试官一直问代码是谁写的、有没有监控，请复盘。",
+      "expected_behavior": "调用 talk-review 并加载 AI Coding 产品交付复盘；基于原话检查技术所有权和生产证据，把追问解释为可能的证据请求，不能断言面试官认定造假。",
+      "notes": "AI Coding 真实面试复盘"
+    },
+    {
+      "id": "edge-deployment-link-01",
+      "type": "edge_case",
+      "prompt": "我现场给了部署链接，但没说用户、测试和故障处理，面试官很快换题了。",
+      "expected_behavior": "只能指出部署链接没有覆盖完整生产证据；换题可能因时间或信息已足够，不能断言该项目通过或失败。",
+      "notes": "成熟度与意图推断边界"
+    }
+  ]
+}

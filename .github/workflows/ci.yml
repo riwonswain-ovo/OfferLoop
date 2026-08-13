@@ -20,7 +20,9 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - name: Install as a new project and verify first-run recovery
+      - name: Validate the documented bundled-installer path
+        run: python scripts/readme_install_contract.py
+      - name: Install, verify, and exercise first-run recovery
         run: python scripts/cold_install_acceptance.py --source .
 
   test:
@@ -38,6 +40,8 @@ jobs:
           node-version: "20"
       - name: Test repository contracts
         run: python -m unittest discover -s tests -v
+      - name: Validate documented bundled-installer contract
+        run: python scripts/readme_install_contract.py
       - name: Check shared AgentSkills compatibility
         run: python scripts/check_skill_compatibility.py
       - name: Test job collection helpers
@@ -56,7 +60,7 @@ jobs:
       fail-fast: false
       matrix:
         template:
-          - skills/offerloop-setup/assets/workbench-template
+          - skills/offerloop-workbench/assets/workbench-template
           - skills/offerloop-setup/assets/progress-sync-template
     steps:
       - uses: actions/checkout@v5

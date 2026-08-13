@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://offerloop.local/schemas/ability-observation.json",
+  "title": "AbilityObservation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "observation_id",
+    "source_skill",
+    "source_artifact_url",
+    "source_run_id",
+    "role_direction",
+    "competency_tag",
+    "observed_behavior",
+    "evidence_summary",
+    "gap",
+    "confidence",
+    "suggested_training",
+    "status",
+    "created_at"
+  ],
+  "properties": {
+    "observation_id": { "type": "string", "pattern": "^obs_[a-f0-9]{16}$" },
+    "source_skill": { "enum": ["mock-lab", "talk-review", "competency-lab"] },
+    "source_artifact_url": { "type": "string", "minLength": 1 },
+    "source_run_id": { "type": "string", "minLength": 1 },
+    "role_direction": { "type": "string", "minLength": 1 },
+    "competency_tag": { "type": "string", "minLength": 1 },
+    "observed_behavior": { "type": "string", "minLength": 1 },
+    "evidence_summary": { "type": "string", "minLength": 1 },
+    "gap": { "type": "string", "minLength": 1 },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "suggested_training": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["candidate", "confirmed", "dismissed", "training", "retest", "resolved"] },
+    "created_at": { "type": "string", "format": "date-time" }
+  }
+}

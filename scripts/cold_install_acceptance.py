@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise the documented multi-Agent install path in an isolated home."""
+"""Exercise the bundled copy installer in isolated Agent homes."""
 
 from __future__ import annotations
 
@@ -7,21 +7,22 @@ import argparse
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
 
 
 SKILL_NAMES = (
-    "offerloop-setup",
+    "career-profile",
     "job-collection",
     "recruiting-reminder",
-    "offerloop-workspace",
-    "resume-deepthink",
+    "experience-deepthink",
+    "resume-tailor",
+    "competency-lab",
     "interview-prep",
     "mock-lab",
     "talk-review",
-    "pm-sense",
 )
 AGENT_ROOTS = {
     "codex": Path(".codex/skills"),
@@ -31,14 +32,14 @@ AGENT_ROOTS = {
 }
 LARK_CLI_RECOVERY = (
     "运行 `npx @larksuite/cli@latest install` 安装 lark-cli；再运行 "
-    "Agent 对应的 `npx skills add larksuite/cli -g -a codex -y`、"
+    "Agent 对应的 `npx skills add larksuite/cli -g -a codex`、"
     "`-a claude-code` 或 `-a hermes-agent` 安装官方 Lark Skills，"
     "然后新开 Agent 会话。WorkBuddy 请在“专家·技能·连接器”中启用飞书连接器，"
     "再新建任务"
 )
 WORKSPACE_SKILLS_RECOVERY = (
     "缺少：lark-base、lark-doc、lark-wiki。运行 "
-    "Agent 对应的 `npx skills add larksuite/cli -g -a codex -y`、"
+    "Agent 对应的 `npx skills add larksuite/cli -g -a codex`、"
     "`-a claude-code` 或 `-a hermes-agent` "
     "安装官方 Lark Skills，然后新开 Agent 会话；WorkBuddy 请在"
     "“专家·技能·连接器”中启用飞书连接器，再新建任务"
@@ -116,6 +117,23 @@ def install_all_agents(source, project, home, env):
         raise AssertionError(f"unexpected welcome catalog: {welcome_skills}")
     roots = {agent: assert_installed(home, agent) for agent in AGENT_ROOTS}
 
+    verify_command = [sys.executable, str(installer)]
+    for agent in AGENT_ROOTS:
+        verify_command.extend(("--agent", agent))
+    verify_command.extend(("--verify", "--json"))
+    verified_report = json.loads(
+        run(verify_command, cwd=project, env=env).stdout
+    )
+    if not verified_report.get("verified"):
+        raise AssertionError(
+            f"documented post-install verification failed: {verified_report}"
+        )
+    if {
+        item["agent"]: item["manifest"]
+        for item in verified_report["results"]
+    } != {agent: "ready" for agent in AGENT_ROOTS}:
+        raise AssertionError("post-install manifest verification failed")
+
     repeated = run(command, cwd=project, env=env)
     repeated_report = json.loads(repeated.stdout)
     repeated_statuses = {
@@ -129,9 +147,19 @@ def install_all_agents(source, project, home, env):
 
 
 def assert_collection_preflight(project, skills_root, env):
-    setup_scripts = skills_root / "offerloop-setup" / "scripts"
+    setup_scripts = skills_root / ".offerloop-runtime" / "scripts"
     configure = setup_scripts / "configure.py"
     preflight = setup_scripts / "preflight.py"
+
+    # The core workspace is mandatory for every capability. Simulate the
+    # separately installed official Lark Skills in this isolated Agent root.
+    for name in ("lark-base", "lark-doc", "lark-wiki"):
+        skill_dir = skills_root / name
+        skill_dir.mkdir(parents=True, exist_ok=True)
+        (skill_dir / "SKILL.md").write_text(
+            f"---\nname: {name}\ndescription: cold-install fixture\n---\n",
+            encoding="utf-8",
+        )
 
     fake_bin = project / "test-bin"
     fake_bin.mkdir()
@@ -175,6 +203,18 @@ def assert_collection_preflight(project, skills_root, env):
             "cold-install-check",
             "--target-base-url",
             "https://example.feishu.cn/base/cold-install-check",
+            "--progress-base-url",
+            "https://example.feishu.cn/base/cold-progress-check",
+            "--reminder-base-url",
+            "https://example.feishu.cn/base/cold-reminder-check",
+            "--wiki-space-id",
+            "cold_space",
+            "--workspace-home-node-token",
+            "cold_home",
+            "--workspace-core-data-node-token",
+            "cold_core_data",
+            "--schema-version",
+            "5",
         ],
         cwd=project,
         env=ready_env,
@@ -192,8 +232,8 @@ def assert_collection_preflight(project, skills_root, env):
     if local_failures:
         raise AssertionError(f"configured collection preflight failed: {local_failures}")
     checks = {check["id"]: check for check in report["checks"]}
-    if checks["local.progress_locator"]["status"] != "unverified":
-        raise AssertionError("optional progress locator must remain unverified")
+    if checks["local.progress_locator"]["status"] != "ready":
+        raise AssertionError("mandatory progress locator must be ready")
     if checks["online.permissions"]["status"] != "unverified":
         raise AssertionError("offline acceptance must not claim online permissions")
 
@@ -216,6 +256,8 @@ def assert_collection_preflight(project, skills_root, env):
     if recovery != LARK_CLI_RECOVERY:
         raise AssertionError("lark-cli recovery instruction changed")
 
+    for name in ("lark-base", "lark-doc", "lark-wiki"):
+        shutil.rmtree(skills_root / name)
     workspace_report = load_report(
         [sys.executable, str(preflight), "--capability", "workspace", "--json"],
         cwd=project,
@@ -251,7 +293,9 @@ def main():
     )
     args = parser.parse_args()
     source = args.source.resolve()
-    if not (source / "skills" / "offerloop-setup" / "SKILL.md").is_file():
+    if not (source / "scripts" / "install_offerloop.py").is_file():
+        raise SystemExit(f"not an OfferLoop checkout: {source}")
+    if not all((source / "skills" / name / "SKILL.md").is_file() for name in SKILL_NAMES):
         raise SystemExit(f"not an OfferLoop checkout: {source}")
 
     with tempfile.TemporaryDirectory(prefix="offerloop-cold-install-") as temporary:
@@ -271,8 +315,8 @@ def main():
         roots = install_all_agents(source, project, home, env)
         assert_collection_preflight(project, roots["codex"], env)
         print(
-            "cold install accepted: four Agents, eleven Skills, idempotency, "
-            "collection preflight, recovery, and redaction"
+            "cold install accepted: four Agents, nine Skills, idempotency, "
+            "post-install verification, collection preflight, recovery, and redaction"
         )
 
 

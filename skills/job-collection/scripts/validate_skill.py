@@ -20,6 +20,8 @@ REQUIRED_FILES = {
     "references/excel-insert.md",
     "references/field-contract.md",
     "references/dedup_judge.md",
+    "references/prewrite-confirmation.md",
+    "references/notification.md",
     "scripts/tencent_mcp.py",
 }
 
@@ -64,13 +66,20 @@ def validate_frontmatter(errors: list[str]) -> None:
 
 
 def validate_references(errors: list[str]) -> None:
-    pattern = re.compile(r"references/[A-Za-z0-9_./-]+\.md")
+    pattern = re.compile(
+        r"(?:\.\./\.offerloop-runtime/)?references/[A-Za-z0-9_./-]+\.md"
+    )
     for path in text_files():
         if path == ROOT / "scripts/validate_skill.py":
             continue
         content = path.read_text(encoding="utf-8")
         for reference in pattern.findall(content):
-            if not (ROOT / reference).is_file():
+            if reference.startswith("../.offerloop-runtime/"):
+                runtime_reference = reference.removeprefix("../.offerloop-runtime/")
+                target = ROOT.parent / "offerloop-workspace" / runtime_reference
+            else:
+                target = ROOT / reference
+            if not target.is_file():
                 errors.append(f"{path.relative_to(ROOT)}: missing reference {reference}")
 
 
@@ -125,6 +134,12 @@ def validate_current_contract(errors: list[str]) -> None:
         ],
         "references/excel-insert.md": ["no operation produced", "安全短前缀"],
         "references/personal-excel-source.md": ["13 字段契约", "每次只传一个 `--record-id`"],
+        "references/prewrite-confirmation.md": [
+            "hard_filtered",
+            "auto_write",
+            "prewrite_confirmation",
+            "awaiting_confirmation",
+        ],
     }
     for relative, markers in required_markers.items():
         content = (ROOT / relative).read_text(encoding="utf-8")

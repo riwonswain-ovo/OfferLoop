@@ -36,6 +36,10 @@ materialize_app_template = load_module(
     "offerloop_materialize_app_template",
     "skills/offerloop-setup/scripts/materialize_app_template.py",
 )
+materialize_workbench = load_module(
+    "offerloop_materialize_workbench",
+    "skills/offerloop-workbench/scripts/materialize_workbench.py",
+)
 
 
 class OfferLoopSetupTest(unittest.TestCase):
@@ -156,15 +160,15 @@ class OfferLoopSetupTest(unittest.TestCase):
             self.assertEqual(
                 set(result["skills"]),
                 {
-                    "offerloop-setup",
-                    "offerloop-workspace",
+                    "career-profile",
                     "job-collection",
                     "recruiting-reminder",
-                    "resume-deepthink",
+                    "experience-deepthink",
+                    "resume-tailor",
                     "interview-prep",
                     "mock-lab",
                     "talk-review",
-                    "pm-sense",
+                    "competency-lab",
                 },
             )
 
@@ -182,14 +186,14 @@ class OfferLoopSetupTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "confirmation"):
                 configure.enable_coaching(path)
             migrated = configure.enable_coaching(path, confirmed=True)
-            self.assertEqual(migrated["schema_version"], 4)
+            self.assertEqual(migrated["schema_version"], 5)
             self.assertEqual(migrated["lark_profile"], "offerloop")
             self.assertIn("artifact_storage", migrated)
             self.assertEqual(
                 migrated["artifact_storage"]["status"], "needs_setup"
             )
 
-    def test_coaching_preflight_requires_v4_storage_and_reports_readiness(self):
+    def test_coaching_preflight_is_chat_first_and_storage_is_optional(self):
         with tempfile.TemporaryDirectory() as directory:
             skill_root = self.make_skill_root(
                 directory, "lark-base", "lark-doc", "lark-wiki"
@@ -215,8 +219,12 @@ class OfferLoopSetupTest(unittest.TestCase):
                 )
             checks = {item["id"]: item for item in report["checks"]}
             self.assertEqual(
-                checks["local.coaching_storage"]["status"], "needs_action"
+                checks["local.coaching_storage"]["status"], "ready"
             )
+            self.assertEqual(report["selected"], ["coaching"])
+            self.assertIn("纯 Chat", checks["local.lark_cli"]["summary"])
+            self.assertIn("纯 Chat", checks["local.profile_locator"]["summary"])
+            self.assertIn("不访问飞书", checks["online.permissions"]["summary"])
             configure.enable_coaching(path, confirmed=True)
             config = configure.load_config(path)
             for key in config["artifact_storage"]["readiness"]:
@@ -260,7 +268,7 @@ class OfferLoopSetupTest(unittest.TestCase):
             self.assertEqual(result["capabilities"]["reminder"]["status"], "not_selected")
             self.assertNotIn("imap_config", {check["id"] for check in result["checks"]})
 
-    def test_collection_without_progress_locator_marks_it_optional(self):
+    def test_collection_without_progress_locator_requires_core_space(self):
         with tempfile.TemporaryDirectory() as directory:
             environment = {"XDG_CONFIG_HOME": directory}
             path = configure.config_file(environment)
@@ -271,10 +279,17 @@ class OfferLoopSetupTest(unittest.TestCase):
                     "target_base_url": "https://example.feishu.cn/base/source",
                 },
             )
-            skill_root = self.make_skill_root(directory)
+            skill_root = self.make_skill_root(
+                directory, "lark-base", "lark-doc", "lark-wiki"
+            )
 
             with mock.patch.object(
-                preflight.shutil, "which", return_value="/usr/local/bin/lark-cli"
+                preflight,
+                "_probe_lark_cli",
+                return_value=(
+                    ("ready", "lark-cli 版本符合要求", ""),
+                    ("ready", "飞书 profile 已登记", ""),
+                ),
             ):
                 report = preflight.run_checks(
                     environment,
@@ -287,9 +302,9 @@ class OfferLoopSetupTest(unittest.TestCase):
                 for check in report["checks"]
             }
             progress = checks[("collection", "local.progress_locator")]
-            self.assertEqual(progress["status"], "unverified")
-            self.assertIn("可选", progress["summary"])
-            self.assertNotEqual(
+            self.assertEqual(progress["status"], "needs_action")
+            self.assertIn("核心空间", progress["summary"])
+            self.assertEqual(
                 report["capabilities"]["collection"]["status"], "needs_action"
             )
 
@@ -329,7 +344,7 @@ class OfferLoopSetupTest(unittest.TestCase):
             }
             self.assertEqual(
                 checks[("collection", "local.progress_locator")]["status"],
-                "unverified",
+                "needs_action",
             )
             self.assertEqual(
                 checks[("reminder", "local.progress_locator")]["status"],
@@ -349,7 +364,7 @@ class OfferLoopSetupTest(unittest.TestCase):
             "collection": set(),
             "reminder": {"lark-calendar"},
             "workspace": {"lark-base", "lark-doc", "lark-wiki"},
-            "coaching": {"lark-base", "lark-doc", "lark-wiki"},
+            "coaching": set(),
             "full": {
                 "lark-apps",
                 "lark-base",
@@ -511,7 +526,7 @@ class OfferLoopSetupTest(unittest.TestCase):
                 "npx @larksuite/cli@latest install", lark_cli["next_action"]
             )
             self.assertIn(
-                "npx skills add larksuite/cli -g -a codex -y",
+                "npx skills add larksuite/cli -g -a codex",
                 lark_cli["next_action"],
             )
             self.assertIn("新开 Agent 会话", lark_cli["next_action"])
@@ -658,7 +673,7 @@ class OfferLoopSetupTest(unittest.TestCase):
             checks = {check["id"]: check for check in report["checks"]}
             self.assertEqual(checks["local.imap_config"]["status"], "ready")
 
-    def test_workspace_preflight_requires_workbench_without_printing_locator(self):
+    def test_workspace_preflight_does_not_require_optional_workbench(self):
         with tempfile.TemporaryDirectory() as directory:
             path = configure.config_file({"XDG_CONFIG_HOME": directory})
             configure.write_private_json(
@@ -670,6 +685,7 @@ class OfferLoopSetupTest(unittest.TestCase):
                     "reminder_base_url": "https://example.feishu.cn/base/reminder",
                     "wiki_space_id": "space_example",
                     "workspace_home_node_token": "wikcnExample",
+                    "workspace_core_data_node_token": "wikcnCore",
                 },
             )
 
@@ -679,7 +695,7 @@ class OfferLoopSetupTest(unittest.TestCase):
 
             checks = {check["id"]: check for check in result["checks"]}
             self.assertEqual(
-                checks["local.workspace_locators"]["status"], "needs_action"
+                checks["local.workspace_locators"]["status"], "ready"
             )
             self.assertNotIn("space_example", json.dumps(result))
             self.assertNotIn("wikcnExample", json.dumps(result))
@@ -696,6 +712,7 @@ class OfferLoopSetupTest(unittest.TestCase):
                     "reminder_base_url": "https://example.feishu.cn/base/reminder",
                     "wiki_space_id": "space_example",
                     "workspace_home_node_token": "wikcnExample",
+                    "workspace_core_data_node_token": "wikcnCore",
                     "workbench_url": "https://example.feishuapp.com/app/app_example",
                     "progress_sync": {
                         "app_id": "app_sync",
@@ -732,6 +749,7 @@ class OfferLoopSetupTest(unittest.TestCase):
                     "reminder_base_url": "https://example.feishu.cn/base/reminder",
                     "wiki_space_id": "space_example",
                     "workspace_home_node_token": "wikcnExample",
+                    "workspace_core_data_node_token": "wikcnCore",
                     "schema_version": 2,
                 },
             )
@@ -930,6 +948,31 @@ class OfferLoopSetupTest(unittest.TestCase):
             self.assertEqual(saved["notifications"]["target_name"], "秋招进度群")
             self.assertEqual(saved["notifications"]["identity"], "bot")
 
+    def test_enabling_daily_checkin_clears_stale_pause_reason(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = configure.config_file({"XDG_CONFIG_HOME": directory})
+            configure.write_private_json(
+                path,
+                {
+                    "daily_checkin": {
+                        "status": "paused",
+                        "chat_id": "oc_example",
+                        "owner_open_id": "ou_example",
+                        "send_time": "21:30",
+                        "timezone": "Asia/Shanghai",
+                        "pause_reason": "missing scope",
+                    },
+                },
+            )
+
+            result = configure.update_daily_checkin_config(
+                path,
+                {"status": "enabled"},
+            )
+
+            self.assertEqual(result["daily_checkin"]["status"], "enabled")
+            self.assertNotIn("pause_reason", result["daily_checkin"])
+
     def test_preflight_reports_workspace_locator_readiness_without_values(self):
         with tempfile.TemporaryDirectory() as directory:
             path = configure.config_file({"XDG_CONFIG_HOME": directory})
@@ -957,7 +1000,7 @@ class OfferLoopSetupTest(unittest.TestCase):
                     "reminder_base_url": True,
                     "wiki_space_id": True,
                     "workspace_home_node_token": True,
-                    "workbench_url": False,
+                    "workspace_core_data_node_token": False,
                     "schema_version": True,
                 },
             )
@@ -986,6 +1029,7 @@ class OfferLoopSetupTest(unittest.TestCase):
                 "progress_base",
                 "reminder_base",
                 "wiki_home",
+                "core_data",
                 "workbench",
                 "progress_sync",
             },
@@ -994,44 +1038,103 @@ class OfferLoopSetupTest(unittest.TestCase):
         self.assertTrue(all(status == "pending" for status in statuses.values()))
 
     def test_bundled_app_templates_have_redacted_manifests(self):
-        assets = ROOT / "skills" / "offerloop-setup" / "assets"
         expected = {
-            "workbench-template": "offerloop-workbench",
-            "progress-sync-template": "offerloop-progress-sync",
+            ROOT / "skills" / "offerloop-workbench" / "assets" / "workbench-template":
+                "offerloop-workbench",
+            ROOT / "skills" / "offerloop-setup" / "assets" / "progress-sync-template":
+                "offerloop-progress-sync",
         }
         forbidden = {
             ".git", ".spark", ".spark_project", ".env", ".env.local",
             "node_modules", "dist", "logs",
         }
-        for directory, template_id in expected.items():
-            root = assets / directory
+        for root, template_id in expected.items():
             manifest = json.loads((root / "template.json").read_text(encoding="utf-8"))
             self.assertEqual(manifest["template_id"], template_id)
             self.assertTrue(manifest["required_environment"])
-            if directory == "workbench-template":
-                self.assertNotIn("optional_environment", manifest)
+            if template_id == "offerloop-workbench":
+                self.assertEqual(
+                    manifest.get("optional_environment"),
+                    ["DAILY_CHECKIN_STATUS", "DAILY_CHECKIN_PAUSE_REASON"],
+                )
             self.assertFalse(any((root / name).exists() for name in forbidden))
             self.assertEqual(
                 [path for path in root.rglob("*") if path.is_symlink()], []
             )
 
-    def test_workbench_template_locks_the_known_good_calendar_contract(self):
+    def test_progress_sync_template_uses_native_tasks_without_card_callback(self):
         root = (
             ROOT
             / "skills"
             / "offerloop-setup"
             / "assets"
+            / "progress-sync-template"
+        )
+        manifest = json.loads((root / "template.json").read_text(encoding="utf-8"))
+        required = set(manifest["required_environment"])
+        self.assertIn("REMINDER_TASKLIST_GUID", required)
+        self.assertNotIn("FEISHU_CALLBACK_VERIFICATION_TOKEN", required)
+        self.assertNotIn("OFFERLOOP_CALLBACK_RELAY_SECRET", required)
+
+        service = (
+            root
+            / "server"
+            / "modules"
+            / "job-progress-sync"
+            / "job-progress-sync.service.ts"
+        ).read_text(encoding="utf-8")
+        module = (
+            root
+            / "server"
+            / "modules"
+            / "job-progress-sync"
+            / "job-progress-sync.module.ts"
+        ).read_text(encoding="utf-8")
+        self.assertIn("ensureReminderTaskMapping", service)
+        self.assertIn("/task/v2/tasks?user_id_type=open_id", service)
+        self.assertIn("type: 'open_url'", service)
+        self.assertNotIn("handleCardActionCallback", service)
+        self.assertNotIn("JobProgressSyncCallbackController", module)
+        self.assertFalse(
+            (
+                root
+                / "server"
+                / "modules"
+                / "job-progress-sync"
+                / "job-progress-sync.callback.controller.ts"
+            ).exists()
+        )
+
+        deploy = (
+            ROOT
+            / "skills"
+            / "offerloop-setup"
+            / "references"
+            / "one-click-deploy.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("offerloop-task-reconcile", deploy)
+        self.assertNotIn("apps/offerloop-card-ingress", deploy)
+        self.assertNotIn("CARD_INGRESS_PUBLIC_URL", deploy)
+
+    def test_workbench_template_locks_the_known_good_calendar_contract(self):
+        root = (
+            ROOT
+            / "skills"
+            / "offerloop-workbench"
+            / "assets"
             / "workbench-template"
         )
         manifest = json.loads((root / "template.json").read_text(encoding="utf-8"))
         contract = manifest["deployment_contract"]
-        self.assertEqual(contract["workbench_page_size"], 30)
+        self.assertEqual(contract["kanban_page_size"], 9)
+        self.assertEqual(contract["table_page_size"], 15)
         self.assertEqual(contract["oauth_callback_path"], "/calendar-oauth-callback")
         self.assertEqual(
             contract["oauth_scopes"],
             [
                 "calendar:calendar:readonly",
                 "calendar:calendar.event:read",
+                "drive:drive",
                 "offline_access",
             ],
         )
@@ -1054,9 +1157,10 @@ class OfferLoopSetupTest(unittest.TestCase):
         app = (root / "client/src/app.tsx").read_text(encoding="utf-8")
 
         self.assertIn(
-            "calendar:calendar:readonly calendar:calendar.event:read offline_access",
+            "calendar:calendar:readonly calendar:calendar.event:read",
             service,
         )
+        self.assertIn("drive:drive offline_access", service)
         self.assertIn("this.httpService.post<FeishuEnvelope<FeishuPrimaryCalendarData>>", service)
         self.assertIn("/calendar/v4/calendars/primary", service)
         self.assertIn("interface CalendarTokenSession", service)
@@ -1074,13 +1178,14 @@ class OfferLoopSetupTest(unittest.TestCase):
 
         guide = (
             ROOT
-            / "skills/offerloop-setup/references/workbench-golden-path.md"
+            / "skills/offerloop-workbench/references/golden-path.md"
         ).read_text(encoding="utf-8")
         for required_text in (
             "csrf token not found in header",
             "授权会话过长",
             "POST /open-apis/calendar/v4/calendars/primary",
-            "每页固定 30 条",
+            "看板视图每页最多",
+            "表格视图的三张表各自每页最多 15 条",
             "再刷新一次",
         ):
             self.assertIn(required_text, guide)
@@ -1112,23 +1217,22 @@ class OfferLoopSetupTest(unittest.TestCase):
                 '{"app_id":"app_new_user"}\n', encoding="utf-8"
             )
 
-            result = materialize_app_template.materialize(
-                "workbench", destination, dry_run=True
-            )
+            result = materialize_workbench.materialize(destination, dry_run=True)
 
             self.assertEqual(
                 result["deployment_contract"]["calendar_primary_method"], "POST"
             )
             self.assertEqual(
-                result["deployment_contract"]["workbench_page_size"], 30
+                result["deployment_contract"]["kanban_page_size"], 9
+            )
+            self.assertEqual(
+                result["deployment_contract"]["table_page_size"], 15
             )
 
     def test_materializer_requires_a_real_miaoda_binding(self):
         with tempfile.TemporaryDirectory() as directory:
             with self.assertRaisesRegex(ValueError, "not bound"):
-                materialize_app_template.materialize(
-                    "workbench", Path(directory), dry_run=True
-                )
+                materialize_workbench.materialize(Path(directory), dry_run=True)
 
     def test_deployment_checkpoint_is_private_and_does_not_include_locators(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -1140,6 +1244,7 @@ class OfferLoopSetupTest(unittest.TestCase):
                     "reminder_base_url": "https://example.feishu.cn/base/private-reminder",
                     "wiki_space_id": "space-private",
                     "workspace_home_node_token": "wiki-private",
+                    "workspace_core_data_node_token": "wiki-core-private",
                     "workbench_url": "https://example.feishuapp.com/app/private",
                     "progress_sync": {
                         "app_id": "app-private",

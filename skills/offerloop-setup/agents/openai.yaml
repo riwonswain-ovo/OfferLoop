@@ -1,4 +1,0 @@
-interface:
-  display_name: "OfferLoop Setup"
-  short_description: "介绍九个 Skill，按需预检或部署 OfferLoop"
-  default_prompt: "Use $offerloop-setup to introduce all nine OfferLoop skills, then help me choose and preflight one capability."

@@ -15,6 +15,10 @@ work/
 exports/
 *.csv
 *.xlsx
+/.playwright-mcp/
+
+# User-provided, personal-use interview materials. Keep local and never publish.
+/skills/competency-lab/references/private-sources/
 
 base_config.json
 processed_emails.json
@@ -25,3 +29,8 @@ processed_emails.json
 .spark/
 .spark_project
 *.tsbuildinfo
+
+# Local package-manager caches, design drafts, and evaluation output
+/.pnpm-store/
+/sketches/
+/skills/*/test-results.md

@@ -46,17 +46,17 @@ class OfferLoopWorkspaceTest(unittest.TestCase):
                 Path(directory) / "offerloop" / "config.json",
             )
 
-    def test_template_is_a_readme_and_keeps_live_data_in_the_workbench(self):
+    def test_template_is_a_readme_and_marks_workbench_optional(self):
         content = TEMPLATE.read_text(encoding="utf-8")
         for expected in (
             "# OfferLoop 使用指南",
-            "## 从这里开始",
-            "{{workbench_url}}",
-            "## 第一次使用",
-            "## 日常流程",
-            "## 核心功能与数据位置",
-            "## 可以对 Agent 说",
-            "## 常见问题",
+            "OFFERLOOP:OPTIONAL:WORKBENCH",
+            "## 三张核心数据表",
+            "## 三条闭环",
+            "## 9 个长期 Skill",
+            "## 固定目录",
+            "不复制记录",
+            "原生 Agent 深链接",
         ):
             self.assertIn(expected, content)
         self.assertNotIn("OFFERLOOP:MANAGED", content)
@@ -108,7 +108,21 @@ class OfferLoopWorkspaceTest(unittest.TestCase):
 
         self.assertIn("https://example.com/workbench", rendered)
         self.assertIn("https://example.com/enterprise", rendered)
-        self.assertNotIn("{{workbench_url}}", rendered)
+        self.assertNotIn("工作台尚未启用", rendered)
+
+    def test_initial_homepage_is_complete_without_workbench(self):
+        workspace = load_workspace_module()
+        rendered = workspace.render_initial_homepage(
+            TEMPLATE.read_text(encoding="utf-8"),
+            {
+                "target_base_url": "https://example.com/enterprise",
+                "progress_base_url": "https://example.com/progress",
+                "reminder_base_url": "https://example.com/interviews",
+            },
+        )
+
+        self.assertIn("工作台尚未启用", rendered)
+        self.assertIn("不影响知识库、三张 Base 或训练产物", rendered)
 
     def test_resource_registration_preserves_existing_config_and_rejects_secrets(self):
         workspace = load_workspace_module()
@@ -124,6 +138,7 @@ class OfferLoopWorkspaceTest(unittest.TestCase):
                 {
                     "wiki_space_id": "space_example",
                     "workspace_home_node_token": "wikcnExample",
+                    "workspace_core_data_node_token": "wikcnCore",
                     "workbench_url": "https://example.com/workbench",
                 },
             )
@@ -134,6 +149,21 @@ class OfferLoopWorkspaceTest(unittest.TestCase):
             self.assertEqual(oct(path.stat().st_mode & 0o777), "0o600")
             with self.assertRaisesRegex(ValueError, "secret"):
                 workspace.register_resources(path, {"WEBHOOK_SECRET": "nope"})
+
+    def test_readiness_separates_required_core_from_optional_workbench(self):
+        workspace = load_workspace_module()
+        config = {
+            "lark_profile": "codex",
+            "target_base_url": "enterprise",
+            "progress_base_url": "progress",
+            "reminder_base_url": "reminder",
+            "wiki_space_id": "space",
+            "workspace_home_node_token": "home",
+            "workspace_core_data_node_token": "core",
+        }
+        result = workspace.readiness(config)
+        self.assertTrue(result["core_ready"])
+        self.assertFalse(result["optional"]["workbench_url"])
 
     def test_future_window_filter_rolls_the_upper_bound_without_document_edits(self):
         workspace = load_workspace_module()

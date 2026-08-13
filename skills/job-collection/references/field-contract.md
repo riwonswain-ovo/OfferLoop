@@ -68,6 +68,9 @@
 | `enterprise_type` | 企业性质与子表路由 |
 | `source_id`、`source_name` | 信息源登记与运行摘要，不落企业表 |
 | `graduation_year`、`education_requirement`、`major_requirement` | 筛选/判断，不落企业表 |
+| `city_match`、`industry_match`、`job_preference_match` | 硬筛/岗位偏好判断，不落企业表 |
+| `role_fit_route`、`role_transfer_reason`、`specialized_only` | 直接匹配、可迁移或仅高专业门槛判断，不落企业表 |
+| `candidate_route`、`confirmation_reason` | 写入门禁与用户确认，不落企业表 |
 | `referral_url`、`referral_code`、`notes`、`requires_exam` | 来源临时上下文，不落企业表 |
 | `dedup_status`、`duplicate_with`、`lead_id` | 单次运行内部状态，不落企业表 |
 
@@ -88,7 +91,7 @@
 | `is_active` | 是否参与下一次同步 |
 | `credential_status` | `not_required` / `mcp_token` / `browser_session` / `pending` / `expired` |
 | `last_sync_time` | 本来源独立的成功扫描高水位 |
-| `last_sync_result` | 窗口、候选、重复、新增、补全、失败和游标摘要 |
+| `last_sync_result` | 窗口、硬筛、岗位软偏好确认、重复、新增、补全、失败和游标摘要 |
 
 某个来源失败时只保留该来源旧游标，不影响其他来源继续处理。
 
@@ -137,7 +140,7 @@
 对账规则：
 
 - `求职进展` 必须包含用户维护的 SingleSelect 字段 `投递简历版本`。选项名称与知识库
-  `02｜当前简历` 中的文档标题完全一致，例如 `互联网产品经理岗 - 简历`；本 Skill 不读取
+  `03｜定制简历` 中的标准文档标题完全一致，例如 `01｜互联网产品经理简历`；本 Skill 不读取
   知识库、不创建或同步选项；
 - 新建：当前阶段=`已投递`、公司=来源公司、投递岗位、岗位 JD 和投递简历版本为空、投递日期
   为本次首次变更日期，并逐值复制企业清单的公告链接和投递链接；

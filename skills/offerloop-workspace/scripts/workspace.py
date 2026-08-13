@@ -12,18 +12,22 @@ import re
 import tempfile
 
 
-RESOURCE_KEYS = {
+REQUIRED_RESOURCE_KEYS = {
     "lark_profile",
     "target_base_url",
     "progress_base_url",
     "reminder_base_url",
     "wiki_space_id",
     "workspace_home_node_token",
+    "workspace_core_data_node_token",
+}
+OPTIONAL_RESOURCE_KEYS = {
     "workbench_url",
     "workspace_calendar_table_id",
     "workspace_calendar_view_id",
     "schema_version",
 }
+RESOURCE_KEYS = REQUIRED_RESOURCE_KEYS | OPTIONAL_RESOURCE_KEYS
 MANAGED_SECTIONS = {
     "UPCOMING_EVENTS",
     "RESUME_DEEP_DIVE",
@@ -76,7 +80,19 @@ def register_resources(path, updates):
 
 
 def readiness(config):
-    return {key: config.get(key) not in (None, "") for key in sorted(RESOURCE_KEYS)}
+    return {
+        "core_ready": all(
+            config.get(key) not in (None, "") for key in REQUIRED_RESOURCE_KEYS
+        ),
+        "required": {
+            key: config.get(key) not in (None, "")
+            for key in sorted(REQUIRED_RESOURCE_KEYS)
+        },
+        "optional": {
+            key: config.get(key) not in (None, "")
+            for key in sorted(OPTIONAL_RESOURCE_KEYS)
+        },
+    }
 
 
 def future_window_filter(start_field_id, *, now=None, days=7):
@@ -160,12 +176,30 @@ def refresh_managed_sections(
 
 def render_initial_homepage(template, config):
     result = template
+    workbench_url = str(config.get("workbench_url", "")).strip()
+    workbench_pattern = re.compile(
+        r"<!-- OFFERLOOP:OPTIONAL:WORKBENCH:START -->.*?"
+        r"<!-- OFFERLOOP:OPTIONAL:WORKBENCH:END -->",
+        re.DOTALL,
+    )
+    workbench_block = (
+        "<!-- OFFERLOOP:OPTIONAL:WORKBENCH:START -->\n"
+        f"[打开 OfferLoop 招聘工作台]({workbench_url})\n\n"
+        "工作台集中展示三张业务 Base；完整记录仍在对应 Base 中维护。\n"
+        "<!-- OFFERLOOP:OPTIONAL:WORKBENCH:END -->"
+        if workbench_url
+        else
+        "<!-- OFFERLOOP:OPTIONAL:WORKBENCH:START -->\n"
+        "飞书工作台尚未启用。这是可选体验，不影响知识库、三张 Base 或训练产物。\n"
+        "<!-- OFFERLOOP:OPTIONAL:WORKBENCH:END -->"
+    )
+    if len(workbench_pattern.findall(result)) != 1:
+        raise ValueError("optional workbench block must appear exactly once")
+    result = workbench_pattern.sub(workbench_block, result)
     replacements = {
-        "{{workbench_url}}": config.get("workbench_url", "待配置"),
         "{{target_base_url}}": config.get("target_base_url", "待配置"),
         "{{progress_base_url}}": config.get("progress_base_url", "待配置"),
         "{{reminder_base_url}}": config.get("reminder_base_url", "待配置"),
-        "{{knowledge_base_url}}": config.get("knowledge_base_url", "待配置"),
     }
     for placeholder, value in replacements.items():
         result = result.replace(placeholder, str(value))

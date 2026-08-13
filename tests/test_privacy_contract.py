@@ -32,6 +32,10 @@ def repository_text_files():
             continue
 
 
+def is_generated_dependency_manifest(relative):
+    return Path(relative).name in {"package-lock.json", "npm-shrinkwrap.json"}
+
+
 class PrivacyContractTest(unittest.TestCase):
     def test_untracked_service_sources_are_included_in_privacy_scan(self):
         scanned = {relative for relative, _ in repository_text_files()}
@@ -40,9 +44,10 @@ class PrivacyContractTest(unittest.TestCase):
     def test_no_personal_contact_details_or_home_paths(self):
         findings = []
         for relative, content in repository_text_files():
-            for match in EMAIL.finditer(content):
-                if match.group(1).lower() not in ALLOWED_EMAIL_DOMAINS:
-                    findings.append(f"{relative}: non-placeholder email")
+            if not is_generated_dependency_manifest(relative):
+                for match in EMAIL.finditer(content):
+                    if match.group(1).lower() not in ALLOWED_EMAIL_DOMAINS:
+                        findings.append(f"{relative}: non-placeholder email")
             if PHONE.search(content):
                 findings.append(f"{relative}: phone-like value")
             if ABSOLUTE_HOME.search(content):
