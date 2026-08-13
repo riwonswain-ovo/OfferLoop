@@ -388,6 +388,69 @@ OfferLoop 可以完全从 Chat 和本地文件开始使用。希望长期积累�
 
 ## 🔄 升级与迁移
 
+### 以前只安装过 `job-collection` 和 `recruiting-reminder`？
+
+早期版本只公开提供这两个 Skill。旧用户可以直接迁移到现在的 9 个 Skill，不需要删除旧目录，
+也不需要重新创建已有 Base。
+
+> [!IMPORTANT]
+> 不要先卸载旧 Skill。新版安装器会先识别同名目录；只有用户确认它们属于旧版 OfferLoop 并显式
+> 使用 `--upgrade` 后，才会把旧目录移动到可恢复备份，再安装新版本。
+
+先把最新版下载到一个新目录，保留原来的下载目录作为额外回滚入口：
+
+```bash
+git clone https://github.com/riwonswain-ovo/OfferLoop.git OfferLoop-latest
+cd OfferLoop-latest
+```
+
+迁移前检查以下旧文件；存在时复制到新的用户配置目录，不存在就跳过。不要把文件内容或凭证粘贴
+到 Chat：
+
+| 旧文件 | 新位置 |
+|---|---|
+| `job-collection/.env` | `~/.config/offerloop/job-collection/.env` |
+| `recruiting-reminder/scripts/.env` | `~/.config/offerloop/recruiting-reminder/.env` |
+| `recruiting-reminder/base_config.json` | `~/.config/offerloop/recruiting-reminder/base_config.json` |
+| `recruiting-reminder/processed_emails.json` | `~/.local/state/offerloop/recruiting-reminder/processed_emails.json` |
+
+然后只做预演：
+
+```bash
+python3 scripts/setup_offerloop.py --agent codex --mode full --dry-run
+```
+
+预演发现旧版同名目录并显示 `conflict` 是预期行为，表示安装器没有直接覆盖。确认这些目录确实属于
+旧版 OfferLoop 后再执行：
+
+```bash
+python3 scripts/setup_offerloop.py --agent codex --mode full --upgrade
+python3 scripts/install_offerloop.py --agent codex --verify
+```
+
+升级会安装 9 个 Skill，并把旧副本保存在 Agent 配置目录下的 `.offerloop-backups/<时间戳>/`。
+第二条命令只验证本地 Skill 和安装清单。如果暂时不接入飞书，到这里就可以停止；完整模式显示
+`needs_setup` 只表示可选的线上空间尚未接入，不代表本地安装失败。
+
+如果要继续复用已有 Base 和飞书文档，请重新开启 Agent 会话并发送下面这段话。Agent 必须先只读
+盘点、展示复用计划并等待确认，不能自动复制记录或创建新的同名 Base：
+
+```text
+我以前只安装过 job-collection 和 recruiting-reminder，
+现在要迁移到 OfferLoop 的 9 个 Skill。
+
+请先只读检查旧 Skill、用户配置和已有飞书 Base，不要读取或输出任何凭证。
+告诉我哪些目录会备份、哪些配置和 Base 会复用；先运行完整模式 dry-run。
+只有我确认旧目录属于 OfferLoop 后，才能使用 --upgrade。
+本地验证通过后，再问我是否接入配套飞书知识库；未经确认不要创建或修改线上资源。
+```
+
+Windows 将 `python3` 替换为 `py -3`；Claude Code、Hermes Agent 或 WorkBuddy 用户将
+`--agent codex` 替换为对应 Agent 名称。旧双 Base、历史邮件去重状态、线上接管和回滚细节见
+[迁移指南](MIGRATION.md)。
+
+### 已安装当前完整模式或单 Skill 模式
+
 完整模式先预演再升级：
 
 ```bash
