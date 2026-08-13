@@ -1,604 +1,193 @@
-<div align="center">
-
 # OfferLoop
 
-### 把招聘信息、投递进展、笔面试安排和个人求职资料放进一个可持续维护的飞书工作流。
+OfferLoop 是一套围绕求职事实、材料沉淀和能力成长运行的 Skill 系统。新用户可以选择：
 
-**招聘信息同步 · 求职进展 · 笔面试安排 · 招聘工作台 · 私有知识库 · 求职训练**
+- **完整模式**：9 个长期 Skill + 三张飞书业务 Base + 一个用户私有的 OfferLoop 知识库；
+- **单 Skill 模式**：只安装指定 Skill 和最小共享运行时，默认不创建飞书知识库或 Base。
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Skills](https://img.shields.io/badge/Skills-9-7C3AED)](#3-认识九个-skill)
+两种模式都**不包含工作台**。工作台、妙搭应用、公网服务、定时自动化和消息机器人属于后续可选
+增强，不是下载或首次使用的前置条件。
 
-</div>
+## 9 个长期 Skill
 
-> 当前版本：0.1.0-alpha.6。旧用户请直接阅读[如何升级](#4-旧用户如何升级)。
+| Skill | 职责 |
+| --- | --- |
+| `career-profile` | 通过自然对话认识自己，维护岗位迁移边界与个人语言画像 |
+| `job-collection` | 收集岗位、执行硬条件过滤并确认边缘候选 |
+| `recruiting-reminder` | 识别招聘通知并维护笔面试事件 |
+| `experience-deepthink` | 复原经历、深挖决策与整理证据 |
+| `resume-tailor` | 针对岗位生成定制简历 |
+| `competency-lab` | 抽象岗位能力、诊断差距并生成专项训练 |
+| `interview-prep` | 准备真实公司、岗位和面试轮次 |
+| `mock-lab` | 模拟面试与逐题训练 |
+| `talk-review` | 拆解真实面试 ASR 并形成复盘 |
 
-OfferLoop 包含 9 个可以独立使用、也可以组合使用的标准 Agent Skill。安装全部 Skill 不代表必须启用全部功能；你可以只同步招聘信息、只管理笔面试提醒、只使用求职空间，也可以按需启用简历深挖、产品思维、面试准备、模拟面试和真实复盘。
+`offerloop-setup`、`offerloop-workspace` 和 `offerloop-workbench` 不是用户可见 Skill。前两者的必要
+内容由安装器放进隐藏的 `.offerloop-runtime`；工作台不会随完整模式或单 Skill 模式安装。
 
-## 1. 安装前准备
-
-安装 OfferLoop 前，只需检查本机是否满足以下条件。飞书权限、邮箱授权和业务 Base 可以在安装完成后，按准备使用的 Skill 再逐项配置。
-
-| 检查项 | 如何检查 | 如果没有 |
-|---|---|---|
-| 当前 Agent 支持标准 Agent Skill | 确认它能加载包含 `SKILL.md` 的 Skill 目录 | 使用 Agent 自带的 Skill 安装功能，或允许它把 Skill 写入自己的标准 Skills 目录 |
-| 可以访问 GitHub | 在浏览器或 Agent 中打开本仓库链接 | 检查网络；私有网络环境可下载 Release 源码包后让 Agent 从本地目录安装 |
-| Python 3.10 或更高版本 | `python3 --version`；Windows 可用 `py -3 --version` | 从 [Python 官网](https://www.python.org/downloads/) 安装，重新打开终端后再次检查 |
-| Node.js 与 `npx`（仅终端安装需要） | `node --version` 和 `npx --version` | 从 [Node.js 官网](https://nodejs.org/) 安装；若把 GitHub 链接直接交给 Agent，可由 Agent 使用自己的安装方式 |
-
-安装 Skill 文件时不需要 App Secret、密码、Cookie、token、邮箱授权码，也不会访问飞书、邮箱或日历。
-
-## 2. 如何安装
-
-OfferLoop 遵循标准 `SKILL.md` 目录结构。只要 Agent 能加载标准 Agent Skill，就可以安装和使用，无需针对不同 Agent 学习不同流程。
-
-### 方式一：把 GitHub 链接交给 Agent
-
-把下面这段话复制给当前 Agent：
+## 三条闭环
 
 ```text
-请帮我安装这个 GitHub 仓库中的 OfferLoop：
-https://github.com/riwonswain-ovo/OfferLoop
-
-请安装仓库 skills/ 下的 9 个 Skill，并使用你自己的标准 Skills 目录。
-先预览安装目标和冲突；确认安全后再安装。不要覆盖来源不明的同名 Skill。
-安装完成后介绍这 9 个 Skill 的用途和一句使用示例，说明隐私边界，并提醒我重新开启会话。
+招聘机会：信息源 → 硬条件过滤 → 软匹配 → 用户确认 → 企业清单/求职进展
+求职进展：邀请与完成事件 → 状态机 → 受管视图 → 每日确认
+能力成长：模拟/复盘 → 能力观察 → 专项训练 → 复测
 ```
 
-Agent 可能会请求访问 GitHub 或写入 Skills 目录的权限。确认目标是本仓库的九个 Skill 后再授权。
+完整模式中，三张 Base 保存企业、投递和笔面试事实；知识库保存用户画像、简历、经历、训练和
+复盘文档。轻量级 Loop Runtime 只保存工作流实例、幂等记录、能力观察和待办，不取代业务真源。
 
-### 方式二：在终端安装
+## 安装与升级
+
+### 使用前准备
+
+- Python 3.10 或更高版本；
+- Codex、Claude Code、Hermes Agent 或 WorkBuddy 之一；
+- 只有完整模式需要飞书账号，以及创建或编辑知识空间和多维表格的权限；
+- 不要把 App Secret、邮箱密码、token 或 cookie 粘贴到 Chat。
+
+稳定版面向用户发布在 `riwonswain-ovo/OfferLoop`。`OfferLoop-development` 仅用于开发、测试和
+Pull Request；新用户不需要访问开发仓。
+
+### 方式 A：完整模式
+
+下载稳定版并先预演本地安装：
 
 ```bash
-npx skills add riwonswain-ovo/OfferLoop -g \
-  -s offerloop-setup job-collection recruiting-reminder offerloop-workspace \
-  resume-deepthink interview-prep mock-lab talk-review pm-sense -y
+git clone https://github.com/riwonswain-ovo/OfferLoop.git
+cd OfferLoop
+python3 scripts/setup_offerloop.py --agent codex --mode full --dry-run
 ```
 
-安装工具若发现同名但内容不同的旧副本，应先报告冲突，不应直接覆盖。确认属于旧版 OfferLoop 后，先把旧副本备份到 Skills 发现范围之外，再安装新版。
-
-### 安装后必须重新开启会话
-
-Agent 通常只在会话开始时发现 Skill。安装完成后结束当前会话并新开会话，然后发送：
-
-```text
-我刚安装 OfferLoop。请调用 offerloop-setup，先介绍 9 个 Skill，再做只读检查并带我完成第一次使用；不要创建或修改飞书资源。
-```
-
-首次安装欢迎会按“4 个求职基础能力 + 5 个求职训练能力”完整介绍九个 Skill，并给出两条常用
-闭环和一条可直接复制的首次使用指令。重复安装不会反复显示完整欢迎；Skill 能被发现仍需重新
-开启 Agent 会话。
-
-## 3. 认识九个 Skill
-
-九个 Skill 的关系如下：
-
-```text
-offerloop-setup
-  ├─ 为 job-collection 做首次预检与配置
-  ├─ 为 recruiting-reminder 做首次预检与配置
-  ├─ 为 offerloop-workspace 做首次预检与配置
-  └─ 为五个求职训练 Skill 做统一存储预检与配置
-
-job-collection ── 已投递记录 ──> 求职进展
-recruiting-reminder ── 笔面试事件 ──> 求职进展 + 个人日历
-offerloop-workspace ── 统一入口 ──> 工作台 + 三张 Base + 私有知识库
-
-resume-deepthink ── 当前简历 + 投递方向 ──> 简历深挖文档
-pm-sense ── 产品判断与答案 ──> 产品 Sense 训练文档
-interview-prep ── 求职进展 JD + 投递简历版本 ──> 面试准备文档
-mock-lab ── 当前简历 + 简历深挖 + 可选 JD ──> 模拟面试报告
-talk-review ── ASR + 当前简历 + 简历深挖 ──> 真实面试复盘
-```
-
-### `offerloop-setup`：首次配置、检查与部署
-
-#### 作用
-
-帮助新用户选择本次要启用的能力，检查本机环境与所需依赖，登记非敏感资源定位，并在用户明确要求时生成完整部署计划。它不负责日常招聘同步、邮件扫描或知识库维护。
-
-#### 第一次运行前需要准备
-
-- 已安装九个 OfferLoop Skill，并重新开启 Agent 会话。
-- Python 3.10 或更高版本。
-- 不需要提前记住 Skill 名称。首次运行会先介绍九个 Skill，再让你从 `collection`、`reminder`、`workspace`、`coaching` 或 `full` 中选择一项；不确定时可以让它解释后再选择。
-- 不必提前准备飞书密钥或邮箱授权码；缺少 `lark-cli`、外部 Lark Skill、profile 或资源定位时，预检会给出解决动作。
-
-#### 第一次运行流程
-
-1. 首次使用时，按基础能力和训练能力完整介绍九个 Skill、使用示例、常用闭环和隐私边界。
-2. 询问本次要启用的能力，未选择的能力标记为 `not_selected`。
-3. 运行只读离线预检，检查 Python、`lark-cli`、九个 OfferLoop Skill、所选能力的外部 Lark Skill、本地配置和文件权限。
-4. 用 `ready`、`needs_action`、`blocked`、`unverified` 汇报状态，并给出下一步。
-5. 经用户确认后，保存 profile、Base URL、知识库和工作台地址等非敏感定位信息。
-6. 用户要求完整部署时，先展示将创建或接管的资源及影响范围，再等待确认；线上权限另做只读验收。
-
-#### 第一次运行后的输出
-
-- 一份所选能力的状态报告：哪些本机条件已满足、哪些缺失、哪些线上条件尚未核验。
-- 可执行的修复清单，例如安装依赖、选择 profile、登记 Base URL 或收紧配置文件权限。
-- 经确认保存的公共定位配置；不会保存密码、App Secret 或访问令牌。
-- 仅在用户要求完整部署时输出部署计划与验收结果。
-
-#### 后续每次运行带来的增量
-
-`offerloop-setup` 不产生招聘或邮件业务数据。后续运行会报告相对于上次新增的可用条件、修复后的阻塞项、新登记的资源、权限漂移或仍待核验的线上条件；已经正确的配置保持不变。重复运行应逐步把状态从 `blocked` / `needs_action` 收敛到本机 `ready`，但不会把未经核验的线上条件误报为可用。
-
-#### 案例
-
-用户只想同步招聘信息，但尚未安装 `lark-cli`：
-
-```text
-用户：请调用 offerloop-setup。我只想先使用招聘信息同步，只读检查，不要创建资源。
-
-输出重点：
-- collection：已选择
-- Python 与 OfferLoop Skill：ready
-- lark-cli：blocked，并给出安装动作
-- 企业清单定位：needs_action
-- 邮箱、日历、知识库：not_selected
-- 本轮没有访问飞书，也没有写入任何资源
-```
-
----
-
-### `job-collection`：同步招聘信息并维护求职企业清单
-
-#### 作用
-
-读取用户明确提供且有权访问的飞书 Base 或腾讯 Smartsheet 招聘信息源，根据求职偏好筛选、跨来源去重，并写入个人的“求职企业清单”。它不主动搜索招聘网站、公众号或公开网页，也不自动投递职位。
-
-#### 第一次运行前需要准备
-
-- 先用 `offerloop-setup` 对 `collection` 做预检。
-- 可用的 `lark-cli >= 1.0.73`、bot profile，以及来源 Base 的查看权限和目标 Base 的编辑权限。
-- 至少一个支持的信息源链接：飞书/Lark Base 或腾讯 Smartsheet。
-- 如果已有个人求职 Base，准备它的 URL；如果没有，允许 Skill 在展示结构后创建。
-- 准备回答缺失的求职偏好：毕业年份、目标城市、目标及排除行业、目标及排除公司、不需要的招聘类型。已有“用户偏好”会优先读取，不重复询问。
-- “求职进展”Base、工作台和飞书结果通知都是可选项；未登记 `progress_base_url` 时会跳过求职进展对账，不会因此阻塞企业信息同步。
-
-#### 第一次运行流程
-
-1. 判断是接管已有 Base 还是新建 Base；已有 Base 先做只读结构审计，不按名称猜测资源。
-2. 读取已有用户偏好，只逐项询问缺失且当前同步必需的内容，不一次抛出长表单。
-3. 登记每个信息源及其独立游标。
-4. 新建时，经确认创建“企业清单”、5 张企业性质子表、“用户偏好”和“信息源登记”，以及状态视图和双向 workflow；接管时只补缺项。
-5. 首次完整扫描来源，执行批次拆分、偏好筛选和跨来源去重。
-6. 写入主表与唯一分类子表，验收字段、映射、视图和 workflow；已配置“求职进展”时再做幂等对账。
-
-#### 第一次运行后的输出
-
-- 可持续维护的求职企业 Base，以及已登记的信息源和用户偏好。
-- 按企业性质分类的记录、`待确认` / `感兴趣` / `已投递` / `已拒绝` 状态入口。
-- 每个来源的首次同步摘要：扫描范围、候选、重复、新增、补全、失败数和下一次同步起点。
-- 若启用求职进展，报告已创建、更新或保持不变的进展记录；若未启用，明确标记“求职进展对账未启用”。
-
-#### 后续每次运行带来的增量
-
-每个来源从自己的游标继续，并重扫最近两个日历日以覆盖迟到更新。每次只新增未出现的招聘记录、补全已有记录中的可靠空字段、修复主子表状态不一致，并补偿“已投递”记录到求职进展；不会覆盖用户手填的投递进度、岗位、JD、首次投递日期或更高阶段。即使没有新增，也会输出逐来源扫描窗口、重复数、失败原因和游标是否推进。
-
-#### 案例
-
-```text
-增量同步完成
-
-来源 A
-- 扫描窗口：最近两个日历日
-- 候选 42 / 重复 30 / 新增 9 / 补全 3 / 失败 0
-- 游标：旧值 → 新值
-
-来源 B
-- 失败：登录过期
-- 游标保持不变，不影响来源 A
-```
-
-![招聘信息同步摘要](docs/images/job-collection/sync-summary.png)
-
-![同步后的求职企业清单](docs/images/job-collection/base-job-list.jpg)
-
----
-
-### `recruiting-reminder`：从招聘邮件生成笔面试安排
-
-#### 作用
-
-从用户本机配置的 IMAP 邮箱识别笔试、在线测评和面试通知，抽取公司、岗位、环节、时间和链接；经用户确认后写入“笔面试中心”，关联求职进展，并安排个人日历。它一次运行完成一次扫描，不在后台持续读取邮箱。
-
-#### 第一次运行前需要准备
-
-- 先用 `offerloop-setup` 对 `reminder` 做预检。
-- 在本机配置 IMAP 主机、账号和邮箱授权码或应用专用密码；不要把这些内容发送到聊天。
-- 登记“笔面试中心”和“求职进展”Base 的定位；Base 写入使用 bot profile。
-- 如需创建日历，安装 `lark-calendar` 并完成 user 身份的最小日历授权。
-- 决定本次扫描范围，例如最近 7 天；可先只检查 IMAP 连通性或使用 dry-run。
-
-#### 第一次运行流程
-
-1. 读取指定时间范围内的邮件，先跳过广告、订阅、已处理邮件和永久忽略的发件人。
-2. 仅对候选招聘邮件读取必要正文，抽取事件并识别重复、改期和求职记录关联。
-3. 展示公司、岗位、环节、时间、平台、链接和拟关联记录，等待第一次确认。
-4. 确认后写入“笔面试中心”，并按事件环节单调推进已关联的求职阶段。
-5. 展示固定时间或异步笔试的日历方案，等待第二次确认。
-6. 确认后创建或更新日程，回填日历 ID，并记录来源邮件已处理。
-
-#### 第一次运行后的输出
-
-- 一份待确认的招聘事件清单；第一次确认前不会写 Base。
-- 确认后的“笔面试中心”主记录和对应环节子表记录。
-- 已关联求职记录的阶段推进结果；无法唯一关联时保留事件并等待用户选择。
-- 经第二次确认创建的日历事件，或“日历未完成”的明确原因。
-- 本轮新增、重复、改期、跳过、部分完成和待补偿项摘要；不会输出完整邮件正文。
-
-#### 后续每次运行带来的增量
-
-后续运行跳过已经处理且未变化的邮件，只新增新的招聘事件；改期邮件更新原 Base 记录和原日历事件，不创建重复安排。每次还会双向对账主表与子表的完成状态，重试上次未完成的阶段推进或日历写入，并保证求职阶段只向前推进、不被迟到邮件降级。
-
-#### 案例
-
-![从邮件识别出的笔面试候选](docs/images/recruiting-reminder/email-scan-result.jpg)
-
-![写入笔面试中心的事件](docs/images/recruiting-reminder/base-records.jpg)
-
-![确认后创建的个人日历事件](docs/images/recruiting-reminder/calendar-event.jpg)
-
----
-
-### `offerloop-workspace`：管理私有求职空间与统一入口
-
-#### 作用
-
-把工作台、求职企业清单、求职进展、笔面试中心和个人材料组织到一个固定、默认私有的飞书知识库入口。它只维护目录、使用指南和资源链接，不抓招聘信息、不读邮箱，也不把业务记录复制到知识库文档。
-
-#### 第一次运行前需要准备
-
-- 先用 `offerloop-setup` 对 `workspace` 做预检。
-- 登记三张业务 Base、知识库空间、知识库首页和工作台 HTTPS 地址。
-- 安装或启用 `lark-base`、`lark-doc`、`lark-wiki`，并具备对应资源的查看或编辑权限。
-- 如果资源尚不存在，先让 `offerloop-setup` 展示创建或接管计划；任何创建、移动、分享或权限变更都需要用户确认。
-
-#### 第一次运行流程
-
-1. 只读检查公共配置中的资源定位，不按标题猜测知识库或 Base。
-2. 展示拟创建或整理的固定目录，以及将登记的工作台和三张 Base 入口。
-3. 用户确认后创建或接管私有知识库首页，整理固定目录，并注册已有资源链接；旧资源只归档、不删除。
-4. 验证首页、工作台入口、三张 Base 和目录是否完整，并报告未完成项。
-
-#### 第一次运行后的输出
-
-- 一个默认私有的“OfferLoop 求职空间”。
-- 固定的使用指南、工作台入口、三张业务 Base 入口，以及当前简历、面试准备、ASR、复盘和
-  训练目录。
-- 一份结构完整性报告；业务数据仍以工作台和三张 Base 为唯一来源。
-
-#### 后续每次运行带来的增量
-
-后续运行只检查并补充新登记的资源入口、缺失目录和允许修复的结构漂移；不会重复创建第二套知识库，也不会把每日招聘或邮件数据复制到首页。招聘记录和笔面试事件会通过工作台读取最新 Base 数据自然更新，因此业务数据变化通常不需要改写知识库首页。
-
-#### 案例
-
-![OfferLoop 求职空间目录](docs/images/workbench/wiki-directory.png)
-
-![固定的使用指南与资源入口](docs/images/workbench/wiki-guide.png)
-
-![招聘工作台概览](docs/images/workbench/dashboard-overview.png)
-
-![工作台中的三张业务 Base](docs/images/workbench/business-data.png)
-
----
-
-### `resume-deepthink`：追问式深挖简历经历
-
-#### 作用
-
-先确认目标投递岗位和方向，再围绕用户选定的当前简历版本连续追问，生成该版本专属的深挖
-文档与面试 STAR/CAR 素材。
-
-#### 第一次运行前需要准备
-
-- 用 `offerloop-setup` 启用 `coaching`，并允许 `offerloop-workspace` 定位训练目录。
-- 在飞书知识库“当前简历”中准备一个有唯一名称的简历版本。
-- 安装或启用 `lark-doc`、`lark-wiki`。
-
-#### 第一次运行流程
-
-1. 确认目标投递岗位与方向，再选择当前简历版本和一段经历。
-2. 先让用户完整口述，再逐层追问背景、目标、职责、行动、决策、协作、困难、结果和反思。
-3. 每阶段复述已确认事实与缺口，用户确认后再生成表达。
-4. 保存包含简历版本和投递方向的独立 Markdown 飞书文档。
-5. 将仍需继续准备的问题保留在深挖文档中。
-
-#### 第一次运行后的输出
-
-- 事实证据卡、完整经历叙述、面试追问地图。
-- 稳健版、强化版和精简版简历 bullet。
-- STAR/CAR 素材、风险和待补证据。
-
-#### 后续每次运行带来的增量
-
-每次运行保存独立文档；后续 Skill 通过 `关联简历版本` 读取同一版本的深挖内容。不会建立
-个人经历主档或历史简历目录。
-
-#### 案例
-
-```text
-调用 resume-deepthink，读取我飞书里的暑期实习简历。
-先深挖推荐系统项目，一次只问一到三个问题。
-```
-
----
-
-### `pm-sense`：产品思维训练
-
-#### 作用
-
-训练产品设计、策略、商业化、AI 产品和发散场景题。用户先独立回答，再通过点评、追问、公开
-研究和自主总结形成可复用答案。
-
-#### 第一次运行前需要准备
-
-- 启用 `coaching` 和 `05｜产品 Sense` 目录。
-- 准备一道题；没有题目时可让 Skill 给出三个不同题型。
-- 如要延续某次训练，可指定对应产品 Sense 训练文档。
-
-#### 第一次运行流程
-
-1. 用户先独立初答，Skill 不提前给框架。
-2. 每轮只推进最关键的两至三个判断。
-3. 用户自主总结后，再查询官方资料和可靠外部证据。
-4. 生成 1 分钟/3 分钟答案并保存 Markdown 飞书文档。
-
-#### 第一次运行后的输出
-
-- 原始答案、逻辑问题、确认判断和研究证据。
-- 完整分析链、反方观点、失败风险和验证指标。
-- 1 分钟与 3 分钟口语答案、后续追问和迁移方法。
-
-#### 后续每次运行带来的增量
-
-每次训练保存独立文档，并把值得继续准备的问题保留在后续训练计划中。
-
-#### 案例
-
-```text
-调用 pm-sense，训练“为大学生设计一款 AI 搜索产品”。
-让我先回答，不要先给框架。
-```
-
----
-
-### `interview-prep`：生成岗位化面试准备文档
-
-#### 作用
-
-从求职进展读取岗位 JD 和用户维护的投递简历版本，再精确读取知识库中的同名当前简历，结合
-公开公司研究生成针对当前公司、岗位和轮次的面试准备文档。
-
-#### 第一次运行前需要准备
-
-- 一条面试事件或明确的公司、岗位、轮次。
-- 求职进展中已维护岗位 JD 和投递简历版本。
-- `lark-base`、`lark-doc`、`lark-wiki` 可用。
-
-#### 第一次运行流程
-
-1. 通过精确 record ID 或统一事件查询接口确认面试事件。
-2. 读取求职进展中的 JD 和简历版本，再精确读取对应当前简历；按需读取同版本深挖文档。
-3. 使用公司官网、公告、财报和官方产品资料研究岗位。
-4. 生成能力映射、追问、回答提纲、风险和检查清单，保存后回填笔面试中心。
-
-#### 第一次运行后的输出
-
-- 公司、业务、岗位和 JD 能力模型。
-- 用户证据映射、简历逐项追问、高频题与回答提纲。
-- 产品题准备、压力追问、反问和面试前清单。
-
-#### 后续每次运行带来的增量
-
-每次面试生成独立文档并关联精确事件；同一 `run_id` 重试幂等，主表和明确轮次子表保持一致。
-
-#### 案例
-
-```text
-调用 interview-prep，为笔面试中心里明天的 AI 产品经理一面生成准备文档。
-使用我当时实际投递的简历。
-```
-
----
-
-### `mock-lab`：真实节奏模拟面试
-
-#### 作用
-
-先确认面试方向和是否有详细 JD，再读取用户选择的当前简历及同版本简历深挖文档，从一面、
-二面、三面和 HR 面角度进行一题一答模拟，结束后统一提供逐题评价。
-
-#### 第一次运行前需要准备
-
-- 面试方向、可选 JD 和一个当前简历版本。
-- 选择完整模拟或部分轮次练习，以及是否允许压力追问。
-- 启用模拟面试飞书目录。
-
-#### 第一次运行流程
-
-1. 读取选定简历及同版本深挖文档，按一面、二面、三面和 HR 面视角构建题目。
-2. 一次只问一题，根据回答自然追问，不实时点评。
-3. 用户明确结束后统一评价内容、结构、证据、表达和岗位匹配。
-4. 保存逐题 Markdown 模拟报告。
-
-#### 第一次运行后的输出
-
-- 问题与追问链、回答摘要和逐题评价。
-- 岗位能力覆盖、证据风险、改进表达和后续训练计划。
-
-#### 后续每次运行带来的增量
-
-新模拟只读取本次选定简历、同版本深挖文档和用户指定材料。报告可建议继续深挖经历或训练产品
-思维，但不会自动修改简历。
-
-#### 案例
-
-```text
-调用 mock-lab，用刚生成的面试准备文档做一次 8 题业务面模拟。
-过程中不要点评，结束后再统一复盘。
-```
-
----
-
-### `talk-review`：真实面试 ASR 复盘
-
-#### 作用
-
-根据真实面试 ASR 或转写稿还原问题和追问链，对比准备文档，逐题评价回答并生成改进表达、
-简历建议和下一轮行动。
-
-#### 第一次运行前需要准备
-
-- 上传到飞书“04｜面试复盘 / ASR待复盘”的转写文档，或直接粘贴 ASR。
-- 选择本次使用的当前简历版本；Skill 会读取同版本简历深挖文档。
-- 允许 Skill 保存最终 Markdown 复盘。
-
-#### 第一次运行流程
-
-1. 标记说话人不确定、缺失片段和疑似 ASR 错误。
-2. 还原主问题、追问和回答边界。
-3. 通过统一事件接口确认笔面试中心记录。
-4. 对比准备命中与遗漏，逐题评价并生成改进表达。
-5. 保存复盘并幂等回填主表和明确轮次子表。
-
-#### 第一次运行后的输出
-
-- ASR 质量、问答链、逐题评价和准备命中分析。
-- 改进回答、面试官关注点推断、素材建议和下一轮行动。
-
-#### 后续每次运行带来的增量
-
-每次真实面试形成独立复盘。新发现事实只有用户确认后才列为建议回流项；对话粘贴 ASR 会明确
-标记没有持久化原始转写来源。
-
-#### 案例
-
-```text
-调用 talk-review，分析我粘贴的面试 ASR。
-先标记不确定片段，再对照准备文档逐题复盘。
-```
-
----
-
-## 4. 旧用户如何升级
-
-旧版 `job-collection` 和 `recruiting-reminder` 可以继续独立使用，但不会自动拥有新的求职进展、统一笔面试中心、工作台或知识库。升级是显式操作，不会随 Skill 文件更新自动迁移业务数据。
-
-### 升级前
-
-- 不要删除旧 Base、旧配置或去重状态。
-- 不要对已有数据直接执行“一键完整部署”；先做只读迁移检查。
-- 备份本地配置和状态，且不要提交备份：
-
-  ```bash
-  cp -a ~/.config/offerloop ~/.config/offerloop.backup-$(date +%Y%m%d)
-  cp -a ~/.local/state/offerloop ~/.local/state/offerloop.backup-$(date +%Y%m%d)
-  ```
-
-### 更新九个 Skill
+确认预演结果后安装 9 个 Skill：
 
 ```bash
-npx skills update offerloop-setup job-collection recruiting-reminder \
-  offerloop-workspace resume-deepthink interview-prep mock-lab \
-  talk-review pm-sense -g -y
+python3 scripts/setup_offerloop.py --agent codex --mode full
 ```
 
-如果当前 Agent 使用其他安装工具，把 GitHub 链接再次交给它并明确要求升级。出现同名但内容不同的 Skill 时，先移到 Skills 发现范围之外的可恢复备份，再安装新版；不要覆盖未知来源文件。必须保留 `~/.config/offerloop/` 和 `~/.local/state/offerloop/`。
+本地安装完成后，命令会给出一段可直接发到**新 Agent 会话**的初始化提示。Agent 会先做只读预检，
+展示准备复用或创建的三张飞书业务 Base、私有知识库和固定目录；只有得到用户明确确认后才执行
+线上写入。中途退出不会重复创建资源，下次从第一个未通过的阶段继续。
 
-更新后重新开启 Agent 会话，然后发送：
-
-```text
-请调用 offerloop-setup。我是旧版 OfferLoop 用户，已经升级到九个 Skill。
-请只读检查我的旧配置和现有飞书 Base，给出迁移计划；不要创建、修改或删除任何资源。
-```
-
-看清迁移计划后，再逐项授权创建或接管求职进展、统一笔面试中心、知识库和工作台。旧双 Base、旧配置和迁移前备份应永久保留为回滚入口。详细兼容原则见[迁移指南](MIGRATION.md)。
-
-## 5. 其他说明
-
-### 外部依赖与缺失处理
-
-OfferLoop 的飞书业务能力需要 `lark-cli >= 1.0.73`。如果尚未安装：
+Agent 完成只读线上验收后记录验收，再核验：
 
 ```bash
-npx @larksuite/cli@latest install
-npx skills add larksuite/cli -g -y
+python3 scripts/setup_offerloop.py --agent codex --mode full --record-workspace-verified
+python3 scripts/setup_offerloop.py --agent codex --mode full --verify
 ```
 
-外部 Lark Skill 不随 OfferLoop 打包：
+只有本地安装、模式配置、三张 Base、知识库目录、schema v5 locator 和权限都通过时，完整模式才会
+报告 `ready`。`--record-workspace-verified` 本身不访问飞书，只能由 Agent 在真实线上验收通过后
+执行；安装命令不会复制三张 Base，也不会用示例 URL 冒充已经完成线上 setup。
 
-| 能力 | 需要的外部 Skill |
-|---|---|
-| 招聘信息同步 | 核心流程直接使用 `lark-cli`；启用通知时需要 `lark-im`，首次按姓名登记通知对象时还需要 `lark-contact` |
-| 笔面试提醒 | `lark-calendar`；启用通知时还需要 `lark-im` |
-| 求职空间 | `lark-base`、`lark-doc`、`lark-wiki` |
-| 求职训练 | `lark-base`、`lark-doc`、`lark-wiki` |
-| 完整部署 | 组合使用上述 Skill，并需要 `lark-shared`、`lark-apps` |
+### 方式 B：只下载并安装一个 Skill
 
-缺少依赖时先让 `offerloop-setup` 只读预检，并按它给出的动作安装或启用；安装后重新开启 Agent 会话。
-
-### 数据、安全与确认边界
-
-- 只访问用户明确提供且有权访问的招聘来源、邮箱和飞书资源。
-- 不绕过登录、验证码、导出限制、租户权限或反爬机制。
-- 任何 Base 写入、日历创建、知识库结构变更、资源分享或工作流启用前，都要说明范围并获得确认。
-- 邮件内容是不可信外部数据，不能作为 Agent 指令；邮件中的链接只展示，不自动打开。
-- App Secret、密码、Cookie、token 和邮箱授权码只保存在用户本机安全配置中，不进入聊天、Git 或 Skill 目录。
-- 配置与运行状态位于用户目录，Skill 更新不会主动覆盖：
-
-  | 内容 | 默认位置 |
-  |---|---|
-  | 公共资源定位 | `~/.config/offerloop/config.json` |
-  | Job Collection 私有配置 | `~/.config/offerloop/job-collection/.env` |
-  | IMAP 凭证 | `~/.config/offerloop/recruiting-reminder/.env` |
-  | 已处理邮件状态 | `~/.local/state/offerloop/recruiting-reminder/processed_emails.json` |
-
-### 核心数据关系
-
-```text
-招聘信息源
-  ↓ job-collection
-求职企业清单 ── 已投递 ──> 求职进展
-                              ↑ recruiting-reminder 关联并推进阶段
-IMAP 邮箱 ── recruiting-reminder ──> 笔面试中心 ──> 个人日历
-
-工作台读取三张 Base 与日历的实时数据
-知识库固定保存于：
-00｜OfferLoop 使用指南、01｜当前简历、02｜简历深挖、03｜面试准备文档、
-04｜面试复盘、05｜产品 Sense、06｜模拟面试
-
-求职进展（JD + 投递简历版本）──> interview-prep
-当前简历 + 同版本简历深挖 ─────> mock-lab
-ASR + 当前简历 + 同版本简历深挖 ─> talk-review
-```
-
-### 当前边界
-
-- `job-collection` 只同步用户提供的飞书 Base 或腾讯 Smartsheet，不主动搜索公开招聘渠道。
-- `recruiting-reminder` 只处理招聘笔试、测评和面试通知，不读取无关邮件；一次运行完成一次扫描，不在后台轮询。
-- `offerloop-workspace` 不复制业务 Base 数据；五个产出型 Skill 只在固定目录写各自的
-  Markdown 产物。
-- 结构化/半结构化央国企面试专项不在当前范围；不得仅根据企业类型猜测简历版本或面试形式。
-- 飞书应用 scope、版本发布、租户安装、Base/知识库共享、IMAP 连通性、日历授权和工作台 OAuth 必须在真实账号下另行核验。离线 `ready` 不代表线上已经可用。
-
-### 开发与发布前验收
+下面以 `mock-lab` 为例。Git sparse checkout 只取该 Skill、安装脚本和最小共享运行时，不下载其余
+8 个 Skill 或工作台内容：
 
 ```bash
-python3 -m unittest discover -s tests -v
-python3 -m unittest discover -s skills/job-collection/tests -v
-python3 -m unittest discover -s skills/recruiting-reminder/tests -v
-python3 scripts/check_skill_compatibility.py
-npm --prefix services/job-progress-sync test
-python3 skills/job-collection/scripts/validate_skill.py
+git clone --filter=blob:none --no-checkout https://github.com/riwonswain-ovo/OfferLoop.git OfferLoop-mock-lab
+cd OfferLoop-mock-lab
+git sparse-checkout init --cone
+git sparse-checkout set scripts skills/mock-lab skills/offerloop-workspace skills/offerloop-setup/scripts skills/offerloop-setup/references
+git checkout main
+python3 scripts/setup_offerloop.py --agent codex --mode single --skill mock-lab --dry-run
+python3 scripts/setup_offerloop.py --agent codex --mode single --skill mock-lab
+python3 scripts/setup_offerloop.py --agent codex --mode single --skill mock-lab --verify
 ```
 
-GitHub CI 会执行多系统冷安装、仓库契约测试和两份应用模板的安装、测试、类型检查与构建。合成端到端用例见[验收用例](docs/cases/end-to-end-acceptance.md)，当前版本说明见[0.1.0-alpha.6](docs/releases/0.1.0-alpha.6.md)，最近一次真实旧版运行结论见[运行时认证](docs/cases/runtime-certification-2026-07-22.md)。
+把三处 `mock-lab` 替换为任一 Skill 名称即可。单 Skill 模式：
 
-## License
+- 跳过 OfferLoop 全局用户画像门槛；
+- 只询问当前任务真正需要的输入；
+- 默认在 Chat 中交付，文件型产物保存到用户选择的本地位置；
+- 不自动创建知识库、Base、目录、飞书文档、日历或任务；
+- 用户明确要求连接飞书且完成授权后，才启用当前 Skill 所需的飞书读写。
 
-[MIT](LICENSE)
+`job-collection` 和 `recruiting-reminder` 的核心能力本身需要相应的信息源、目标 Base、邮箱或日历
+连接；这不等于必须安装完整 OfferLoop 工作区。
+
+### 支持的 Agent
+
+将示例中的 `codex` 替换为 `claude-code`、`hermes-agent` 或 `workbuddy`。Windows 使用 `py -3`
+代替 `python3`。
+
+### 升级
+
+先预演，再只升级当前选择的模式：
+
+```bash
+python3 scripts/setup_offerloop.py --agent codex --mode full --dry-run
+python3 scripts/setup_offerloop.py --agent codex --mode full --upgrade
+
+python3 scripts/setup_offerloop.py --agent codex --mode single --skill mock-lab --dry-run
+python3 scripts/setup_offerloop.py --agent codex --mode single --skill mock-lab --upgrade
+```
+
+安装和升级均为幂等操作；同名但内容不同的目录会先报告冲突，只有显式 `--upgrade` 才备份旧版并
+替换。模式、所选 Skill 和 setup 阶段保存在用户私有的本机配置中，凭证不写入仓库或安装清单。
+
+旧版命令仍保留兼容，但只管理本地 Skill，不代表飞书工作区已经完成：
+
+```bash
+python3 scripts/install_offerloop.py --agent codex --setup
+python3 scripts/install_offerloop.py --agent codex --verify
+python3 scripts/install_offerloop.py --agent codex --upgrade
+```
+
+新安装应优先使用 `setup_offerloop.py`，因为它会明确记录 `full` / `single` 并核验线上状态。
+
+## 固定知识库结构
+
+仅完整模式创建或接管以下结构：
+
+```text
+00｜OfferLoop 使用指南
+01｜核心求职数据 / 企业清单、求职进展、笔面试中心
+02｜用户画像
+03｜定制简历
+04｜经历深挖 / 细节复原文档、面试逐字文档
+05｜岗位能力与训练 / 岗位能力画像、专项训练、每日三题、周报
+06｜面试准备
+07｜模拟面试
+08｜真实面试复盘 / ASR 待复盘、已完成复盘
+```
+
+setup 不预建空用户画像。`career-profile` 在用户确认第一条真实内容后才创建对应文档。完成和暂停
+的产物按统一标题保存；暂停或时间不足时使用 `incomplete`，并保留缺口与续做清单。
+
+## Loop Runtime
+
+完整模式继续执行用户画像门槛并默认把产物沉淀到飞书；单 Skill 模式跳过全局门槛并默认在 Chat
+中交付。模式由 `.offerloop-runtime/scripts/install_mode.py` 从本机非敏感配置中解析。旧版配置未
+记录模式时按完整模式兼容，避免静默改变既有用户的自动保存行为。
+
+参考实现位于 `services/job-progress-sync`，包含机会、求职进展与能力成长三个闭环。每日进展确认
+固定为 `21:30 Asia/Shanghai`。成员列表截断、存在多个真人、唯一真人不是所有者或缺少成员读取
+权限时，一律暂停，不切换私聊，也不发送替代消息。
+
+## 工作台边界
+
+工作台不是两种安装模式的一部分。需要参与开发时才可单独预演：
+
+```bash
+python3 scripts/install_offerloop.py --deploy-workbench /path/to/miaoda-project --dry-run
+```
+
+工作台只展示事实、待办、触发原因、下一步和暂停原因。生成式任务通过原生 Agent 深链接打开并
+自动带齐上下文。OfferLoop 不恢复本机 Agent Worker，也不提供 Agent Chat、后台轮询或 Worker
+队列。
+
+## 验证
+
+```bash
+python3 -m unittest discover -s tests
+cd services/job-progress-sync && npm test
+```
+
+所有线上迁移都应先导出快照、原地升级并保留旧数据；无法可靠回填的记录进入“迁移复核”视图。
+
+## 发布流程
+
+这类安装器、setup、Skill 契约和 README 改动先提交到 `OfferLoop-development` 的功能分支，经冷
+安装、9 个单 Skill 安装、完整模式飞书验收和升级回归通过后再合并。形成明确版本号和发布说明后，
+再同步到公开的 `OfferLoop` 仓库。不要把未经真实飞书冷启动验证的开发提交直接推到公开仓。

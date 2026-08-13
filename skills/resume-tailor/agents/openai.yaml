@@ -1,0 +1,4 @@
+interface:
+  display_name: "简历定制"
+  short_description: "用真实经历生成一页简历，支持 AI 产品专项事实门禁"
+  default_prompt: "使用 $resume-tailor 根据我的目标岗位和亲自选择的真实经历制作一页 PDF 简历；若为 AI 产品岗位，请检查技术名词、指标和项目成熟度。"

@@ -1,27 +1,26 @@
-# OfferLoop Job Progress Sync
+# OfferLoop Loop Runtime
 
-This directory is the platform-neutral reference implementation for copying a
-newly submitted enterprise record into the independent `求职进展` Base. The
-production Miaoda adapter is distributed from
-`skills/offerloop-setup/assets/progress-sync-template`;
-`job-collection` performs the same idempotent operation as a repair path.
+这是 OfferLoop 的平台中立轻量级闭环运行时。三张飞书 Base 与知识库仍是业务真源；本服务只保存工作流实例、节点运行、能力观察、待办、审批与幂等记录。
 
-## Current status
+## 三个 workflow
 
-The production path is a Base workflow that reacts when `投递进度` becomes
-`已投递` and calls the route-scoped Miaoda OpenAPI endpoint. The workflow sends
-the source record ID as the `sourceRecordId` query parameter because Base raw
-JSON body references do not reliably render system record metadata.
+- `opportunity-loop`：岗位过滤、边缘候选确认与去重写入。
+- `application-progress-loop`：邀请、完成事件与不可倒退的求职状态。
+- `capability-growth-loop`：能力观察、专项训练待办与复测。
 
-Production verification may use an explicitly approved, uniquely named
-temporary record and must remove both source and progress records afterward.
-Stable verification returns HTTP 200 and remains idempotent on replay.
+`loop-store.js` 提供原子持久化和合法边校验；`progress-model.js` 负责拆分“最近完成节点 / 下一环节 / 流程结果 / 当前状态”；`daily-checkin.js` 负责每日确认的安全预检和回调幂等。
 
-## Runtime settings
+## 每日进展确认
 
-Configure these as encrypted environment variables in the selected hosting
-platform. Do not put their values in Git, a Feishu document, Base fields, or
-request logs.
+固定计划为 `21:30 Asia/Shanghai`。发送前必须完整分页读取群成员，并确认群内只有一个真人且该真人是 OfferLoop 所有者。任何条件不满足时返回暂停原因；不自动改为私聊。
+
+卡片按钮使用 `message_id + action_id + event_id` 去重。自由文本只生成变更预览，用户确认前不得写 Base。
+
+## Agent 边界
+
+运行时可以确定性同步 Base、排队能力观察、创建待办和准备上下文。生成训练题、模拟面试、经历深挖、简历、面试准备与复盘时，只生成原生 Agent 深链接，不运行本机 Agent Worker。
+
+## 环境变量
 
 ```text
 FEISHU_APP_ID=<value>
@@ -31,53 +30,14 @@ PROGRESS_TABLE_ID=<value>
 WEBHOOK_SECRET=<value>
 ```
 
-The Feishu app needs record read/write access to the target progress Base and
-must be added as a document collaborator. The HTTP endpoint must use HTTPS.
+密钥只能存放在托管平台的加密环境变量中，不能写入 Git、飞书文档、Base 字段或日志。
 
-The Miaoda production adapter additionally reads source Base identifiers from
-encrypted environment variables and accepts a minimal body containing only
-`sourceRecordId`. It re-reads the source record, verifies that its status is
-`已投递`, and obtains the company name itself. Authentication is handled by a
-route-scoped Miaoda OpenAPI key stored only in the Base workflow.
+## 验证
 
-## Webhook contract
-
-The caller supplies the shared secret in the `X-OfferLoop-Secret` header and a
-JSON body with only the minimum recruitment metadata:
-
-```json
-{
-  "event": "application.submitted",
-  "source_record_id": "rec_example",
-  "company": "示例公司",
-  "announcement_url": "https://example.com/notice",
-  "application_url": "https://example.com/apply",
-  "transitioned_at": "2026-07-17T19:00:00+08:00"
-}
-```
-
-`企业清单 record_id` is a repeatable parent key: one enterprise record may have
-multiple progress rows for different jobs. `投递记录 ID` uniquely identifies each
-application. A first event creates one default record with a blank `投递岗位`
-and `岗位 JD`; later retries update every job row under that parent while preserving
-user-edited fields, the first `投递日期`, and any later interview stage. Missing
-application IDs are backfilled from the progress record ID. Creation uses a stable Feishu
-`client_token`, so retrying the same source record remains idempotent.
-
-## Feishu FaaS adapter
-
-`src/feishu-faas.js` exports `main(event)`. The adapter expects an HTTP event
-with `headers` and `body`, then returns `statusCode`, response headers and a JSON
-string body. If the tenant's FaaS Public API shape differs, only this adapter
-should change; `handler.js` and its tests remain platform-neutral.
-
-## Local verification
-
-Use a Node.js 20 or newer runtime:
+使用 Node.js 20 或更高版本：
 
 ```bash
 npm test
 ```
 
-The tests use injected mock HTTP clients. They do not contact Feishu or require
-real credentials.
+测试全部使用注入的 mock，不访问飞书，也不需要真实凭据。

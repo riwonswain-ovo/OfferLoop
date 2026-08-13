@@ -1,0 +1,4 @@
+interface:
+  display_name: "求职画像与岗位偏好"
+  short_description: "通过对话建立岗位选择偏好、性格探索与个人表达习惯"
+  default_prompt: "使用 $career-profile 和我逐题建立岗位选择偏好，并持续整理性格探索与语言表达习惯。"

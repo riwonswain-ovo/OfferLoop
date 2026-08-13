@@ -142,7 +142,9 @@ test("creates a progress record for the first submitted event", async () => {
   });
   assert.deepEqual(created, [
     {
-      "当前阶段": "已投递",
+      "最近完成节点": "投递完成",
+      "下一环节": "待反馈",
+      "流程结果": "进行中",
       "公司": "示例公司",
       "投递岗位": "",
       "投递日期": "2026-07-17",
@@ -225,7 +227,9 @@ test("repeat submission preserves user fields and later interview stage", async 
 test("identical retry does not write the progress record again", async () => {
   let updateCount = 0;
   const existingFields = {
-    "当前阶段": "已投递",
+    "最近完成节点": "投递完成",
+    "下一环节": "待反馈",
+    "流程结果": "进行中",
     "公司": "示例公司",
     "投递岗位": "",
     "投递日期": "2026-07-17",

@@ -1,0 +1,76 @@
+{
+  "skill": "mock-lab",
+  "version": "0.3.0",
+  "test_cases": [
+    {
+      "id": "should-trigger-ai-pm-project-01",
+      "type": "should_trigger",
+      "prompt": "按我的 JD 模拟 AI 产品经理面试，重点深挖 RAG 项目，一次只问一道。",
+      "expected_behavior": "调用 mock-lab，加载产品与 AI 产品 Playbook/问题模式；从用户回答动态选择项目真实性、技术选型、评测或所有权缺口。",
+      "notes": "AI 项目模拟正例"
+    },
+    {
+      "id": "should-trigger-ai-case-01",
+      "type": "should_trigger",
+      "prompt": "练一道从零设计企业知识助手的 AI 产品 Case，不要提前给答案。",
+      "expected_behavior": "调用 mock-lab；先观察用户是否澄清任务、数据、错误代价和成功标准，再逐步追加一个约束。",
+      "notes": "AI 产品 Case"
+    },
+    {
+      "id": "should-trigger-pressure-01",
+      "type": "should_trigger",
+      "prompt": "允许压力追问。如果我一直讲空话，你可以打断，让我举具体例子。",
+      "expected_behavior": "在用户授权下可礼貌中断持续偏题、要求实例或数字口径；压力针对证据，不羞辱，证据充分后停止。",
+      "notes": "压力行为"
+    },
+    {
+      "id": "edge-term-only-01",
+      "type": "edge_case",
+      "prompt": "逐题训练我解释 MCP、A2A、Function Call，但要从产品经理角度问。",
+      "expected_behavior": "可以做专项逐题训练；定义后追适用条件、产品决策和项目边界，不按术语词典顺序背诵。",
+      "notes": "术语专项"
+    },
+    {
+      "id": "should-not-trigger-prep-01",
+      "type": "should_not_trigger",
+      "prompt": "先给我生成完整 AI 产品面试作战手册和十道题答案，不要开始问。",
+      "expected_behavior": "不进入模拟；应由 interview-prep 处理。",
+      "notes": "跨 Skill 诱饵：准备文档"
+    },
+    {
+      "id": "should-not-trigger-review-01",
+      "type": "should_not_trigger",
+      "prompt": "分析这份真实面试 ASR 里为什么面试官连续追问我准确率。",
+      "expected_behavior": "不进入模拟；应由 talk-review 处理。",
+      "notes": "跨 Skill 诱饵：真实复盘"
+    },
+    {
+      "id": "should-trigger-ai-coding-ownership-01",
+      "type": "should_trigger",
+      "prompt": "模拟面试深挖我用 AI Coding 独立完成并上线 SaaS 的项目，重点追问是不是真正由我做的。",
+      "expected_behavior": "调用 mock-lab 并加载 AI Coding 产品交付问题模式；动态追问来源、本人/Agent/模板分工、验收、部署和生产证据，不变成代码语法考试。",
+      "notes": "AI Coding 所有权模拟"
+    },
+    {
+      "id": "edge-system-boundary-01",
+      "type": "edge_case",
+      "prompt": "我投 AI 产品经理，不会写后端代码，但想练 API、数据库和权限追问。",
+      "expected_behavior": "可以从 PM 级系统边界训练真实业务动作、接口、状态、权限和异常；确认职责边界，不要求现场编码。",
+      "notes": "PM 技术深度边界"
+    },
+    {
+      "id": "should-trigger-product-seven-types-hour-01",
+      "type": "should_trigger",
+      "prompt": "用我投递的某内容平台 C 端产品经理 JD 做一场完整模拟面试，控制在一小时。",
+      "expected_behavior": "先核验目标公司、业务赛道、岗位性质和材料；在 60 分钟预算内动态覆盖自我介绍、简历深挖、行为动机、工作职能、开放业务、产品实战和费米估算七类，顺序与追问深度按 JD 和回答调整。",
+      "notes": "产品经理七类完整模拟"
+    },
+    {
+      "id": "edge-special-drill-not-full-01",
+      "type": "edge_case",
+      "prompt": "今天只专项练三道费米估算题。",
+      "expected_behavior": "按专项练习运行，不强行插入其他六类，也不把本轮称为完整模拟。",
+      "notes": "专项练习边界"
+    }
+  ]
+}

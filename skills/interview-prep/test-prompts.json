@@ -1,0 +1,76 @@
+{
+  "skill": "interview-prep",
+  "version": "0.3.0",
+  "test_cases": [
+    {
+      "id": "should-trigger-ai-pm-01",
+      "type": "should_trigger",
+      "prompt": "我收到了某公司 Agent 产品经理二面，下面是完整 JD 和我选的经历深挖，请帮我准备。",
+      "expected_behavior": "调用 interview-prep，加载产品与 AI 产品岗位指南；结合公司/JD/轮次生成五类共 15 道正式题和较完整答案，不另建项目战斗卡，也不生成通用 Agent 题库。",
+      "notes": "AI 产品准备正例"
+    },
+    {
+      "id": "should-trigger-term-01",
+      "type": "should_trigger",
+      "prompt": "AI 产品经理一面可能突然问 Agentic RAG 和普通 RAG 的区别，请结合我的知识库项目准备 45 秒回答。",
+      "expected_behavior": "调用 interview-prep；按本质、相邻概念、PM 决策和项目边界组织，不把 Query Rewrite 自动说成 Agentic RAG。",
+      "notes": "术语突袭正例"
+    },
+    {
+      "id": "edge-ai-engineer-01",
+      "type": "edge_case",
+      "prompt": "岗位标题是 AI 产品工程师，但 JD 主要写 Python、模型部署和推理优化。",
+      "expected_behavior": "按真实工程职责建立复合画像，不强制使用 AI 产品经理指南替代技术准备。",
+      "notes": "标题与职责冲突"
+    },
+    {
+      "id": "edge-project-gap-01",
+      "type": "edge_case",
+      "prompt": "我简历写了 RAG 准确率 90%，但经历材料里没有测试集和口径，明天面试。",
+      "expected_behavior": "在相关正式题中标记证据缺口并给出诚实口径；不得补造测试方法，建议回流 experience-deepthink。",
+      "notes": "个人证据不足"
+    },
+    {
+      "id": "should-not-trigger-mock-01",
+      "type": "should_not_trigger",
+      "prompt": "不要给我题单，现在直接当 AI 产品面试官一次问我一道。",
+      "expected_behavior": "不生成准备文档；应由 mock-lab 处理。",
+      "notes": "跨 Skill 诱饵：模拟面试"
+    },
+    {
+      "id": "should-not-trigger-review-01",
+      "type": "should_not_trigger",
+      "prompt": "这是刚结束的 AI 产品面试 ASR，帮我逐题复盘。",
+      "expected_behavior": "不进入面试准备；应由 talk-review 处理。",
+      "notes": "跨 Skill 诱饵：真实复盘"
+    },
+    {
+      "id": "should-trigger-ai-coding-prep-01",
+      "type": "should_trigger",
+      "prompt": "明天面 Agent 产品经理，JD 强调能用 AI Coding 快速交付原型。请结合我用 Codex 做的 MVP 准备。",
+      "expected_behavior": "调用 interview-prep，加载 AI 产品与 AI Coding 产品交付指南；把参与层级、Spec—验收、系统边界、测试安全、部署成熟度和所有权证据融入相关正式题。",
+      "notes": "AI Coding 岗位准备正例"
+    },
+    {
+      "id": "edge-tool-version-01",
+      "type": "edge_case",
+      "prompt": "面试官可能问现在 Codex 和 Cursor 哪个最好，课程说优先某一个。",
+      "expected_behavior": "不背诵课程排名；重新核验当前能力，并按任务、预算、速度、控制权、质量、安全和维护责任回答。",
+      "notes": "时效性工具推荐边界"
+    },
+    {
+      "id": "should-trigger-product-five-types-01",
+      "type": "should_trigger",
+      "prompt": "我要准备某本地生活公司的产品经理二面，请按公司业务和 JD 给我完整准备材料。",
+      "expected_behavior": "生成 15 道正式题；高相关面经优先，剩余题按行为动机、工作职能、开放业务、产品实战和费米估算五类动态补齐，每类至少一题，并提供较完整参考回答。",
+      "notes": "产品经理五类正式题覆盖"
+    },
+    {
+      "id": "edge-no-resume-deep-dive-section-01",
+      "type": "edge_case",
+      "prompt": "简历里有三段产品实习，顺便给每段做一张项目战斗卡。",
+      "expected_behavior": "不在 interview-prep 中新增项目战斗卡；将项目深挖路由到 experience-deepthink，个人材料仅用于自我介绍和正式题证据。",
+      "notes": "经历深挖职责边界"
+    }
+  ]
+}

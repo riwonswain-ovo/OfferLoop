@@ -26,14 +26,36 @@ ENTERPRISE_FIELDS = (
     "子表 record_id",
 )
 APPLICATION_STATUSES = ("待确认", "感兴趣", "已投递", "已拒绝")
+CANDIDATE_ROUTES = ("hard_filtered", "auto_write", "prewrite_confirmation")
 PROFILE_FIELD_NAMES = (
     "graduation_year",
     "target_cities",
     "city_filter_mode",
+    "selected_industries",
+    "target_job_preferences",
     "excluded_companies",
     "excluded_industries",
     "excluded_recruitment_types",
 )
+
+
+def route_candidate(
+    *,
+    city_matches: bool | None,
+    industry_matches: bool | None,
+    job_preference_matches: bool | None,
+) -> str:
+    """Route a candidate after normalization without weakening hard filters.
+
+    ``None`` means the adapter could not verify a condition. Unverifiable city
+    or industry data fails the hard gate; an unverifiable job match is sent to
+    the user because job preference is intentionally soft.
+    """
+    if city_matches is not True or industry_matches is not True:
+        return "hard_filtered"
+    if job_preference_matches is True:
+        return "auto_write"
+    return "prewrite_confirmation"
 
 
 def resolve_profile_field(fields: dict[str, object], canonical_name: str) -> object:

@@ -21,25 +21,32 @@ import tempfile
 
 
 ARTIFACT_SCHEMA_VERSION = 1
-CONFIG_SCHEMA_VERSION = 4
+CONFIG_SCHEMA_VERSION = 5
 SKILLS = (
-    "resume-deepthink",
+    "career-profile",
+    "experience-deepthink",
+    "resume-tailor",
+    "competency-lab",
     "interview-prep",
     "mock-lab",
     "talk-review",
-    "pm-sense",
 )
+LEGACY_SKILLS = ("resume-deepthink", "pm-sense")
 SKILL_CONFIG_KEYS = {
-    "resume-deepthink": "resume_deepthink",
+    "career-profile": "user_profile",
+    "experience-deepthink": "experience_deepthink",
+    "resume-tailor": "current_resumes",
+    "competency-lab": "competency_training",
     "interview-prep": "interview_prep",
     "mock-lab": "mock_lab",
     "talk-review": "talk_review",
-    "pm-sense": "pm_sense",
 }
 FOLDER_KEYS = (
+    "user_profile",
     "current_resumes",
-    "resume_deepthink",
-    "pm_sense",
+    "experience_deepthink",
+    "competency_profiles",
+    "competency_training",
     "interview_prep",
     "mock_lab",
     "interview_asr",
@@ -47,19 +54,33 @@ FOLDER_KEYS = (
 )
 LOCATOR_PATHS = {
     "folders": {
-        "current_resumes": ("01｜当前简历",),
-        "resume_deepthink": ("02｜简历深挖",),
-        "interview_prep": ("03｜面试准备文档",),
-        "interview_review": ("04｜面试复盘", "已完成复盘"),
-        "interview_asr": ("04｜面试复盘", "ASR待复盘"),
-        "pm_sense": ("05｜产品 Sense",),
-        "mock_lab": ("06｜模拟面试",),
+        "user_profile": ("02｜用户画像",),
+        "current_resumes": ("03｜定制简历",),
+        "experience_deepthink": ("04｜经历深挖",),
+        "competency_profiles": ("05｜岗位能力与训练", "岗位能力画像"),
+        "competency_training": ("05｜岗位能力与训练", "专项训练"),
+        "interview_prep": ("06｜面试准备",),
+        "mock_lab": ("07｜模拟面试",),
+        "interview_review": ("08｜真实面试复盘", "已完成复盘"),
+        "interview_asr": ("08｜真实面试复盘", "ASR 待复盘"),
     },
 }
 ROUTES = {
-    "resume-deepthink": {
-        "completed": "resume_deepthink",
-        "incomplete": "resume_deepthink",
+    "career-profile": {
+        "completed": "user_profile",
+        "incomplete": "user_profile",
+    },
+    "experience-deepthink": {
+        "completed": "experience_deepthink",
+        "incomplete": "experience_deepthink",
+    },
+    "resume-tailor": {
+        "completed": "current_resumes",
+        "incomplete": "current_resumes",
+    },
+    "competency-lab": {
+        "completed": "competency_training",
+        "incomplete": "competency_training",
     },
     "interview-prep": {
         "completed": "interview_prep",
@@ -73,30 +94,34 @@ ROUTES = {
         "completed": "interview_review",
         "incomplete": "interview_review",
     },
-    "pm-sense": {
-        "completed": "pm_sense",
-        "incomplete": "pm_sense",
-    },
 }
 REQUIRED_LOCATORS = {
-    "resume-deepthink": {
-        "folders": ("current_resumes", "resume_deepthink"),
+    "career-profile": {"folders": ("user_profile",)},
+    "experience-deepthink": {
+        "folders": ("experience_deepthink",),
+    },
+    "resume-tailor": {"folders": ("current_resumes",)},
+    "competency-lab": {
+        "folders": ("competency_profiles", "competency_training"),
     },
     "interview-prep": {
-        "folders": ("current_resumes", "interview_prep"),
+        "folders": ("interview_prep",),
     },
     "mock-lab": {
-        "folders": ("current_resumes", "resume_deepthink", "mock_lab"),
+        "folders": (
+            "current_resumes",
+            "experience_deepthink",
+            "mock_lab",
+        ),
     },
     "talk-review": {
         "folders": (
             "current_resumes",
-            "resume_deepthink",
+            "experience_deepthink",
             "interview_asr",
             "interview_review",
         ),
     },
-    "pm-sense": {"folders": ("pm_sense",)},
 }
 RUN_ID_RE = re.compile(
     r"^(?P<skill>[a-z0-9-]+)-(?P<timestamp>\d{14})-(?P<suffix>[a-z0-9]{8})$"
@@ -152,7 +177,7 @@ def default_artifact_storage():
     return {
         "status": "needs_setup",
         "format": "markdown_docx",
-        "save_policy": "auto_on_completion",
+        "save_policy": "auto_on_completion_or_pause",
         "readiness": {key: False for key in SKILL_CONFIG_KEYS.values()},
         "folders": {key: "" for key in FOLDER_KEYS},
     }
@@ -165,9 +190,9 @@ def validate_artifact_storage(storage):
         raise ValueError("artifact_storage.status is invalid")
     if storage.get("format") != "markdown_docx":
         raise ValueError("artifact_storage.format must be markdown_docx")
-    if storage.get("save_policy") != "auto_on_completion":
+    if storage.get("save_policy") != "auto_on_completion_or_pause":
         raise ValueError(
-            "artifact_storage.save_policy must be auto_on_completion"
+            "artifact_storage.save_policy must be auto_on_completion_or_pause"
         )
     readiness = storage.get("readiness")
     folders = storage.get("folders")
@@ -187,22 +212,25 @@ def validate_artifact_storage(storage):
 
 
 def _migrate_artifact_storage(existing):
-    """Return schema-v4 storage while preserving compatible locators."""
+    """Return schema-v5 storage while preserving compatible locators."""
     target = default_artifact_storage()
     if not isinstance(existing, dict):
         return target
 
     old_folders = existing.get("folders", {})
     if isinstance(old_folders, dict):
-        direct = (
-            "current_resumes",
-            "resume_deepthink",
-            "pm_sense",
-            "mock_lab",
-        )
-        for key in direct:
-            if isinstance(old_folders.get(key), str):
-                target["folders"][key] = old_folders[key]
+        aliases = {
+            "current_resumes": "current_resumes",
+            "resume_deepthink": "experience_deepthink",
+            "pm_sense": "competency_training",
+            "mock_lab": "mock_lab",
+            "interview_prep": "interview_prep",
+            "interview_asr": "interview_asr",
+            "interview_review": "interview_review",
+        }
+        for old_key, new_key in aliases.items():
+            if isinstance(old_folders.get(old_key), str):
+                target["folders"][new_key] = old_folders[old_key]
         target["folders"]["interview_prep"] = str(
             old_folders.get("interview_prep_completed")
             or old_folders.get("interview_prep_pending")
@@ -220,7 +248,7 @@ def _migrate_artifact_storage(existing):
 
 
 def migrate_config(config):
-    """Return a v4 config while preserving public values and valid locators."""
+    """Return a v5 config while preserving public values and valid locators."""
     if not isinstance(config, dict):
         raise ValueError("OfferLoop config must be a JSON object")
     current = config.get("schema_version", 1)
@@ -326,7 +354,7 @@ def new_entity_id(kind, *, suffix=None):
 
 def parse_run_id(run_id, *, expected_skill=None):
     match = RUN_ID_RE.fullmatch(str(run_id))
-    if not match or match.group("skill") not in SKILLS:
+    if not match or match.group("skill") not in SKILLS + LEGACY_SKILLS:
         raise ValueError("invalid run_id")
     if expected_skill and match.group("skill") != expected_skill:
         raise ValueError("run_id does not belong to the requested skill")
@@ -343,12 +371,15 @@ def build_title(
     skill,
     run_id,
     *,
+    artifact_type="",
     date=None,
     subject="",
     resume_version="",
+    target_direction="",
     company="",
     position="",
     stage="",
+    sequence="",
 ):
     parsed = parse_run_id(run_id, expected_skill=skill)
     if date:
@@ -363,28 +394,76 @@ def build_title(
             parsed["timestamp"], "%Y%m%d%H%M%S"
         ).strftime("%Y-%m-%d")
     subject = _clean_title_part(subject, "未命名主题")
-    resume_version = _clean_title_part(resume_version, "简历版本待确认")
+    resume_version = _clean_title_part(resume_version, "")
+    target_direction = _clean_title_part(target_direction, "目标岗位待确认")
     company = _clean_title_part(company, "独立任务")
     position = _clean_title_part(position, "岗位待确认")
     stage = _clean_title_part(stage, "环节待确认")
-    if skill == "resume-deepthink":
-        return (
-            f"简历深挖｜{resume_version}｜{subject}｜{title_date}｜{run_id}"
-        )
+    sequence = _clean_title_part(sequence, "01")
+    if skill == "career-profile":
+        profile_titles = {
+            "job-preference": "岗位选择偏好",
+            "personality-exploration": "个人性格探索",
+            "language-habits": "语言表达习惯",
+        }
+        if artifact_type in profile_titles:
+            return f"{profile_titles[artifact_type]}｜{subject}"
+        if artifact_type:
+            raise ValueError("unknown career-profile artifact type")
+        # Compatibility for existing callers and legacy documents only.
+        return f"用户画像｜{subject}"
+    if skill == "experience-deepthink" and artifact_type == "detail-reconstruction":
+        return f"细节复原稿｜{subject}｜{target_direction}"
+    if skill == "experience-deepthink" and artifact_type == "restored-prd":
+        # Legacy locator only. V3 uses detail-reconstruction for new documents.
+        return f"复原 PRD｜{subject}｜{target_direction}"
+    if skill == "experience-deepthink" and artifact_type == "interview-transcript":
+        return f"面试逐字稿｜{subject}｜{target_direction}"
+    if skill == "experience-deepthink" and artifact_type:
+        raise ValueError("unknown experience-deepthink artifact type")
+    if skill == "experience-deepthink":
+        return f"经历深挖｜{subject}｜{target_direction}"
+    if skill == "resume-tailor":
+        title = f"简历｜{target_direction}｜{company}"
+        return f"{title}｜v{resume_version}" if resume_version else title
+    if skill == "competency-lab" and artifact_type == "capability-profile":
+        return f"岗位能力地图｜{target_direction}"
+    if skill == "competency-lab":
+        return f"能力训练｜{target_direction}｜{title_date}｜{sequence}"
+    if skill == "talk-review" and artifact_type == "interview-asr":
+        return f"面试ASR｜{company}｜{position}｜{stage}｜{title_date}"
+    if skill == "talk-review" and artifact_type == "recruiter-assessment":
+        return f"招聘者评估｜{company}｜{position}｜{stage}｜{title_date}"
+    if artifact_type:
+        raise ValueError("artifact type is invalid for this skill")
     if skill == "interview-prep":
-        return f"{company}｜{position}｜{stage}准备｜{title_date}｜{run_id}"
+        return f"面试准备｜{company}｜{position}｜{stage}｜{title_date}"
     if skill == "mock-lab":
-        return f"{subject}｜模拟面试｜{title_date}｜{run_id}"
+        return f"模拟面试｜{company}｜{position}｜{stage}｜{title_date}｜{sequence}"
     if skill == "talk-review":
-        return f"{company}｜{position}｜{stage}复盘｜{title_date}｜{run_id}"
-    return f"产品思维｜{subject}｜{title_date}｜{run_id}"
+        return f"面试复盘｜{company}｜{position}｜{stage}｜{title_date}"
+    raise ValueError(f"unsupported title skill: {skill}")
 
 
-def route_folder(skill, status):
+def route_folder(skill, status, *, artifact_type=""):
     if skill not in ROUTES:
         raise ValueError(f"unknown skill: {skill}")
     if status not in VALID_RUN_STATUSES:
         raise ValueError("run status must be completed or incomplete")
+    if skill == "career-profile" and artifact_type in {
+        "job-preference",
+        "personality-exploration",
+        "language-habits",
+    }:
+        return "user_profile"
+    if skill == "competency-lab" and artifact_type == "capability-profile":
+        return "competency_profiles"
+    if skill == "talk-review" and artifact_type == "interview-asr":
+        return "interview_asr"
+    if skill == "talk-review" and artifact_type == "recruiter-assessment":
+        return "interview_review"
+    if artifact_type:
+        raise ValueError("artifact type is invalid for this skill")
     return ROUTES[skill][status]
 
 
@@ -396,7 +475,11 @@ def find_by_run(candidates, run_id):
     for candidate in candidates:
         if not isinstance(candidate, dict):
             raise ValueError("each candidate must be a JSON object")
-        if run_id in str(candidate.get("title", "")):
+        metadata = candidate.get("metadata", {})
+        candidate_run_id = candidate.get("run_id")
+        if isinstance(metadata, dict):
+            candidate_run_id = candidate_run_id or metadata.get("run_id")
+        if candidate_run_id == run_id:
             matches.append(candidate)
     status = (
         "missing"
@@ -408,19 +491,39 @@ def find_by_run(candidates, run_id):
     return {"match_status": status, "matches": matches}
 
 
-def validate_markdown(markdown, *, run_id=None):
+def find_by_title(candidates, title):
+    if not isinstance(candidates, list):
+        raise ValueError("candidates must be a JSON array")
+    expected = str(title).strip()
+    if not expected:
+        raise ValueError("title must not be empty")
+    matches = []
+    for candidate in candidates:
+        if not isinstance(candidate, dict):
+            raise ValueError("each candidate must be a JSON object")
+        if str(candidate.get("title", "")).strip() == expected:
+            matches.append(candidate)
+    status = (
+        "missing"
+        if not matches
+        else "found"
+        if len(matches) == 1
+        else "ambiguous"
+    )
+    return {"match_status": status, "matches": matches}
+
+
+def validate_markdown(markdown, *, run_id=None, content_only=False):
     text = str(markdown).strip()
     errors = []
     if not text.startswith("# "):
         errors.append("document must start with one level-1 title")
     if len(re.findall(r"^# ", text, flags=re.MULTILINE)) != 1:
         errors.append("document must contain exactly one level-1 title")
-    if "## 产物信息" not in text:
+    if not content_only and "## 产物信息" not in text:
         errors.append("document must contain a 产物信息 section")
     if run_id:
         parse_run_id(run_id)
-        if run_id not in text:
-            errors.append("document does not contain the requested run_id")
     if re.search(r"<(?:html|body|script)\b", text, flags=re.IGNORECASE):
         errors.append("HTML output is not allowed")
     if "\x00" in text:
@@ -486,17 +589,36 @@ def _parser():
     title = subparsers.add_parser("build-title")
     title.add_argument("--skill", required=True, choices=SKILLS)
     title.add_argument("--run-id", required=True)
+    title.add_argument(
+        "--artifact-type",
+        default="",
+        choices=(
+            "detail-reconstruction",
+            "restored-prd",
+            "interview-transcript",
+            "capability-profile",
+            "interview-asr",
+            "recruiter-assessment",
+        ),
+    )
     title.add_argument("--date")
     title.add_argument("--subject", default="")
     title.add_argument("--resume-version", default="")
+    title.add_argument("--target-direction", default="")
     title.add_argument("--company", default="")
     title.add_argument("--position", default="")
     title.add_argument("--stage", default="")
+    title.add_argument("--sequence", default="")
     title.add_argument("--json", action="store_true")
 
     route = subparsers.add_parser("route-folder")
     route.add_argument("--skill", required=True, choices=SKILLS)
     route.add_argument("--status", required=True, choices=VALID_RUN_STATUSES)
+    route.add_argument(
+        "--artifact-type",
+        default="",
+        choices=("", "capability-profile", "interview-asr", "recruiter-assessment"),
+    )
     route.add_argument("--json", action="store_true")
 
     find = subparsers.add_parser("find-by-run")
@@ -504,9 +626,17 @@ def _parser():
     find.add_argument("--run-id", required=True)
     find.add_argument("--json", action="store_true")
 
+    find_title = subparsers.add_parser("find-by-title")
+    find_title.add_argument(
+        "--candidates", required=True, help="JSON file or - for stdin"
+    )
+    find_title.add_argument("--title", required=True)
+    find_title.add_argument("--json", action="store_true")
+
     validate = subparsers.add_parser("validate-markdown")
     validate.add_argument("--file", required=True, help="Markdown file or - for stdin")
     validate.add_argument("--run-id")
+    validate.add_argument("--content-only", action="store_true")
     validate.add_argument("--json", action="store_true")
     return parser
 
@@ -550,23 +680,38 @@ def main():
                 "title": build_title(
                     args.skill,
                     args.run_id,
+                    artifact_type=args.artifact_type,
                     date=args.date,
                     subject=args.subject,
                     resume_version=args.resume_version,
+                    target_direction=args.target_direction,
                     company=args.company,
                     position=args.position,
                     stage=args.stage,
+                    sequence=args.sequence,
                 )
             }
         elif args.command == "route-folder":
-            data = {"folder_key": route_folder(args.skill, args.status)}
+            data = {
+                "folder_key": route_folder(
+                    args.skill,
+                    args.status,
+                    artifact_type=args.artifact_type,
+                )
+            }
         elif args.command == "find-by-run":
             data = find_by_run(
                 _read_json_source(args.candidates), args.run_id
             )
+        elif args.command == "find-by-title":
+            data = find_by_title(
+                _read_json_source(args.candidates), args.title
+            )
         else:
             result = validate_markdown(
-                _read_text_source(args.file), run_id=args.run_id
+                _read_text_source(args.file),
+                run_id=args.run_id,
+                content_only=args.content_only,
             )
             if not result["valid"]:
                 raise ValueError("; ".join(result["errors"]))

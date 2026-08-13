@@ -19,32 +19,51 @@ SKILLS_ROOT = SKILL_ROOT.parent
 STATUS_MODEL_PATH = Path(__file__).with_name("status_model.py")
 
 BUNDLED_SKILLS = (
-    "offerloop-setup",
-    "offerloop-workspace",
+    "career-profile",
     "job-collection",
     "recruiting-reminder",
-    "resume-deepthink",
+    "experience-deepthink",
+    "resume-tailor",
     "interview-prep",
     "mock-lab",
     "talk-review",
-    "pm-sense",
+    "competency-lab",
 )
+REQUIRED_BUNDLED_BY_CAPABILITY = {
+    "workspace": {"career-profile"},
+    "collection": {"career-profile", "job-collection"},
+    "reminder": {
+        "recruiting-reminder",
+    },
+    "coaching": {
+        "career-profile",
+        "experience-deepthink",
+        "resume-tailor",
+        "interview-prep",
+        "mock-lab",
+        "talk-review",
+        "competency-lab",
+    },
+    "workbench": set(),
+    "integration": {"job-collection"},
+}
 EXTERNAL_SKILLS_BY_CAPABILITY = {
     "collection": (),
     "reminder": ("lark-calendar",),
     "workspace": ("lark-base", "lark-doc", "lark-wiki"),
-    "coaching": ("lark-base", "lark-doc", "lark-wiki"),
+    "coaching": (),
+    "workbench": ("lark-apps", "lark-shared"),
     "integration": ("lark-shared", "lark-apps"),
 }
 LARK_CLI_RECOVERY = (
     "运行 `npx @larksuite/cli@latest install` 安装 lark-cli；再运行 "
-    "Agent 对应的 `npx skills add larksuite/cli -g -a codex -y`、"
+    "Agent 对应的 `npx skills add larksuite/cli -g -a codex`、"
     "`-a claude-code` 或 `-a hermes-agent` 安装官方 Lark Skills，"
     "然后新开 Agent 会话。WorkBuddy 请在“专家·技能·连接器”中启用飞书连接器，"
     "再新建任务"
 )
 LARK_SKILLS_RECOVERY = (
-    "运行 Agent 对应的 `npx skills add larksuite/cli -g -a codex -y`、"
+    "运行 Agent 对应的 `npx skills add larksuite/cli -g -a codex`、"
     "`-a claude-code` 或 `-a hermes-agent` "
     "安装官方 Lark Skills，然后新开 Agent 会话；WorkBuddy 请在"
     "“专家·技能·连接器”中启用飞书连接器，再新建任务"
@@ -85,7 +104,7 @@ WORKSPACE_LOCATORS = (
     "reminder_base_url",
     "wiki_space_id",
     "workspace_home_node_token",
-    "workbench_url",
+    "workspace_core_data_node_token",
     "schema_version",
 )
 IMAP_REQUIRED_KEYS = {
@@ -200,11 +219,16 @@ def _required_external_skills(capability, config):
 def _external_skills_check(config, capability, roots):
     required = _required_external_skills(capability, config)
     if not required:
+        summary = (
+            "纯 Chat 求职训练不需要外部 Lark Skill"
+            if capability == "coaching"
+            else "此能力核心流程直接使用 lark-cli，无额外 Lark Skill 依赖"
+        )
         return _check(
             "local.external_skills",
             capability,
             "ready",
-            "此能力核心流程直接使用 lark-cli，无额外 Lark Skill 依赖",
+            summary,
         )
 
     missing = tuple(name for name in required if not _skill_is_installed(name, roots))
@@ -588,7 +612,7 @@ def _capability_report(source, capability, skills_roots=None):
     if config_state == "missing":
         common_status = "needs_action"
         common_summary = "尚未登记 OfferLoop 公共定位"
-        common_action = "运行 offerloop-setup 配置所选能力的非敏感定位信息"
+        common_action = "运行 OfferLoop 安装器 --setup 配置所选能力的非敏感定位信息"
     elif config_state == "invalid":
         common_status = "blocked"
         common_summary = "OfferLoop 公共配置不是有效 JSON"
@@ -602,11 +626,47 @@ def _capability_report(source, capability, skills_roots=None):
         name: _skill_is_installed(name, roots)
         for name in BUNDLED_SKILLS
     }
-    lark_check, profile_check = _probe_lark_cli(
-        source, config.get("lark_profile")
-    )
+    if any(item != "coaching" for item in selected):
+        lark_check, profile_check = _probe_lark_cli(
+            source, config.get("lark_profile")
+        )
+    else:
+        lark_check = (
+            "ready",
+            "纯 Chat 求职训练不需要 lark-cli",
+            "",
+        )
+        profile_check = (
+            "ready",
+            "纯 Chat 求职训练不需要飞书 profile",
+            "",
+        )
 
     for selected_capability in sorted(selected):
+        chat_first_coaching = selected_capability == "coaching"
+        required_bundled = REQUIRED_BUNDLED_BY_CAPABILITY[selected_capability]
+        selected_skills_ready = all(
+            bundled_skills[name] for name in required_bundled
+        )
+        selected_config_check = (
+            (
+                "ready",
+                "纯 Chat 求职训练不需要 OfferLoop 公共定位",
+                "",
+            )
+            if chat_first_coaching
+            else (common_status, common_summary, common_action)
+        )
+        selected_online_check = (
+            _check(
+                "online.permissions",
+                selected_capability,
+                "ready",
+                "纯 Chat 求职训练不访问飞书或其他线上资源",
+            )
+            if chat_first_coaching
+            else _online_permissions_check(selected_capability)
+        )
         checks.extend(
             [
                 _check(
@@ -628,27 +688,25 @@ def _capability_report(source, capability, skills_roots=None):
                 _check(
                     "local.skills",
                     selected_capability,
-                    "ready" if all(bundled_skills.values()) else "blocked",
-                    "OfferLoop 九个 Skill 已安装"
-                    if all(bundled_skills.values())
-                    else "OfferLoop Skill 安装不完整",
-                    "重新安装缺失的 OfferLoop Skill"
-                    if not all(bundled_skills.values())
+                    "ready" if selected_skills_ready else "blocked",
+                    "所选能力需要的 OfferLoop Skill 已安装"
+                    if selected_skills_ready
+                    else "所选能力需要的 OfferLoop Skill 安装不完整",
+                    "重新安装所选能力缺失的 OfferLoop Skill"
+                    if not selected_skills_ready
                     else "",
                 ),
                 _check(
                     "local.config",
                     selected_capability,
-                    common_status,
-                    common_summary,
-                    common_action,
+                    *selected_config_check,
                 ),
                 _external_skills_check(
                     config,
                     selected_capability,
                     roots,
                 ),
-                _online_permissions_check(selected_capability),
+                selected_online_check,
             ]
         )
         if profile_check is None:
@@ -685,9 +743,9 @@ def _capability_report(source, capability, skills_roots=None):
                 _check(
                     "local.progress_locator",
                     "collection",
-                    "unverified",
-                    "未登记求职进展（可选，跨 Base 对账未启用）",
-                    "如需跨 Base 对账，再登记求职进展地址",
+                    "needs_action",
+                    "核心空间尚未登记求职进展",
+                    "创建或接管核心知识库中的求职进展 Base",
                 )
             )
         else:
@@ -696,7 +754,7 @@ def _capability_report(source, capability, skills_roots=None):
                     "local.progress_locator",
                     "collection",
                     "ready",
-                    "已登记求职进展（可选）",
+                    "核心空间已登记求职进展",
                 )
             )
         checks.append(_notification_check(config, "collection"))
@@ -750,7 +808,7 @@ def _capability_report(source, capability, skills_roots=None):
             "reminder_base_url",
             "wiki_space_id",
             "workspace_home_node_token",
-            "workbench_url",
+            "workspace_core_data_node_token",
         )
         missing = [name for name in required if config.get(name) in (None, "")]
         checks.append(
@@ -758,10 +816,26 @@ def _capability_report(source, capability, skills_roots=None):
                 "local.workspace_locators",
                 "workspace",
                 "ready" if not missing else "needs_action",
-                "工作台与知识库定位已登记"
+                "必需知识库、三张 Base 与核心数据目录已登记"
                 if not missing
-                else "工作台或知识库定位不完整",
-                "登记三张 Base、知识库首页和工作台地址" if missing else "",
+                else "必需知识库或三张 Base 定位不完整",
+                "创建或接管知识库、核心数据目录和三张 Base" if missing else "",
+            )
+        )
+
+    if "workbench" in selected:
+        workbench_url = config.get("workbench_url")
+        checks.append(
+            _check(
+                "local.workbench_locator",
+                "workbench",
+                "ready" if workbench_url not in (None, "") else "needs_action",
+                "可选工作台入口已登记"
+                if workbench_url not in (None, "")
+                else "可选工作台尚未部署或登记",
+                "运行 scripts/install_offerloop.py --deploy-workbench 创建、发布并验收工作台"
+                if workbench_url in (None, "")
+                else "",
             )
         )
 
@@ -773,30 +847,42 @@ def _capability_report(source, capability, skills_roots=None):
             else None
         )
         expected = {
-            "resume_deepthink",
+            "user_profile",
+            "experience_deepthink",
+            "current_resumes",
+            "competency_training",
             "interview_prep",
             "mock_lab",
             "talk_review",
-            "pm_sense",
         }
         storage_valid = (
-            config.get("schema_version") == 4
+            config.get("schema_version") == 5
             and isinstance(readiness, dict)
             and expected.issubset(readiness)
             and all(isinstance(readiness.get(name), bool) for name in expected)
         )
         all_ready = storage_valid and all(readiness[name] for name in expected)
+        storage_configured = isinstance(storage, dict)
+        storage_required = capability == "full"
+        if all_ready:
+            storage_status = "ready"
+            storage_summary = "七项画像与训练能力的飞书材料均已登记"
+            storage_action = ""
+        elif storage_required or storage_configured:
+            storage_status = "needs_action"
+            storage_summary = "Chat 训练可用，但飞书产物配置仍有目录待启用"
+            storage_action = "确认升级 schema v5，并按需创建和登记训练目录"
+        else:
+            storage_status = "ready"
+            storage_summary = "Chat 训练可直接开始；飞书保存尚未启用（可选）"
+            storage_action = ""
         checks.append(
             _check(
                 "local.coaching_storage",
                 "coaching",
-                "ready" if all_ready else "needs_action",
-                "五项训练能力的飞书材料均已登记"
-                if all_ready
-                else "训练产物配置尚未升级或仍有目录待首次启用",
-                "确认升级 schema v4，并按需创建和登记训练目录"
-                if not all_ready
-                else "",
+                storage_status,
+                storage_summary,
+                storage_action,
             )
         )
 
@@ -844,6 +930,7 @@ def main():
             "reminder",
             "workspace",
             "coaching",
+            "workbench",
             "full",
         ),
         help="run a capability-specific offline preflight",

@@ -8,12 +8,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts.sync_utils import (
     APPLICATION_STATUSES,
+    CANDIDATE_ROUTES,
     ENTERPRISE_FIELDS,
     normalize_url,
     overlap_start,
     parse_feishu_bitable_url,
     recruitment_fingerprint,
     resolve_profile_field,
+    route_candidate,
 )
 
 
@@ -44,6 +46,45 @@ class SyncUtilsTest(unittest.TestCase):
             APPLICATION_STATUSES,
             ("待确认", "感兴趣", "已投递", "已拒绝"),
         )
+
+    def test_candidate_routes_keep_city_and_industry_hard(self):
+        self.assertEqual(
+            CANDIDATE_ROUTES,
+            ("hard_filtered", "auto_write", "prewrite_confirmation"),
+        )
+        for city_matches, industry_matches in (
+            (False, True),
+            (True, False),
+            (None, True),
+            (True, None),
+        ):
+            self.assertEqual(
+                route_candidate(
+                    city_matches=city_matches,
+                    industry_matches=industry_matches,
+                    job_preference_matches=True,
+                ),
+                "hard_filtered",
+            )
+
+    def test_job_preference_is_a_soft_prewrite_gate(self):
+        self.assertEqual(
+            route_candidate(
+                city_matches=True,
+                industry_matches=True,
+                job_preference_matches=True,
+            ),
+            "auto_write",
+        )
+        for job_match in (False, None):
+            self.assertEqual(
+                route_candidate(
+                    city_matches=True,
+                    industry_matches=True,
+                    job_preference_matches=job_match,
+                ),
+                "prewrite_confirmation",
+            )
 
     def test_parse_feishu_url_with_arbitrary_query_order(self):
         url = "https://example.feishu.cn/base/bascnExample?view=vewExample&table=tblExample"
