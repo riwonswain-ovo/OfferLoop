@@ -88,8 +88,8 @@ def main() -> None:
         raise AssertionError(
             "MIGRATION.md must use the mode-aware setup and post-install verification"
         )
-    if "OfferLoop-development" not in readme or "Pull Request" not in readme:
-        raise AssertionError("README must separate development and public release repositories")
+    if "OfferLoop-development" in readme or "开发、验证与发布" in readme:
+        raise AssertionError("README must not expose internal development workflow")
     if "配套飞书知识库是**可选的线上配置**" not in readme:
         raise AssertionError("README must make the Feishu knowledge base optional")
     if "工作台" in readme:
@@ -100,7 +100,7 @@ def main() -> None:
     print(
         "README install contract accepted: public full download, sparse single-Skill "
         f"download, explicit Agent target, {len(packaged)} Skills, online verification, "
-        "optional Feishu knowledge base, and separate development/public release repositories"
+        "and optional Feishu knowledge base"
     )
 
 

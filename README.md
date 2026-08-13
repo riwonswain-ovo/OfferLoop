@@ -429,24 +429,6 @@ python3 scripts/install_offerloop.py --agent codex --upgrade
 
 ---
 
-## 🧪 开发、验证与发布
-
-稳定版发布在 [`riwonswain-ovo/OfferLoop`](https://github.com/riwonswain-ovo/OfferLoop)。`OfferLoop-development` 只用于开发、测试和 Pull Request，新用户无需访问开发仓库。
-
-```bash
-python3 -m unittest discover -s tests
-python3 -m unittest discover -s skills/job-collection/tests
-python3 -m unittest discover -s skills/recruiting-reminder/tests
-python3 scripts/readme_install_contract.py
-python3 scripts/check_skill_compatibility.py
-python3 skills/job-collection/scripts/validate_skill.py
-cd services/job-progress-sync && npm test
-```
-
-GitHub CI 会在 Ubuntu、macOS 和 Windows 上执行冷安装、幂等恢复、Python 3.10/3.12 测试和应用模板构建。安装器、setup、9 个 Skill 契约及 README 改动先进入开发仓库验证，再通过 Pull Request 同步到公开仓库。
-
----
-
 ## License
 
 [MIT](LICENSE)
