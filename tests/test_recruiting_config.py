@@ -30,11 +30,12 @@ class RecruitingConfigTest(unittest.TestCase):
             "progress_base_url",
             "面试准备文档",
             "面试复盘文档",
-            "投递简历版本",
             "可选",
             "未来 7 天",
         ):
             self.assertIn(expected, content)
+        self.assertNotIn("投递简历版本", content)
+        self.assertIn("`进展状态`", content)
         self.assertNotIn("按类型选 Base", content)
         self.assertNotIn("建**两个** Base", content)
 

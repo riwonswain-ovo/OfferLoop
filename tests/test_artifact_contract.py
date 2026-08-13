@@ -53,7 +53,7 @@ class ArtifactContractTest(unittest.TestCase):
                 "notifications": {"status": "disabled"},
             }
         )
-        self.assertEqual(migrated["schema_version"], 5)
+        self.assertEqual(migrated["schema_version"], 6)
         self.assertEqual(migrated["lark_profile"], "offerloop")
         self.assertEqual(migrated["notifications"], {"status": "disabled"})
         self.assertEqual(
@@ -301,7 +301,7 @@ class ArtifactContractTest(unittest.TestCase):
                 storage["folders"]["experience_deepthink"], "wik_folder_b"
             )
             self.assertNotIn("documents", storage)
-            self.assertEqual(result["schema_version"], 5)
+            self.assertEqual(result["schema_version"], 6)
 
     def test_v3_storage_migrates_to_current_resume_and_fixed_output_folders(self):
         contract = load_module()
@@ -325,7 +325,7 @@ class ArtifactContractTest(unittest.TestCase):
         migrated = contract.migrate_config(old)
         storage = migrated["artifact_storage"]
 
-        self.assertEqual(migrated["schema_version"], 5)
+        self.assertEqual(migrated["schema_version"], 6)
         self.assertEqual(storage["folders"]["current_resumes"], "resume-folder")
         self.assertEqual(storage["folders"]["interview_prep"], "prep-folder")
         self.assertEqual(storage["folders"]["interview_asr"], "asr-folder")

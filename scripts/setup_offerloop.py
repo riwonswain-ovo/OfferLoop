@@ -83,7 +83,7 @@ def _write_private_json(path: Path, payload: dict) -> None:
 
 
 def workspace_locators_ready(config: dict) -> bool:
-    if config.get("schema_version") != 5:
+    if config.get("schema_version") != 6:
         return False
     if any(config.get(key) in (None, "") for key in FULL_REQUIRED_LOCATORS):
         return False
@@ -109,7 +109,7 @@ def workspace_status(config: dict) -> str:
         return "needs_online_verification"
     if (
         verification.get("status") != "verified"
-        or verification.get("schema_version") != 5
+        or verification.get("schema_version") != 6
         or verification.get("locator_fingerprint")
         != workspace_locator_fingerprint(config)
     ):
@@ -259,11 +259,11 @@ def record_workspace_verification(agent: str, *, environ=None) -> dict:
     if not isinstance(installation, dict) or installation.get("mode") != "full":
         raise ValueError("full mode config must exist before online completion")
     if not workspace_locators_ready(config):
-        raise ValueError("all schema v5 workspace locators are required")
+        raise ValueError("all schema v6 workspace locators are required")
     now = datetime.now(timezone.utc).isoformat()
     config["workspace_verification"] = {
         "status": "verified",
-        "schema_version": 5,
+        "schema_version": 6,
         "verified_at": now,
         "locator_fingerprint": workspace_locator_fingerprint(config),
         "checks": ["three_bases", "wiki_structure", "locators", "permissions"],

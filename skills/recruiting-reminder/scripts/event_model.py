@@ -23,7 +23,6 @@ REMINDER_FIELDS = (
     "平台",
     "链接",
     "注意事项",
-    "投递简历版本",
     "面试准备文档",
     "面试复盘文档",
     "完成状态",
@@ -39,16 +38,28 @@ ARRANGEMENT_NAME_FORMULA = """IF(
   [公司] & "－" & [环节],
   [公司] & "－" & [岗位] & "－" & [环节]
 )"""
-PROGRESS_STAGE_ORDER = {
-    "已投递": 0,
-    "笔试": 1,
-    "群面": 2,
-    "一面": 3,
-    "二面": 4,
-    "三面": 5,
-    "HR面": 6,
+PROGRESS_STATUS_ORDER = {
+    "待反馈": 0,
+    "待笔试": 1,
+    "待面试": 1,
+    "待群面": 2,
+    "待一面": 3,
+    "待二面": 4,
+    "待三面": 5,
+    "待 HR 面": 6,
+    "待 OC": 7,
 }
-MANUAL_TERMINAL_STAGES = {"Offer", "已结束"}
+EVENT_STAGE_TO_PROGRESS_STATUS = {
+    "笔试": "待笔试",
+    "群面": "待群面",
+    "一面": "待一面",
+    "二面": "待二面",
+    "三面": "待三面",
+    "HR面": "待 HR 面",
+}
+MANUAL_PROGRESS_STATUSES = {
+    "Offer", "未通过", "主动放弃", "岗位关闭", "状态待确认"
+}
 COMPLETION_STATUSES = {"待完成", "已完成", "已错过"}
 
 
@@ -133,9 +144,16 @@ def _active_company_candidates(event, progress_records):
     return [
         record
         for record in progress_records
-        if record.get("fields", {}).get("当前阶段") != "已结束"
+        if _is_active_progress(record.get("fields", {}))
         and _normalized(record.get("fields", {}).get("公司")) == company_key
     ]
+
+
+def _is_active_progress(fields):
+    status = str(fields.get("进展状态", "")).strip()
+    if status:
+        return status in PROGRESS_STATUS_ORDER
+    return fields.get("当前阶段") not in {"Offer", "已结束"}
 
 
 def _position_matches(event_position, candidate_position):
@@ -201,17 +219,18 @@ def link_progress_records(event, progress_records):
     }
 
 
-def next_progress_stage(current_stage, event_stage):
-    """Advance a progress stage monotonically; protect manual terminal states."""
-    if current_stage in MANUAL_TERMINAL_STAGES:
-        return current_stage
-    if event_stage not in PROGRESS_STAGE_ORDER:
-        return current_stage
-    if current_stage not in PROGRESS_STAGE_ORDER:
-        return event_stage
-    if PROGRESS_STAGE_ORDER[event_stage] > PROGRESS_STAGE_ORDER[current_stage]:
-        return event_stage
-    return current_stage
+def next_progress_status(current_status, event_stage):
+    """Advance the pending action monotonically; protect manual statuses."""
+    if current_status in MANUAL_PROGRESS_STATUSES:
+        return current_status
+    candidate = EVENT_STAGE_TO_PROGRESS_STATUS.get(event_stage)
+    if candidate is None:
+        return current_status
+    if current_status not in PROGRESS_STATUS_ORDER:
+        return candidate
+    if PROGRESS_STATUS_ORDER[candidate] > PROGRESS_STATUS_ORDER[current_status]:
+        return candidate
+    return current_status
 
 
 def decide_completion_status_sync(
@@ -286,7 +305,6 @@ def build_main_record_fields(event, progress_links):
         "平台": event.get("platform", ""),
         "链接": event.get("link", ""),
         "注意事项": event.get("notes", ""),
-        "投递简历版本": "",
         "面试准备文档": "",
         "面试复盘文档": "",
         "完成状态": "待完成",

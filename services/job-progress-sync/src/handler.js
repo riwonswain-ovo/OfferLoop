@@ -60,14 +60,15 @@ export async function handleSyncRequest(request, deps) {
   );
   if (existingRecords.length === 0) {
     const fields = {
+      "进展状态": "待反馈",
       "最近完成节点": "投递完成",
       "下一环节": "待反馈",
       "流程结果": "进行中",
+      "当前阶段": "已投递",
       "公司": payload.company,
       "投递岗位": "",
       "投递日期": String(payload.transitioned_at).slice(0, 10),
       "岗位 JD": "",
-      "投递简历版本": "",
       "公告链接": payload.announcement_url ?? "",
       "投递链接": payload.application_url ?? "",
       "企业清单 record_id": payload.source_record_id,
@@ -89,7 +90,6 @@ export async function handleSyncRequest(request, deps) {
       "投递日期":
         existing.fields["投递日期"] || String(payload.transitioned_at).slice(0, 10),
       "岗位 JD": existing.fields["岗位 JD"] ?? "",
-      "投递简历版本": existing.fields["投递简历版本"] ?? "",
       "公告链接": payload.announcement_url ?? "",
       "投递链接": payload.application_url ?? "",
       "企业清单 record_id": payload.source_record_id,
