@@ -13,7 +13,7 @@ README = ROOT / "README.md"
 MIGRATION = ROOT / "MIGRATION.md"
 INSTALLER = ROOT / "scripts" / "install_offerloop.py"
 SETUP = ROOT / "scripts" / "setup_offerloop.py"
-WORKBENCH_TASK = (
+OPTIONAL_APP_TASK = (
     ROOT
     / "skills"
     / "offerloop-workbench"
@@ -45,7 +45,7 @@ def main() -> None:
         raise AssertionError("repository is missing the two-mode setup entrypoint")
     readme = README.read_text(encoding="utf-8")
     migration = MIGRATION.read_text(encoding="utf-8")
-    workbench_task = WORKBENCH_TASK.read_text(encoding="utf-8")
+    optional_app_task = OPTIONAL_APP_TASK.read_text(encoding="utf-8")
 
     packaged = tuple(installer.SKILL_NAMES)
     tracked_skill_files = subprocess.check_output(
@@ -90,15 +90,17 @@ def main() -> None:
         )
     if "OfferLoop-development" not in readme or "Pull Request" not in readme:
         raise AssertionError("README must separate development and public release repositories")
-    if "两种模式都**不包含工作台**" not in readme:
-        raise AssertionError("README must exclude the workbench from both install modes")
-    if "OfferLoop-development" in workbench_task:
+    if "配套飞书知识库是**可选的线上配置**" not in readme:
+        raise AssertionError("README must make the Feishu knowledge base optional")
+    if "工作台" in readme:
+        raise AssertionError("README must not mention the unreleased optional product")
+    if "OfferLoop-development" in optional_app_task:
         raise AssertionError("shipped workbench must not require the private repository")
 
     print(
         "README install contract accepted: public full download, sparse single-Skill "
         f"download, explicit Agent target, {len(packaged)} Skills, online verification, "
-        "and separate development/public release repositories"
+        "optional Feishu knowledge base, and separate development/public release repositories"
     )
 
 
