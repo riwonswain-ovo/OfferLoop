@@ -1,7 +1,11 @@
 import type { WorkbenchWikiNode } from '@shared/api.interface';
 
 import { collectMaterials } from '../../client/src/pages/workbench/workbench-materials';
-import { isEmbeddableWikiNode } from '../../client/src/pages/workbench/workbench-wiki-nodes';
+import {
+  isBitableWikiNode,
+  isEmbeddableWikiNode,
+  isRecoverableBitableComponentError,
+} from '../../client/src/pages/workbench/workbench-wiki-nodes';
 
 const createNode = (
   title: string,
@@ -44,6 +48,19 @@ describe('WorkbenchMaterialsPage material collection', () => {
     expect([docx, sheet, bitable].every(isEmbeddableWikiNode)).toBe(true);
     expect(isEmbeddableWikiNode(unsupported)).toBe(false);
     expect(isEmbeddableWikiNode(missingUrl)).toBe(false);
+    expect(isBitableWikiNode(bitable)).toBe(true);
+    expect(isRecoverableBitableComponentError(
+      bitable,
+      { code: '-500', msg: 'load docs component error' },
+    )).toBe(true);
+    expect(isRecoverableBitableComponentError(
+      bitable,
+      { code: '4', msg: 'user has not permission' },
+    )).toBe(false);
+    expect(isRecoverableBitableComponentError(
+      docx,
+      { code: '-500', msg: 'load docs component error' },
+    )).toBe(false);
   });
 
   it('keeps leaf documents and excludes current and legacy folder nodes', () => {

@@ -50,3 +50,16 @@ export const isWikiFolderNode = (node: WorkbenchWikiNode): boolean =>
 export const isEmbeddableWikiNode = (node: WorkbenchWikiNode): boolean =>
   Boolean(node.documentUrl) &&
   EMBEDDABLE_WIKI_OBJECT_TYPES.has(node.objectType);
+
+export const isBitableWikiNode = (node: WorkbenchWikiNode): boolean =>
+  node.objectType === 'bitable';
+
+export const isRecoverableBitableComponentError = (
+  node: WorkbenchWikiNode,
+  error: unknown,
+): boolean => {
+  if (!isBitableWikiNode(node) || typeof error !== 'object' || error === null) {
+    return false;
+  }
+  return String((error as Record<string, unknown>).code ?? '') === '-500';
+};

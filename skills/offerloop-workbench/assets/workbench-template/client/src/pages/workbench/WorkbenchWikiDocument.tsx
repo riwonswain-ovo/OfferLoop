@@ -21,7 +21,11 @@ import {
   getWorkbenchWikiDocumentPreview,
 } from '@client/src/api';
 import { useExternalScript } from '@client/src/lib/external-script';
-import { isEmbeddableWikiNode } from './workbench-wiki-nodes';
+import {
+  isBitableWikiNode,
+  isEmbeddableWikiNode,
+  isRecoverableBitableComponentError,
+} from './workbench-wiki-nodes';
 import {
   Alert,
   AlertDescription,
@@ -189,15 +193,11 @@ const WorkbenchWikiDocument: React.FC<WorkbenchWikiDocumentProps> = ({
 
     let cancelled = false;
     let instance: DocComponentSdkInstance | null = null;
-    let mountTimeout: number | undefined;
     const failEmbedding = (message: string): void => {
       if (cancelled || embedFailureHandledRef.current) {
         return;
       }
       embedFailureHandledRef.current = true;
-      if (mountTimeout) {
-        window.clearTimeout(mountTimeout);
-      }
       setLoading(false);
       setError(message);
       setEmbedEnabled(false);
@@ -223,11 +223,6 @@ const WorkbenchWikiDocument: React.FC<WorkbenchWikiDocumentProps> = ({
         if (typeof DocComponentSdk !== 'function') {
           throw new Error('飞书新版文档组件 SDK 未正确加载');
         }
-        mountTimeout = window.setTimeout((): void => {
-          failEmbedding(
-            '飞书内容加载时间过长。你可以重新加载，或先在飞书中打开。',
-          );
-        }, 15_000);
 
         instance = new DocComponentSdk({
           src: node.documentUrl,
@@ -272,18 +267,33 @@ const WorkbenchWikiDocument: React.FC<WorkbenchWikiDocumentProps> = ({
           },
           onError: (componentError: unknown): void => {
             const detail = summarizeComponentError(componentError);
+            if (isRecoverableBitableComponentError(node, componentError)) {
+              if (!cancelled) {
+                logger.warn(
+                  `飞书多维表格兼容模式忽略组件握手超时：${detail}`,
+                );
+                setLoading(false);
+              }
+              return;
+            }
             logger.error(`飞书内容组件运行失败：${detail}`);
             failEmbedding(`飞书内容组件运行失败：${detail}`);
           },
           onMountSuccess: (): void => {
             if (!cancelled) {
-              if (mountTimeout) {
-                window.clearTimeout(mountTimeout);
-              }
               setLoading(false);
             }
           },
           onMountTimeout: (): void => {
+            if (isBitableWikiNode(node)) {
+              if (!cancelled) {
+                logger.warn(
+                  '飞书多维表格未完成文档组件握手，继续保留已渲染内容',
+                );
+                setLoading(false);
+              }
+              return;
+            }
             failEmbedding(
               '飞书内容加载时间过长。你可以重新加载，或先在飞书中打开。',
             );
@@ -304,9 +314,6 @@ const WorkbenchWikiDocument: React.FC<WorkbenchWikiDocumentProps> = ({
     return () => {
       cancelled = true;
       instance?.destroy();
-      if (mountTimeout) {
-        window.clearTimeout(mountTimeout);
-      }
       if (mountRef.current) {
         mountRef.current.replaceChildren();
       }
