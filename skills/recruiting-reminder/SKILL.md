@@ -12,11 +12,10 @@ description: 从 IMAP 邮箱识别校招笔试、在线测评和面试通知，�
 
 ## 用户画像前置门禁
 
-本 Skill 的第一项动作是完整读取
-`../.offerloop-runtime/references/profile-gate.md` 并执行用户画像前置门禁。必须在询问扫描输入、
-读取本 Skill 其他参考、访问邮箱/Base/日历、运行脚本或写入任何事件前完成。画像为
-`missing` 或 `empty` 时不得启动本 Skill，转由 `career-profile` 一次只问一个问题并自动保存；
-门禁通过后才返回本次招聘提醒任务。
+本 Skill 的第一项动作是读取 `../.offerloop-runtime/references/installation-mode.md` 并运行模式
+检查。`full` 模式继续完整执行 `profile-gate.md`；画像缺失或为空时转由 `career-profile`。
+`single` 模式跳过全局画像门禁，只配置当前功能所需的邮箱、笔面试 Base 和可选日历；不得因此
+创建整套 OfferLoop 知识库。
 
 ## 开工前材料路由
 

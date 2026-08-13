@@ -6,17 +6,16 @@ description: 根据用户的目标岗位、可选完整 JD 和用户亲自选择
 # Resume Tailor
 
 把 `experience-deepthink` 产出的真实经历素材组合成一份岗位定制简历，并交付经过视觉检查的一页
-PDF。首次用户画像门禁需要读取飞书；门禁通过后，正文生成不依赖其他飞书材料，只有用户选择
-从飞书取材或明确要求保存当前简历时才继续读取飞书。
+PDF。完整模式的首次用户画像门禁需要读取飞书；单 Skill 模式不需要飞书，除非用户明确选择
+从飞书取材或保存当前简历。
 
 运行本 Skill 内任何相对路径前，先从当前 `SKILL.md` 定位 Skill 根目录。
 
 ## 用户画像前置门禁
 
-本 Skill 的第一项动作是完整读取
-`../.offerloop-runtime/references/profile-gate.md` 并执行用户画像前置门禁。必须在读取下列本 Skill
-参考、询问目标岗位、读取经历或开始制作简历前完成。画像为 `missing` 或 `empty` 时不得启动本
-Skill，转由 `career-profile` 一次只问一个问题并自动保存；门禁通过后才返回本次简历任务。
+本 Skill 的第一项动作是读取 `../.offerloop-runtime/references/installation-mode.md` 并运行模式
+检查。`full` 模式继续完整执行 `profile-gate.md`；画像缺失或为空时转由 `career-profile`。
+`single` 模式跳过全局画像门禁，只读取用户本轮提供或明确选择的材料，默认本地交付 PDF。
 
 ## 开工前材料路由
 

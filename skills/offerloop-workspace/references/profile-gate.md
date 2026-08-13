@@ -2,8 +2,9 @@
 
 ## 目的与范围
 
-`career-profile` 是 OfferLoop 的首次使用入口。除 `career-profile` 自身外，下面 8 个 OfferLoop
-业务 Skill 在开始业务工作前都必须先执行本门禁：
+`career-profile` 是 OfferLoop 完整模式的首次使用入口。先读取 `installation-mode.md` 并运行
+`../scripts/install_mode.py`。只有输出为 `full` 时，除 `career-profile` 自身外的下面 8 个
+OfferLoop 业务 Skill 才执行本门禁；输出为 `single` 时立即跳过本门禁：
 
 - `job-collection`
 - `recruiting-reminder`
@@ -14,7 +15,7 @@
 - `mock-lab`
 - `talk-review`
 
-本门禁不适用于安装器、升级/修复流程，也不适用于 `lark-doc`、`lark-wiki`、PDF 等通用工具
+本门禁不适用于安装器、升级/修复流程和单 Skill 模式，也不适用于 `lark-doc`、`lark-wiki`、PDF 等通用工具
 Skill。`career-profile` 自身直接进入建档或校准流程，不递归执行本门禁。
 
 ## 执行时机

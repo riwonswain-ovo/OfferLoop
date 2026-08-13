@@ -6,9 +6,15 @@
 
 在线读取和写入由 Agent 按 `lark-wiki`、`lark-doc`、`lark-base` 的规则完成。OfferLoop 私有空间内的唯一匹配材料可自动读取；零匹配、多匹配、冲突或空间外材料才询问用户。
 
+## 安装模式
+
+先执行 `installation-mode.md`。`full` 模式使用下述飞书目录、门禁和默认自动保存规则；`single`
+模式跳过全局画像门禁，默认只在 Chat 中交付，不自动读取或写入飞书。单 Skill 用户明确要求连接
+飞书且相应权限与 locator 已配置后，才按本契约中与当前任务相关的目录执行读写。
+
 ## 用户画像前置门禁
 
-除 `career-profile` 外，8 个 OfferLoop 业务 Skill 必须把 `profile-gate.md` 作为第一项业务检查。
+在 `full` 模式中，除 `career-profile` 外，8 个 OfferLoop 业务 Skill 必须把 `profile-gate.md` 作为第一项业务检查。
 `02｜用户画像` 下的岗位选择偏好、个人性格探索和语言表达习惯文档全部缺失、空白或只有模板
 占位内容时，不得启动原 Skill；改由 `career-profile` 一次只问一个问题，并在每条确认信息后自动
 保存对应文档。只要存在至少一条用户确认的有效信息即可通过全局门禁，不要求状态已经是
@@ -78,7 +84,7 @@
 
 ## 自动保存
 
-所有产出型 Skill（`career-profile`、`experience-deepthink`、`resume-tailor`、`competency-lab`、`interview-prep`、`mock-lab`、`talk-review`）在每次生成、补充或修订内容后默认自动保存：
+`full` 模式下，所有产出型 Skill（`career-profile`、`experience-deepthink`、`resume-tailor`、`competency-lab`、`interview-prep`、`mock-lab`、`talk-review`）在每次生成、补充或修订内容后默认自动保存。`single` 模式默认不自动保存到飞书，只在用户本轮明确要求且连接已配置时保存：
 
 - 正常结束：`completed`。
 - 用户暂停、时间到或提前结束：`incomplete`，正文保留已完成内容、缺口和续做清单。

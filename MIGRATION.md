@@ -1,7 +1,8 @@
 # OfferLoop 迁移与回滚
 
-新用户直接运行仓库自带的 `scripts/install_offerloop.py --setup`。已有独立版
-`job-collection` 或 `recruiting-reminder` 用户先备份配置和旧 Base，不要把凭证内容复制到聊天。
+新用户直接按 README 选择完整模式或单 Skill 模式，并运行仓库自带的
+`scripts/setup_offerloop.py`。已有独立版 `job-collection` 或 `recruiting-reminder` 用户先备份
+配置和旧 Base，不要把凭证内容复制到聊天。
 
 ## 1. 迁移本地配置
 
@@ -22,12 +23,12 @@
 
 ## 2. 升级并核验九个 Skill
 
-先按 README 完成 GitHub 私库认证并进入最新的开发仓库目录。以下以 Codex 为例：
+先进入最新仓库目录。已有完整 OfferLoop 用户继续选择 `full`，以下以 Codex 为例：
 
 ```bash
-python3 scripts/install_offerloop.py --agent codex --upgrade --dry-run
-python3 scripts/install_offerloop.py --agent codex --upgrade
-python3 scripts/install_offerloop.py --agent codex --verify
+python3 scripts/setup_offerloop.py --agent codex --mode full --dry-run
+python3 scripts/setup_offerloop.py --agent codex --mode full --upgrade
+python3 scripts/setup_offerloop.py --agent codex --mode full --verify
 ```
 
 Windows 将 `python3` 替换为 `py -3`；其他 Agent 替换 `--agent` 参数。只有确认同名目录属于
@@ -43,6 +44,18 @@ Windows 将 `python3` 替换为 `py -3`；其他 Agent 替换 `--agent` 参数�
 - `interview-prep`
 - `mock-lab`
 - `talk-review`
+
+只有一个旧 Skill 的用户可保持独立运行，例如：
+
+```bash
+python3 scripts/setup_offerloop.py --agent codex --mode single --skill job-collection --dry-run
+python3 scripts/setup_offerloop.py --agent codex --mode single --skill job-collection --upgrade
+python3 scripts/setup_offerloop.py --agent codex --mode single --skill job-collection --verify
+```
+
+单 Skill 模式不会创建 OfferLoop 知识库，也不会要求全局用户画像；已有飞书 Base 和配置仍保留，
+只有当前 Skill 明确需要时才继续使用。旧 `scripts/install_offerloop.py --setup` 仍兼容本地整套安装，
+但不会记录模式，也不能证明飞书工作区已经完成。
 
 旧 `offerloop-setup`、`offerloop-workspace` 和 `offerloop-workbench` 已迁入安装器与隐藏的
 `.offerloop-runtime`，不再作为用户可见 Skill 安装。旧 `pm-sense` 的产品经理训练能力迁入
@@ -86,6 +99,10 @@ OfferLoop 管理，可由用户自行保留或另行归档。
 5. 迁移历史记录，以企业 record ID 和来源邮件 ID 幂等去重。
 6. 小流量验证即时进展同步、人工字段保护、同公司多岗位、改期和日历更新。
 7. 验收通过后才切换日常写入；旧双 Base 和旧配置永久保留为回滚入口。
+
+完成真实线上验收后运行
+`python3 scripts/setup_offerloop.py --agent codex --mode full --record-workspace-verified`，再运行
+`--verify`。任何 locator 变化都会使这条验收记录失效，必须重新只读核验。
 
 飞书工作台不属于核心迁移前置条件。只有用户明确选择时才运行安装器的
 `--deploy-workbench`；未部署或失败不影响知识库、三张 Base、日历和训练产物。

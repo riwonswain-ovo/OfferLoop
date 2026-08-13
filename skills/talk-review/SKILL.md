@@ -12,11 +12,10 @@ description: 接收用户上传或指定的真实面试 ASR，询问本次面试
 
 ## 用户画像前置门禁
 
-本 Skill 的第一项动作是完整读取
-`../.offerloop-runtime/references/profile-gate.md` 并执行用户画像前置门禁。必须在读取本 Skill
-其他参考、索取或读取 ASR/简历、关联事件或开始复盘前完成。画像为 `missing` 或 `empty` 时
-不得启动本 Skill，转由 `career-profile` 一次只问一个问题并自动保存；门禁通过后才返回本次
-真实面试复盘任务。
+本 Skill 的第一项动作是读取 `../.offerloop-runtime/references/installation-mode.md` 并运行模式
+检查。`full` 模式继续完整执行 `profile-gate.md`；画像缺失或为空时转由 `career-profile`。
+`single` 模式跳过全局画像门禁，只读取用户本轮指定的 ASR、简历和经历材料，默认在 Chat 中
+交付复盘。
 
 ## 开工前材料路由
 

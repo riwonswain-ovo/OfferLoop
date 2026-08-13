@@ -772,7 +772,7 @@ class RepositoryContractTest(unittest.TestCase):
         for retired in ("`offerloop-setup`", "`offerloop-workspace`", "`pm-sense`"):
             self.assertNotIn(retired, welcome)
 
-    def test_all_offerloop_business_skills_enforce_the_profile_gate_first(self):
+    def test_all_offerloop_business_skills_route_profile_gate_by_install_mode(self):
         gated_skills = (
             "job-collection",
             "recruiting-reminder",
@@ -785,10 +785,12 @@ class RepositoryContractTest(unittest.TestCase):
         )
         for name in gated_skills:
             skill = (SKILLS / name / "SKILL.md").read_text(encoding="utf-8")
+            self.assertIn("installation-mode.md", skill, name)
             self.assertIn("profile-gate.md", skill, name)
             self.assertIn("本 Skill 的第一项动作", skill, name)
-            self.assertIn("不得启动", skill, name)
-            self.assertIn("一次只问一个问题并自动保存", skill, name)
+            self.assertIn("`full` 模式", skill, name)
+            self.assertIn("`single` 模式跳过全局画像门禁", skill, name)
+            self.assertIn("`career-profile`", skill, name)
 
         career = (SKILLS / "career-profile" / "SKILL.md").read_text(
             encoding="utf-8"
@@ -803,7 +805,8 @@ class RepositoryContractTest(unittest.TestCase):
             / "references"
             / "profile-gate.md"
         ).read_text(encoding="utf-8")
-        self.assertIn("8 个 OfferLoop", gate)
+        self.assertIn("下面 8 个", gate)
+        self.assertIn("输出为 `single` 时立即跳过", gate)
         self.assertIn("至少存在一条用户明确提供并已确认的有效认识", gate)
         self.assertIn("状态就是 `ready`", gate)
         self.assertIn("不适用于安装器", gate)

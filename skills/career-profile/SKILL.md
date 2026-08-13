@@ -8,6 +8,12 @@ description: 作为 OfferLoop 首次使用入口，维护独立的岗位选择�
 维护三份会随用户对话逐步生长的文档：`岗位选择偏好｜<显示名>`、`个人性格探索｜<显示名>` 和
 `语言表达习惯｜<显示名>`。三者分别服务招聘筛选、认识自己和自然表达，不混成一份大而全的表。
 
+第一项动作是读取 `../.offerloop-runtime/references/installation-mode.md` 并运行其中的模式检查。
+`full` 模式下，若三张 Base、私有知识库或 schema v5 locator 尚未通过验收，先读取
+`../.offerloop-runtime/references/full-setup.md`，展示计划并在用户确认后完成线上初始化；不要默认
+部署工作台或自动化。`single` 模式不要求飞书工作区，直接在 Chat 中进行当前对话，默认不创建或
+更新飞书画像文档。
+
 运行相对路径前先从当前 `SKILL.md` 定位 Skill 根目录，并完整读取：
 
 - `references/profile-schema.md`
@@ -19,7 +25,8 @@ description: 作为 OfferLoop 首次使用入口，维护独立的岗位选择�
 
 ## OfferLoop 首次使用入口
 
-本 Skill 是共享用户画像门禁的建档执行者，自身不重复执行门禁。被其他业务 Skill 转入时：
+完整模式下，本 Skill 是共享用户画像门禁的建档执行者，自身不重复执行门禁。被其他业务 Skill
+转入时：
 
 1. 保留用户原始请求和来源 Skill。
 2. 读取 `../.offerloop-runtime/references/profile-gate.md`，只接续尚未知的内容。
@@ -139,7 +146,7 @@ Skill 发现的单次表现只可成为候选观察，不能直接变成稳定�
 
 ## 保存
 
-保存时读取 `../.offerloop-runtime/references/artifact-contract.md`。固定保存到：
+保存时读取 `../.offerloop-runtime/references/artifact-contract.md`。`full` 模式固定保存到：
 
 - `02｜用户画像/岗位选择偏好｜<显示名>`；
 - `02｜用户画像/个人性格探索｜<显示名>`；
@@ -147,7 +154,10 @@ Skill 发现的单次表现只可成为候选观察，不能直接变成稳定�
 
 旧 `用户画像｜<显示名>` 仅作为兼容迁移来源，不再作为新建目标，也不自动删除。
 
-每确认一条认识立即更新对应的同一文档。探索仍在继续时保持 `incomplete`；固定岗位偏好流程全部
+`single` 模式默认只在 Chat 中返回当前结构化内容；用户明确要求连接飞书且授权与 locator 已就绪
+后，才采用上述路径保存。
+
+需要保存时，每确认一条认识立即更新对应的同一文档。探索仍在继续时保持 `incomplete`；固定岗位偏好流程全部
 确认或用户认为当前探索已足够时可标记 `completed`，以后仍可继续校准。唯一命中时更新，零命中时创建，多命中时让
 用户选择。成功后返回知识库路径和 URL；失败时交付当前完整 Markdown，不声称已写入。只有用户
 明确说“不保存”时跳过写入；明确要求另建记录时才创建独立版本。

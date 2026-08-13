@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 README = ROOT / "README.md"
 MIGRATION = ROOT / "MIGRATION.md"
 INSTALLER = ROOT / "scripts" / "install_offerloop.py"
+SETUP = ROOT / "scripts" / "setup_offerloop.py"
 WORKBENCH_TASK = (
     ROOT
     / "skills"
@@ -23,8 +24,8 @@ WORKBENCH_TASK = (
     / "lib"
     / "codex-task.ts"
 )
-DEVELOPMENT_REPOSITORY = "riwonswain-ovo/OfferLoop-development"
-INSTALL_SCRIPT = "scripts/install_offerloop.py"
+PUBLIC_REPOSITORY = "https://github.com/riwonswain-ovo/OfferLoop.git"
+SETUP_SCRIPT = "scripts/setup_offerloop.py"
 
 
 def load_installer():
@@ -40,6 +41,8 @@ def load_installer():
 
 def main() -> None:
     installer = load_installer()
+    if not SETUP.is_file():
+        raise AssertionError("repository is missing the two-mode setup entrypoint")
     readme = README.read_text(encoding="utf-8")
     migration = MIGRATION.read_text(encoding="utf-8")
     workbench_task = WORKBENCH_TASK.read_text(encoding="utf-8")
@@ -65,15 +68,13 @@ def main() -> None:
             raise AssertionError(f"MIGRATION.md is missing Skill: {name}")
 
     required_readme_commands = (
-        "gh auth status -h github.com",
-        f"gh repo view {DEVELOPMENT_REPOSITORY}",
-        f"gh repo clone {DEVELOPMENT_REPOSITORY}",
-        f"python3 {INSTALL_SCRIPT} --agent codex --dry-run",
-        f"python3 {INSTALL_SCRIPT} --agent codex",
-        f"python3 {INSTALL_SCRIPT} --agent codex --verify",
-        f"py -3 {INSTALL_SCRIPT} --agent codex --dry-run",
-        f"py -3 {INSTALL_SCRIPT} --agent codex",
-        f"py -3 {INSTALL_SCRIPT} --agent codex --verify",
+        f"git clone {PUBLIC_REPOSITORY}",
+        f"python3 {SETUP_SCRIPT} --agent codex --mode full --dry-run",
+        f"python3 {SETUP_SCRIPT} --agent codex --mode full",
+        f"python3 {SETUP_SCRIPT} --agent codex --mode full --verify",
+        f"python3 {SETUP_SCRIPT} --agent codex --mode single --skill mock-lab",
+        "git sparse-checkout set scripts skills/mock-lab",
+        "--record-workspace-verified",
     )
     for command in required_readme_commands:
         if command not in readme:
@@ -83,23 +84,21 @@ def main() -> None:
     for agent in installer.ALL_AGENTS:
         if f"`{agent}`" not in readme:
             raise AssertionError(f"README is missing installer target: {agent}")
-    if f"npx skills add {DEVELOPMENT_REPOSITORY}" in readme:
+    if SETUP_SCRIPT not in migration or "--verify" not in migration:
         raise AssertionError(
-            "README must not document a second OfferLoop terminal installer"
+            "MIGRATION.md must use the mode-aware setup and post-install verification"
         )
-    if "scripts/install_offerloop.py" not in migration or "--verify" not in migration:
-        raise AssertionError(
-            "MIGRATION.md must use the bundled installer and post-install verification"
-        )
-    if "（开发版）" not in readme or "尚未与公开仓库同步" not in readme:
-        raise AssertionError("development README must disclose its release status")
+    if "OfferLoop-development" not in readme or "Pull Request" not in readme:
+        raise AssertionError("README must separate development and public release repositories")
+    if "两种模式都**不包含工作台**" not in readme:
+        raise AssertionError("README must exclude the workbench from both install modes")
     if "OfferLoop-development" in workbench_task:
         raise AssertionError("shipped workbench must not require the private repository")
 
     print(
-        "README install contract accepted: GitHub authentication, explicit Agent "
-        f"target, bundled installer, {len(packaged)} Skills, post-install verification, "
-        "and no private workbench origin"
+        "README install contract accepted: public full download, sparse single-Skill "
+        f"download, explicit Agent target, {len(packaged)} Skills, online verification, "
+        "and separate development/public release repositories"
     )
 
 
