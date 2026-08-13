@@ -5,9 +5,6 @@ OfferLoop 是一套围绕求职事实、材料沉淀和能力成长运行的 Ski
 - **完整模式**：9 个长期 Skill + 三张飞书业务 Base + 一个用户私有的 OfferLoop 知识库；
 - **单 Skill 模式**：只安装指定 Skill 和最小共享运行时，默认不创建飞书知识库或 Base。
 
-两种模式都**不包含工作台**。工作台、妙搭应用、公网服务、定时自动化和消息机器人属于后续可选
-增强，不是下载或首次使用的前置条件。
-
 ## 9 个长期 Skill
 
 | Skill | 职责 |
@@ -22,8 +19,8 @@ OfferLoop 是一套围绕求职事实、材料沉淀和能力成长运行的 Ski
 | `mock-lab` | 模拟面试与逐题训练 |
 | `talk-review` | 拆解真实面试 ASR 并形成复盘 |
 
-`offerloop-setup`、`offerloop-workspace` 和 `offerloop-workbench` 不是用户可见 Skill。前两者的必要
-内容由安装器放进隐藏的 `.offerloop-runtime`；工作台不会随完整模式或单 Skill 模式安装。
+`offerloop-setup` 和 `offerloop-workspace` 不是用户可见 Skill；必要内容由安装器放进隐藏的
+`.offerloop-runtime`。
 
 ## 三条闭环
 
@@ -75,14 +72,14 @@ python3 scripts/setup_offerloop.py --agent codex --mode full --record-workspace-
 python3 scripts/setup_offerloop.py --agent codex --mode full --verify
 ```
 
-只有本地安装、模式配置、三张 Base、知识库目录、schema v5 locator 和权限都通过时，完整模式才会
+只有本地安装、模式配置、三张 Base、知识库目录、schema v6 locator 和权限都通过时，完整模式才会
 报告 `ready`。`--record-workspace-verified` 本身不访问飞书，只能由 Agent 在真实线上验收通过后
 执行；安装命令不会复制三张 Base，也不会用示例 URL 冒充已经完成线上 setup。
 
 ### 方式 B：只下载并安装一个 Skill
 
 下面以 `mock-lab` 为例。Git sparse checkout 只取该 Skill、安装脚本和最小共享运行时，不下载其余
-8 个 Skill 或工作台内容：
+8 个 Skill：
 
 ```bash
 git clone --filter=blob:none --no-checkout https://github.com/riwonswain-ovo/OfferLoop.git OfferLoop-mock-lab
@@ -165,18 +162,6 @@ setup 不预建空用户画像。`career-profile` 在用户确认第一条真实
 固定为 `21:30 Asia/Shanghai`。成员列表截断、存在多个真人、唯一真人不是所有者或缺少成员读取
 权限时，一律暂停，不切换私聊，也不发送替代消息。
 
-## 工作台边界
-
-工作台不是两种安装模式的一部分。需要参与开发时才可单独预演：
-
-```bash
-python3 scripts/install_offerloop.py --deploy-workbench /path/to/miaoda-project --dry-run
-```
-
-工作台只展示事实、待办、触发原因、下一步和暂停原因。生成式任务通过原生 Agent 深链接打开并
-自动带齐上下文。OfferLoop 不恢复本机 Agent Worker，也不提供 Agent Chat、后台轮询或 Worker
-队列。
-
 ## 验证
 
 ```bash
@@ -184,7 +169,7 @@ python3 -m unittest discover -s tests
 cd services/job-progress-sync && npm test
 ```
 
-所有线上迁移都应先导出快照、原地升级并保留旧数据；无法可靠回填的记录进入“迁移复核”视图。
+所有线上迁移都应先导出快照、原地升级并保留旧数据；无法可靠判断的记录进入“状态待确认”。
 
 ## 发布流程
 

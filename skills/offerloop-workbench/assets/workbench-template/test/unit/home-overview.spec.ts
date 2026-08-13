@@ -47,16 +47,14 @@ describe('findUpcomingInterviews', () => {
 });
 
 describe('getInterviewReadiness', () => {
-  it('prefers the linked progress record for 岗位 JD and reads the interview record otherwise', () => {
+  it('prefers the linked progress record for 岗位 JD and checks the preparation document', () => {
     const interview = createRecord('event', {
-      投递简历版本: 'v3.2',
       面试准备文档: '',
     });
     const progress = createRecord('progress', { '岗位 JD': '负责 AI 产品' });
 
     expect(getInterviewReadiness(interview, progress)).toEqual([
       { key: 'jd', label: '岗位 JD', ready: true },
-      { key: 'resume', label: '简历版本', ready: true },
       { key: 'prepDoc', label: '准备文档', ready: false },
     ]);
   });
@@ -66,7 +64,7 @@ describe('getInterviewReadiness', () => {
 
     expect(
       getInterviewReadiness(interview, undefined).map((check) => check.ready),
-    ).toEqual([true, false, false]);
+    ).toEqual([true, false]);
   });
 });
 

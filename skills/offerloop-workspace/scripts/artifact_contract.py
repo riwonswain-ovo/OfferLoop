@@ -21,7 +21,7 @@ import tempfile
 
 
 ARTIFACT_SCHEMA_VERSION = 1
-CONFIG_SCHEMA_VERSION = 5
+CONFIG_SCHEMA_VERSION = 6
 SKILLS = (
     "career-profile",
     "experience-deepthink",
@@ -248,7 +248,7 @@ def _migrate_artifact_storage(existing):
 
 
 def migrate_config(config):
-    """Return a v5 config while preserving public values and valid locators."""
+    """Return a v6 config while preserving public values and valid locators."""
     if not isinstance(config, dict):
         raise ValueError("OfferLoop config must be a JSON object")
     current = config.get("schema_version", 1)

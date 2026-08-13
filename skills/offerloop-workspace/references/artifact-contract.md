@@ -2,7 +2,7 @@
 
 ## 职责
 
-`scripts/artifact_contract.py` 只处理确定性本地逻辑：schema v5 迁移、固定目录定位、`run_id`、标题、状态路由和 Markdown 校验。它不访问飞书，也不保存凭证或私人正文。
+`scripts/artifact_contract.py` 只处理确定性本地逻辑：schema v6 迁移、固定目录定位、`run_id`、标题、状态路由和 Markdown 校验。它不访问飞书，也不保存凭证或私人正文。
 
 在线读取和写入由 Agent 按 `lark-wiki`、`lark-doc`、`lark-base` 的规则完成。OfferLoop 私有空间内的唯一匹配材料可自动读取；零匹配、多匹配、冲突或空间外材料才询问用户。
 

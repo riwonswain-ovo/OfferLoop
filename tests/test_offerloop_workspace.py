@@ -46,17 +46,16 @@ class OfferLoopWorkspaceTest(unittest.TestCase):
                 Path(directory) / "offerloop" / "config.json",
             )
 
-    def test_template_is_a_readme_and_marks_workbench_optional(self):
+    def test_template_is_a_complete_user_guide(self):
         content = TEMPLATE.read_text(encoding="utf-8")
         for expected in (
             "# OfferLoop 使用指南",
-            "OFFERLOOP:OPTIONAL:WORKBENCH",
             "## 三张核心数据表",
             "## 三条闭环",
             "## 9 个长期 Skill",
             "## 固定目录",
             "不复制记录",
-            "原生 Agent 深链接",
+            "`进展状态`",
         ):
             self.assertIn(expected, content)
         self.assertNotIn("OFFERLOOP:MANAGED", content)
@@ -94,7 +93,7 @@ class OfferLoopWorkspaceTest(unittest.TestCase):
         self.assertIn("2026-07-17T20:00:00+00:00", refreshed)
         self.assertIn("笔面试中心暂时不可读", refreshed)
 
-    def test_initial_homepage_renders_workbench_and_base_links(self):
+    def test_initial_homepage_renders_base_links_only(self):
         workspace = load_workspace_module()
         rendered = workspace.render_initial_homepage(
             TEMPLATE.read_text(encoding="utf-8"),
@@ -106,11 +105,11 @@ class OfferLoopWorkspaceTest(unittest.TestCase):
             },
         )
 
-        self.assertIn("https://example.com/workbench", rendered)
         self.assertIn("https://example.com/enterprise", rendered)
-        self.assertNotIn("工作台尚未启用", rendered)
+        self.assertNotIn("https://example.com/workbench", rendered)
+        self.assertNotIn("工作台", rendered)
 
-    def test_initial_homepage_is_complete_without_workbench(self):
+    def test_initial_homepage_does_not_require_an_optional_app(self):
         workspace = load_workspace_module()
         rendered = workspace.render_initial_homepage(
             TEMPLATE.read_text(encoding="utf-8"),
@@ -121,8 +120,8 @@ class OfferLoopWorkspaceTest(unittest.TestCase):
             },
         )
 
-        self.assertIn("工作台尚未启用", rendered)
-        self.assertIn("不影响知识库、三张 Base 或训练产物", rendered)
+        self.assertIn("https://example.com/interviews", rendered)
+        self.assertNotIn("工作台", rendered)
 
     def test_resource_registration_preserves_existing_config_and_rejects_secrets(self):
         workspace = load_workspace_module()

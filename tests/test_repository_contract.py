@@ -891,9 +891,8 @@ class RepositoryContractTest(unittest.TestCase):
         field_contract = (
             SKILLS / "job-collection" / "references" / "field-contract.md"
         ).read_text(encoding="utf-8")
-        self.assertIn("03｜定制简历", field_contract)
-        self.assertIn("01｜互联网产品经理简历", field_contract)
-        self.assertNotIn("02｜简历合集", field_contract)
+        self.assertIn("`进展状态` 是用户维护的当前状态唯一真源", field_contract)
+        self.assertIn("简历选择属于具体简历任务的上下文", field_contract)
 
     def test_user_voice_contract_is_consumed_by_generated_personal_content(self):
         consumers = (
@@ -927,7 +926,7 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertIn("企业清单和求职进展已作为唯一 Base 对象", collection)
         self.assertIn("Base 是求职事实真源", contract)
         self.assertIn("不得复制 Base 或记录", onboarding)
-        self.assertIn("原生 Agent 深链接", onboarding)
+        self.assertIn("原生 Agent 会话", onboarding)
 
     def test_readme_and_migration_describe_the_current_workspace(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
@@ -937,9 +936,10 @@ class RepositoryContractTest(unittest.TestCase):
             "求职进展",
             "笔面试中心",
             "能力成长",
-            "不恢复本机 Agent Worker",
         ):
             self.assertIn(expected, readme)
+        self.assertNotIn("工作台", readme)
+        self.assertNotIn("offerloop-workbench", readme)
         self.assertNotIn("Skills-11", readme)
         self.assertNotIn("`pm-sense`：", readme)
 
@@ -954,7 +954,7 @@ class RepositoryContractTest(unittest.TestCase):
             "python3 scripts/install_offerloop.py --agent codex --verify",
             readme,
         )
-        self.assertIn("--deploy-workbench", readme)
+        self.assertNotIn("--deploy-workbench", readme)
         self.assertIn("幂等", readme)
         self.assertIn("不会复制三张 Base", readme)
 
@@ -980,7 +980,6 @@ class RepositoryContractTest(unittest.TestCase):
             "## 安装与升级",
             "## 固定知识库结构",
             "## Loop Runtime",
-            "## 工作台边界",
         )
         positions = [readme.index(section) for section in sections]
         self.assertEqual(positions, sorted(positions))
@@ -993,8 +992,8 @@ class RepositoryContractTest(unittest.TestCase):
         for text in (readme, onboarding):
             self.assertIn("三张", text)
             self.assertIn("Base", text)
-            self.assertIn("工作台", text)
-            self.assertIn("Agent Worker", text)
+            self.assertNotIn("工作台", text)
+            self.assertNotIn("Agent Worker", text)
         self.assertIn("--setup", onboarding)
         self.assertIn("--verify", onboarding)
         self.assertIn("`.offerloop-runtime`", onboarding)
@@ -1050,7 +1049,7 @@ class RepositoryContractTest(unittest.TestCase):
             SKILLS / "offerloop-workspace" / "assets" / "homepage-template.md"
         ).read_text(encoding="utf-8")
         self.assertIn("# OfferLoop 使用指南", template)
-        self.assertIn("OFFERLOOP:OPTIONAL:WORKBENCH", template)
+        self.assertNotIn("工作台", template)
         self.assertIn("## 9 个长期 Skill", template)
         for name in (
             "career-profile",
@@ -1330,7 +1329,7 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertIn("不能断言面试官认定造假", review)
         self.assertIn("resume-tailor", review)
 
-    def test_resume_version_is_user_maintained_in_both_business_bases(self):
+    def test_resume_choice_is_not_persisted_in_business_bases(self):
         collection = (SKILLS / "job-collection" / "SKILL.md").read_text(
             encoding="utf-8"
         )
@@ -1338,9 +1337,9 @@ class RepositoryContractTest(unittest.TestCase):
             encoding="utf-8"
         )
         for text in (collection, reminder):
-            self.assertIn("`投递简历版本`", text)
-            self.assertIn("SingleSelect", text)
-            self.assertIn("不读取飞书知识库", text)
+            self.assertNotIn("投递简历版本", text)
+        self.assertIn("`进展状态`", collection)
+        self.assertIn("`进展状态`", reminder)
 
     def test_deployable_templates_do_not_reconfigure_git_hooks(self):
         templates = (

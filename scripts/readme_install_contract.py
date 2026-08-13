@@ -90,8 +90,8 @@ def main() -> None:
         )
     if "OfferLoop-development" not in readme or "Pull Request" not in readme:
         raise AssertionError("README must separate development and public release repositories")
-    if "两种模式都**不包含工作台**" not in readme:
-        raise AssertionError("README must exclude the workbench from both install modes")
+    if "工作台" in readme or "offerloop-workbench" in readme:
+        raise AssertionError("README must not expose internal application experiments")
     if "OfferLoop-development" in workbench_task:
         raise AssertionError("shipped workbench must not require the private repository")
 

@@ -9,7 +9,7 @@ description: 作为 OfferLoop 首次使用入口，维护独立的岗位选择�
 `语言表达习惯｜<显示名>`。三者分别服务招聘筛选、认识自己和自然表达，不混成一份大而全的表。
 
 第一项动作是读取 `../.offerloop-runtime/references/installation-mode.md` 并运行其中的模式检查。
-`full` 模式下，若三张 Base、私有知识库或 schema v5 locator 尚未通过验收，先读取
+`full` 模式下，若三张 Base、私有知识库或 schema v6 locator 尚未通过验收，先读取
 `../.offerloop-runtime/references/full-setup.md`，展示计划并在用户确认后完成线上初始化；不要默认
 部署工作台或自动化。`single` 模式不要求飞书工作区，直接在 Chat 中进行当前对话，默认不创建或
 更新飞书画像文档。
