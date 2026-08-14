@@ -66,8 +66,102 @@ test("rejects events other than an application entering submitted status", async
 
   assert.deepEqual(response, {
     status: 400,
-    body: { ok: false, error: "event must be application.submitted" },
+    body: {
+      ok: false,
+      error: "event must be application.submitted or application.status_changed",
+    },
   });
+});
+
+
+test("deletes an untouched generated default after leaving submitted status", async () => {
+  const deleted = [];
+  const repository = {
+    async findAllByEnterpriseRecordId() {
+      return [{
+        record_id: "rec_progress",
+        fields: {
+          "进展状态": "待反馈",
+          "最近完成节点": "投递完成",
+          "当前阶段": "已投递",
+          "下一环节": "待反馈",
+          "流程结果": "进行中",
+          "投递岗位": "",
+          "岗位 JD": "",
+          "企业清单 record_id": "rec_source",
+          "投递记录 ID": "enterprise:rec_source:default",
+        },
+      }];
+    },
+    async delete(recordId) {
+      deleted.push(recordId);
+    },
+  };
+
+  const response = await handleSyncRequest(
+    {
+      headers: { "x-offerloop-secret": "expected" },
+      body: {
+        event: "application.status_changed",
+        status: "已拒绝",
+        source_record_id: "rec_source",
+      },
+    },
+    { webhookSecret: "expected", repository },
+  );
+
+  assert.deepEqual(deleted, ["rec_progress"]);
+  assert.deepEqual(response, {
+    status: 200,
+    body: {
+      ok: true,
+      action: "deleted",
+      record_id: "rec_progress",
+      matched_count: 1,
+      deleted_count: 1,
+      protected_count: 0,
+    },
+  });
+});
+
+
+test("protects a progressed record after leaving submitted status", async () => {
+  let deleteCount = 0;
+  const repository = {
+    async findAllByEnterpriseRecordId() {
+      return [{
+        record_id: "rec_progress",
+        fields: {
+          "进展状态": "待二面",
+          "最近完成节点": "一面完成",
+          "投递岗位": "AI 产品经理",
+          "岗位 JD": "负责 AI 产品规划",
+          "企业清单 record_id": "rec_source",
+          "投递记录 ID": "enterprise:rec_source:default",
+        },
+      }];
+    },
+    async delete() {
+      deleteCount += 1;
+    },
+  };
+
+  const response = await handleSyncRequest(
+    {
+      headers: { "x-offerloop-secret": "expected" },
+      body: {
+        event: "application.status_changed",
+        status: "感兴趣",
+        source_record_id: "rec_source",
+      },
+    },
+    { webhookSecret: "expected", repository },
+  );
+
+  assert.equal(deleteCount, 0);
+  assert.equal(response.body.action, "review_required");
+  assert.equal(response.body.deleted_count, 0);
+  assert.equal(response.body.protected_count, 1);
 });
 
 

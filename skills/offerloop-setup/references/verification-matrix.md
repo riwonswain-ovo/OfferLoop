@@ -112,7 +112,7 @@ coaching 状态。
 | --- | --- | --- | --- |
 | 即时桥接定位已配置 | 本地 | 离线预检 | 已登记 profile、两张 Base、同步应用、HTTPS endpoint 与 workflow ID |
 | 工作流列表可读取 | bot | `base +workflow-list` | 可读取目标表工作流列表 |
-| 即时工作流已启用 | bot | `base +workflow-get` | 登记的 workflow 状态为 enabled，触发条件为投递进度变成已投递 |
+| 即时工作流已启用 | bot | `base +workflow-get` | 登记的 workflow 状态为 enabled，触发条件监听投递进度的所有变更 |
 | 自动化运行历史可读取 | bot | `base +workflow-run-history` | 可读取历史状态，不重跑工作流 |
 | 应用身份有效 | bot | `lark-cli whoami` | 返回当前 bot 身份，不泄露凭据 |
 

@@ -41,6 +41,27 @@ def application_id_for(record) -> str:
     return fields.get("投递记录 ID") or f"progress:{record['record_id']}"
 
 
+def can_delete_generated_default(record, source_record_id: str) -> bool:
+    """Return whether a source rollback may safely remove this progress row."""
+    fields = record.get("fields", {})
+    progress_status = str(fields.get("进展状态", "") or "").strip()
+    completed = str(fields.get("最近完成节点", "") or "").strip()
+    stage = str(fields.get("当前阶段", "") or "").strip()
+    next_stage = str(fields.get("下一环节", "") or "").strip()
+    process_result = str(fields.get("流程结果", "") or "").strip()
+    return (
+        str(fields.get("投递记录 ID", "") or "").strip()
+        == default_application_id(source_record_id)
+        and not str(fields.get("投递岗位", "") or "").strip()
+        and not str(fields.get("岗位 JD", "") or "").strip()
+        and progress_status in {"", "待反馈"}
+        and completed in {"", "投递完成"}
+        and stage in {"", "已投递"}
+        and next_stage in {"", "待反馈"}
+        and process_result in {"", "进行中"}
+    )
+
+
 def normalized_progress_fields(fields: dict) -> dict:
     """Backfill the v6 state model without overwriting user-maintained state."""
     result = dict(fields)
@@ -106,11 +127,32 @@ def merge_progress_record(
 
 
 def sync_submitted_application(source, repository, submitted_on: date | None):
-    """Create or refresh every application under one enterprise record."""
-    if source.get("fields", {}).get("投递进度") != "已投递":
-        return {"action": "skipped", "reason": "not_submitted"}
+    """Reconcile every application under one enterprise record in either direction."""
     source_record_id = source["record_id"]
     existing_records = repository.find_all_by_enterprise_record_id(source_record_id)
+    if source.get("fields", {}).get("投递进度") != "已投递":
+        deletable = [
+            record
+            for record in existing_records
+            if can_delete_generated_default(record, source_record_id)
+        ]
+        protected = [
+            record
+            for record in existing_records
+            if not can_delete_generated_default(record, source_record_id)
+        ]
+        for record in deletable:
+            repository.delete(record["record_id"])
+        return {
+            "action": (
+                "review_required"
+                if protected
+                else "deleted" if deletable else "unchanged"
+            ),
+            "record_ids": [record["record_id"] for record in existing_records],
+            "deleted_record_ids": [record["record_id"] for record in deletable],
+            "protected_record_ids": [record["record_id"] for record in protected],
+        }
     if not existing_records:
         fields = build_progress_record(source, submitted_on)
         record_id = repository.create(fields)
