@@ -3,7 +3,7 @@
     "/openapi/job-progress-sync": {
       "post": {
         "operationId": "sync",
-        "summary": "将已投递企业记录幂等同步到求职进展",
+        "summary": "按企业投递进度双向对账求职进展",
         "requestBody": {
           "required": true,
           "content": {
@@ -43,14 +43,26 @@
                     },
                     "action": {
                       "type": "string",
-                      "enum": ["created", "updated", "unchanged"],
-                      "description": "本次幂等同步采取的动作",
+                      "enum": ["created", "updated", "deleted", "review_required", "unchanged"],
+                      "description": "本次双向幂等对账采取的动作",
                       "example": "created"
                     },
                     "recordId": {
                       "type": "string",
                       "description": "求职进展记录 ID",
                       "example": "rec_progress_example"
+                    },
+                    "matchedCount": {
+                      "type": "integer",
+                      "description": "离开已投递状态时匹配到的求职进展数"
+                    },
+                    "deletedCount": {
+                      "type": "integer",
+                      "description": "安全删除的未维护自动默认行数"
+                    },
+                    "protectedCount": {
+                      "type": "integer",
+                      "description": "因已推进或人工维护而保留、需要复核的记录数"
                     }
                   }
                 }
@@ -58,7 +70,7 @@
             }
           },
           "400": {
-            "description": "来源记录缺失或尚未进入已投递状态"
+            "description": "来源记录缺失或来源字段不完整"
           },
           "503": {
             "description": "飞书接口暂时不可用"

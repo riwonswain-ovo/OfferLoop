@@ -192,6 +192,33 @@ test("updates an existing progress record without changing blank non-date fields
 });
 
 
+test("deletes an existing progress record by its exact record id", async () => {
+  const requests = [];
+  const repository = new FeishuProgressRepository({
+    baseToken: "app_example",
+    tableId: "tblExample",
+    accessTokenProvider: async () => "tenant-token",
+    fetchImpl: async (url, options) => {
+      requests.push({ url, options });
+      return {
+        ok: true,
+        async json() {
+          return { code: 0, data: {} };
+        },
+      };
+    },
+  });
+
+  await repository.delete("rec_progress");
+
+  assert.equal(
+    requests[0].url,
+    "https://open.feishu.cn/open-apis/bitable/v1/apps/app_example/tables/tblExample/records/rec_progress",
+  );
+  assert.equal(requests[0].options.method, "DELETE");
+});
+
+
 test("retries transient Feishu failures before returning a record", async () => {
   let attempts = 0;
   const repository = new FeishuProgressRepository({

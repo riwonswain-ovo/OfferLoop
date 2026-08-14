@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from scripts.progress_sync import (
     application_id_for,
     build_progress_record,
+    can_delete_generated_default,
     merge_progress_record,
     sync_submitted_application,
 )
@@ -36,6 +37,11 @@ class FakeProgressRepository:
                 record["fields"] = dict(fields)
                 return
         raise AssertionError(f"unknown record: {record_id}")
+
+    def delete(self, record_id):
+        self.records = [
+            record for record in self.records if record["record_id"] != record_id
+        ]
 
 
 class ProgressSyncTest(unittest.TestCase):
@@ -165,7 +171,7 @@ class ProgressSyncTest(unittest.TestCase):
             "2026-07-17",
         )
 
-    def test_sync_skips_records_not_in_submitted_status(self):
+    def test_sync_is_unchanged_when_non_submitted_has_no_progress(self):
         source = {
             "record_id": "rec_source",
             "fields": {"公司": "示例公司", "投递进度": "感兴趣"},
@@ -178,8 +184,82 @@ class ProgressSyncTest(unittest.TestCase):
             submitted_on=date(2026, 7, 17),
         )
 
-        self.assertEqual(result, {"action": "skipped", "reason": "not_submitted"})
+        self.assertEqual(
+            result,
+            {
+                "action": "unchanged",
+                "record_ids": [],
+                "deleted_record_ids": [],
+                "protected_record_ids": [],
+            },
+        )
         self.assertEqual(repository.records, [])
+
+    def test_sync_deletes_untouched_default_when_source_leaves_submitted(self):
+        source = {
+            "record_id": "rec_source",
+            "fields": {"公司": "示例公司", "投递进度": "已拒绝"},
+        }
+        repository = FakeProgressRepository()
+        repository.records = [{
+            "record_id": "rec_progress",
+            "fields": {
+                "进展状态": "待反馈",
+                "最近完成节点": "投递完成",
+                "当前阶段": "已投递",
+                "下一环节": "待反馈",
+                "流程结果": "进行中",
+                "投递岗位": "",
+                "岗位 JD": "",
+                "企业清单 record_id": "rec_source",
+                "投递记录 ID": "enterprise:rec_source:default",
+            },
+        }]
+
+        result = sync_submitted_application(source, repository, date(2026, 7, 17))
+
+        self.assertEqual(result["action"], "deleted")
+        self.assertEqual(result["deleted_record_ids"], ["rec_progress"])
+        self.assertEqual(result["protected_record_ids"], [])
+        self.assertEqual(repository.records, [])
+
+    def test_sync_protects_progressed_record_when_source_leaves_submitted(self):
+        source = {
+            "record_id": "rec_source",
+            "fields": {"公司": "示例公司", "投递进度": "感兴趣"},
+        }
+        repository = FakeProgressRepository()
+        protected = {
+            "record_id": "rec_progress",
+            "fields": {
+                "进展状态": "待二面",
+                "最近完成节点": "一面完成",
+                "投递岗位": "AI 产品经理",
+                "岗位 JD": "负责 AI 产品规划",
+                "企业清单 record_id": "rec_source",
+                "投递记录 ID": "enterprise:rec_source:default",
+            },
+        }
+        repository.records = [protected]
+
+        result = sync_submitted_application(source, repository, date(2026, 7, 17))
+
+        self.assertEqual(result["action"], "review_required")
+        self.assertEqual(result["deleted_record_ids"], [])
+        self.assertEqual(result["protected_record_ids"], ["rec_progress"])
+        self.assertEqual(repository.records, [protected])
+
+    def test_only_the_stable_generated_default_is_deletable(self):
+        record = {
+            "record_id": "rec_progress",
+            "fields": {
+                "进展状态": "待反馈",
+                "最近完成节点": "投递完成",
+                "投递记录 ID": "manual:application-one",
+            },
+        }
+
+        self.assertFalse(can_delete_generated_default(record, "rec_source"))
 
     def test_first_submission_requires_company(self):
         source = {

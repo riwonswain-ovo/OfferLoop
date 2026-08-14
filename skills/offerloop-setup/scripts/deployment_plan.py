@@ -41,7 +41,7 @@ PHASES = (
     ("workspace", "创建私有知识库、固定目录和使用指南"),
     ("coaching", "登记训练产物目录并启用 Markdown 飞书文档沉淀"),
     ("workbench", "按用户选择发布可选招聘工作台"),
-    ("progress_sync", "发布已投递即时同步服务并创建唯一 Base workflow"),
+    ("progress_sync", "发布投递进度双向同步服务并创建唯一 Base workflow"),
     ("imap", "创建本地 IMAP 模板，等待用户在本机填写授权码"),
     ("acceptance", "运行只读验收；即时联动演练必须使用并清理临时记录"),
 )
