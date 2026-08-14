@@ -304,6 +304,26 @@ function readOptions(value: unknown): string[] {
   return option ? [option] : [];
 }
 
+function canDeleteGeneratedDefault(
+  record: FeishuRecord,
+  sourceRecordId: string,
+): boolean {
+  const fields: Record<string, unknown> = record.fields ?? {};
+  const progressStatus: string = readText(fields['进展状态']);
+  const completed: string = readText(fields['最近完成节点']);
+  const stage: string = readText(fields['当前阶段']);
+  const next: string = readText(fields['下一环节']);
+  const result: string = readText(fields['流程结果']);
+  return readText(fields['投递记录 ID']) === `enterprise:${sourceRecordId}:default`
+    && !readText(fields['投递岗位'])
+    && !readText(fields['岗位 JD'])
+    && (!progressStatus || progressStatus === '待反馈')
+    && (!completed || completed === '投递完成')
+    && (!stage || stage === '已投递')
+    && (!next || next === '待反馈')
+    && (!result || result === '进行中');
+}
+
 function readUrl(value: unknown): string {
   if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
     const candidate: Record<string, unknown> = value as Record<string, unknown>;
@@ -640,8 +660,35 @@ export class JobProgressSyncService {
   async sync(request: JobProgressSyncRequest): Promise<JobProgressSyncResponse> {
     const sourceRecord: FeishuRecord = await this.getSourceRecord(request.sourceRecordId);
     const statuses: string[] = readOptions(sourceRecord.fields['投递进度']);
+    const existingRecords: FeishuRecord[] = await this.findProgressRecords(
+      request.sourceRecordId,
+    );
     if (!statuses.includes('已投递')) {
-      throw new BadRequestException('source record is not submitted');
+      const deletable: FeishuRecord[] = existingRecords.filter(
+        (record: FeishuRecord): boolean => canDeleteGeneratedDefault(
+          record,
+          request.sourceRecordId,
+        ),
+      );
+      const protectedRecords: FeishuRecord[] = existingRecords.filter(
+        (record: FeishuRecord): boolean => !canDeleteGeneratedDefault(
+          record,
+          request.sourceRecordId,
+        ),
+      );
+      for (const record of deletable) {
+        await this.deleteProgressRecord(record.record_id);
+      }
+      return {
+        ok: true,
+        action: protectedRecords.length > 0
+          ? 'review_required'
+          : deletable.length > 0 ? 'deleted' : 'unchanged',
+        recordId: existingRecords[0]?.record_id ?? '',
+        matchedCount: existingRecords.length,
+        deletedCount: deletable.length,
+        protectedCount: protectedRecords.length,
+      };
     }
 
     const company: string = readText(sourceRecord.fields['公司']);
@@ -649,9 +696,6 @@ export class JobProgressSyncService {
       throw new BadRequestException('source record company is empty');
     }
 
-    const existingRecords: FeishuRecord[] = await this.findProgressRecords(
-      request.sourceRecordId,
-    );
     const announcementUrl: string = readUrl(sourceRecord.fields['公告链接']);
     const applicationUrl: string = readUrl(sourceRecord.fields['投递链接']);
     const submittedDate: string = formatShanghaiDate(request.transitionedAt);
@@ -1165,6 +1209,16 @@ export class JobProgressSyncService {
       method: 'PUT',
       url,
       data: { fields: toWritableFields(fields) },
+    });
+  }
+
+  private async deleteProgressRecord(recordId: string): Promise<void> {
+    const url: string = `${OPEN_API_ROOT}/bitable/v1/apps/`
+      + `${this.config.progressBaseToken}/tables/${this.config.progressTableId}`
+      + `/records/${encodeURIComponent(recordId)}`;
+    await this.feishuRequest<Record<string, never>>({
+      method: 'DELETE',
+      url,
     });
   }
 

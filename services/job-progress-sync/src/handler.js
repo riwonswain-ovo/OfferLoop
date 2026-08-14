@@ -20,6 +20,71 @@ function getHeader(headers, name) {
 }
 
 
+function readText(value) {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (Array.isArray(value)) {
+    return value.map(readText).filter(Boolean).join("");
+  }
+  if (value && typeof value === "object") {
+    return readText(value.text ?? value.name ?? value.value ?? "");
+  }
+  return "";
+}
+
+
+function canDeleteGeneratedDefault(record, sourceRecordId) {
+  const fields = record.fields ?? {};
+  const expectedApplicationId = `enterprise:${sourceRecordId}:default`;
+  const progressStatus = readText(fields["进展状态"]);
+  const completed = readText(fields["最近完成节点"]);
+  const stage = readText(fields["当前阶段"]);
+  const next = readText(fields["下一环节"]);
+  const result = readText(fields["流程结果"]);
+  return (
+    readText(fields["投递记录 ID"]) === expectedApplicationId
+    && !readText(fields["投递岗位"])
+    && !readText(fields["岗位 JD"])
+    && (!progressStatus || progressStatus === "待反馈")
+    && (!completed || completed === "投递完成")
+    && (!stage || stage === "已投递")
+    && (!next || next === "待反馈")
+    && (!result || result === "进行中")
+  );
+}
+
+
+async function reconcileUnsubmitted(payload, repository) {
+  const existingRecords = await repository.findAllByEnterpriseRecordId(
+    payload.source_record_id,
+  );
+  const deletable = existingRecords.filter((record) => (
+    canDeleteGeneratedDefault(record, payload.source_record_id)
+  ));
+  const protectedRecords = existingRecords.filter((record) => (
+    !canDeleteGeneratedDefault(record, payload.source_record_id)
+  ));
+  for (const record of deletable) {
+    await repository.delete(record.record_id);
+  }
+  return {
+    status: 200,
+    body: {
+      ok: true,
+      action: protectedRecords.length > 0
+        ? "review_required"
+        : deletable.length > 0 ? "deleted" : "unchanged",
+      record_id: existingRecords[0]?.record_id ?? null,
+      matched_count: existingRecords.length,
+      deleted_count: deletable.length,
+      protected_count: protectedRecords.length,
+    },
+  };
+}
+
+
 export async function handleSyncRequest(request, deps) {
   const actualSecret = getHeader(request.headers, "x-offerloop-secret");
   if (!secretsMatch(actualSecret, deps.webhookSecret)) {
@@ -37,11 +102,26 @@ export async function handleSyncRequest(request, deps) {
   }
 
   const payload = request.body;
-  if (payload.event !== "application.submitted") {
+  const isSubmittedEvent = payload.event === "application.submitted";
+  const isStatusChangeEvent = payload.event === "application.status_changed";
+  if (!isSubmittedEvent && !isStatusChangeEvent) {
     return {
       status: 400,
-      body: { ok: false, error: "event must be application.submitted" },
+      body: {
+        ok: false,
+        error: "event must be application.submitted or application.status_changed",
+      },
     };
+  }
+  const status = isSubmittedEvent ? "已投递" : readText(payload.status);
+  if (isStatusChangeEvent && !status) {
+    return {
+      status: 400,
+      body: { ok: false, error: "status is required for application.status_changed" },
+    };
+  }
+  if (status !== "已投递") {
+    return reconcileUnsubmitted(payload, deps.repository);
   }
   if (
     !String(payload.company ?? "").trim()
