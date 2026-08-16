@@ -176,26 +176,6 @@ def refresh_managed_sections(
 
 def render_initial_homepage(template, config):
     result = template
-    workbench_url = str(config.get("workbench_url", "")).strip()
-    workbench_pattern = re.compile(
-        r"<!-- OFFERLOOP:OPTIONAL:WORKBENCH:START -->.*?"
-        r"<!-- OFFERLOOP:OPTIONAL:WORKBENCH:END -->",
-        re.DOTALL,
-    )
-    workbench_block = (
-        "<!-- OFFERLOOP:OPTIONAL:WORKBENCH:START -->\n"
-        f"[打开 OfferLoop 招聘工作台]({workbench_url})\n\n"
-        "工作台集中展示三张业务 Base；完整记录仍在对应 Base 中维护。\n"
-        "<!-- OFFERLOOP:OPTIONAL:WORKBENCH:END -->"
-        if workbench_url
-        else
-        "<!-- OFFERLOOP:OPTIONAL:WORKBENCH:START -->\n"
-        "飞书工作台尚未启用。这是可选体验，不影响知识库、三张 Base 或训练产物。\n"
-        "<!-- OFFERLOOP:OPTIONAL:WORKBENCH:END -->"
-    )
-    if len(workbench_pattern.findall(result)) != 1:
-        raise ValueError("optional workbench block must appear exactly once")
-    result = workbench_pattern.sub(workbench_block, result)
     replacements = {
         "{{target_base_url}}": config.get("target_base_url", "待配置"),
         "{{progress_base_url}}": config.get("progress_base_url", "待配置"),

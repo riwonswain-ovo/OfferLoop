@@ -324,7 +324,6 @@ const WorkbenchInterviewsPage: React.FC<WorkbenchInterviewsPageProps> = ({
                   <div className="my-3 min-h-0 flex-1 space-y-2 overflow-auto text-xs">
                     {[
                       ['岗位 JD', hasValue(nextProgress, '岗位 JD')],
-                      ['投递简历版本', hasValue(nextInterview, '投递简历版本')],
                       ['面试准备文档', hasValue(nextInterview, '面试准备文档')],
                     ].map(([label, ready]) => (
                       <div key={String(label)} className="flex items-center justify-between rounded-lg border p-3">

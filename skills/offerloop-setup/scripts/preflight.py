@@ -856,7 +856,7 @@ def _capability_report(source, capability, skills_roots=None):
             "talk_review",
         }
         storage_valid = (
-            config.get("schema_version") == 5
+            config.get("schema_version") == 6
             and isinstance(readiness, dict)
             and expected.issubset(readiness)
             and all(isinstance(readiness.get(name), bool) for name in expected)
@@ -871,7 +871,7 @@ def _capability_report(source, capability, skills_roots=None):
         elif storage_required or storage_configured:
             storage_status = "needs_action"
             storage_summary = "Chat 训练可用，但飞书产物配置仍有目录待启用"
-            storage_action = "确认升级 schema v5，并按需创建和登记训练目录"
+            storage_action = "确认升级 schema v6，并按需创建和登记训练目录"
         else:
             storage_status = "ready"
             storage_summary = "Chat 训练可直接开始；飞书保存尚未启用（可选）"

@@ -21,8 +21,9 @@ SKILLS_SOURCE = ROOT / "skills"
 SUPPORT_SOURCE = SKILLS_SOURCE / "offerloop-workspace"
 SUPPORT_NAME = ".offerloop-runtime"
 ADMIN_SCRIPTS_SOURCE = SKILLS_SOURCE / "offerloop-setup" / "scripts"
+ADMIN_REFERENCES_SOURCE = SKILLS_SOURCE / "offerloop-setup" / "references"
 VERSION_FILE = ROOT / "VERSION"
-INSTALLER_VERSION = "2.0"
+INSTALLER_VERSION = "2.1"
 SKILL_NAMES = (
     "career-profile",
     "job-collection",
@@ -252,15 +253,16 @@ def _source_symlinks(root: Path) -> list[Path]:
     return found
 
 
-def validate_sources() -> None:
+def validate_sources(skill_names=None) -> None:
+    selected_names = _selected_skill_names(skill_names)
     discovered = {
         path.parent.name for path in SKILLS_SOURCE.glob("*/SKILL.md") if path.is_file()
     }
-    if not set(SKILL_NAMES).issubset(discovered):
+    if not set(selected_names).issubset(discovered):
         raise ValueError(
-            "repository must contain all nine supported OfferLoop Skills"
+            "repository does not contain every selected OfferLoop Skill"
         )
-    for name in SKILL_NAMES:
+    for name in selected_names:
         skill_file = SKILLS_SOURCE / name / "SKILL.md"
         metadata = _frontmatter(skill_file)
         if set(metadata) != {"name", "description"}:
@@ -316,6 +318,10 @@ def runtime_source_digest() -> str:
         ((Path("scripts") / relative).as_posix(), path)
         for path, relative in _included_files(ADMIN_SCRIPTS_SOURCE)
     )
+    entries.extend(
+        ((Path("references") / relative).as_posix(), path)
+        for path, relative in _included_files(ADMIN_REFERENCES_SOURCE)
+    )
     digest = hashlib.sha256()
     for relative, path in sorted(entries, key=lambda item: item[0]):
         digest.update(relative.encode("utf-8"))
@@ -358,28 +364,60 @@ def _ignore_copy(directory: str, names: list[str]) -> set[str]:
     return {name for name in names if _is_ignored(parent / name)}
 
 
-def _manifest_payload(agent: str, digests: dict[str, str]) -> dict:
+def _manifest_payload(
+    agent: str,
+    digests: dict[str, str],
+    *,
+    install_mode: str = "full",
+) -> dict:
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "installer_version": INSTALLER_VERSION,
         "agent": agent,
+        "install_mode": install_mode,
         "offerloop_version": offerloop_version(),
-        "skills": {name: {"sha256": digests[name]} for name in SKILL_NAMES},
+        "skills": {name: {"sha256": digests[name]} for name in digests},
         "runtime": {"sha256": runtime_source_digest()},
         "installed_at": datetime.now(timezone.utc).isoformat(),
     }
 
 
-def _write_manifest(root: Path, agent: str, digests: dict[str, str]) -> None:
+def _write_manifest(
+    root: Path,
+    agent: str,
+    digests: dict[str, str],
+    *,
+    install_mode: str = "full",
+) -> None:
     destination = root / MANIFEST_NAME
     temporary = destination.with_suffix(".tmp")
     temporary.write_text(
-        json.dumps(_manifest_payload(agent, digests), ensure_ascii=False, indent=2)
+        json.dumps(
+            _manifest_payload(agent, digests, install_mode=install_mode),
+            ensure_ascii=False,
+            indent=2,
+        )
         + "\n",
         encoding="utf-8",
     )
     os.chmod(temporary, 0o600)
     temporary.replace(destination)
+
+
+def _manifest_matches_install(
+    path: Path,
+    agent: str,
+    digests: dict[str, str],
+    install_mode: str,
+) -> bool:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    expected = _manifest_payload(agent, digests, install_mode=install_mode)
+    expected.pop("installed_at", None)
+    payload.pop("installed_at", None)
+    return payload == expected
 
 
 def _move_directory(source: Path, destination: Path) -> None:
@@ -537,13 +575,38 @@ def _workbuddy_import_duplicates(root: Path) -> dict[str, list[tuple[Path, Path]
     return duplicates
 
 
-def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> dict:
+def _selected_skill_names(skill_names=None) -> tuple[str, ...]:
+    selected = tuple(SKILL_NAMES if skill_names is None else skill_names)
+    if not selected:
+        raise ValueError("at least one OfferLoop Skill must be selected")
+    unknown = tuple(name for name in selected if name not in SKILL_NAMES)
+    if unknown:
+        raise ValueError("unsupported OfferLoop Skill: " + ", ".join(unknown))
+    if len(set(selected)) != len(selected):
+        raise ValueError("OfferLoop Skill selection contains duplicates")
+    return selected
+
+
+def install_agent(
+    agent: str,
+    *,
+    environ=None,
+    dry_run=False,
+    upgrade=False,
+    skill_names=None,
+    install_mode="full",
+) -> dict:
+    selected_names = _selected_skill_names(skill_names)
+    if install_mode not in {"full", "single"}:
+        raise ValueError("install_mode must be full or single")
+    if install_mode == "single" and len(selected_names) != 1:
+        raise ValueError("single mode must select exactly one Skill")
     source = dict(os.environ if environ is None else environ)
     home = Path(source.get("HOME", Path.home())).expanduser()
     root = agent_root(agent, source)
     assert root is not None
     source_digests = {
-        name: tree_digest(SKILLS_SOURCE / name) for name in SKILL_NAMES
+        name: tree_digest(SKILLS_SOURCE / name) for name in selected_names
     }
     support_digest = runtime_source_digest()
     support_destination = root / SUPPORT_NAME
@@ -556,6 +619,11 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
         _workbuddy_import_duplicates(root) if agent == "workbuddy" else {}
     )
     runtime_duplicates = {**hermes_duplicates, **workbuddy_duplicates}
+    runtime_duplicates = {
+        name: candidates
+        for name, candidates in runtime_duplicates.items()
+        if name in selected_names
+    }
     had_offerloop_install = (
         (root / MANIFEST_NAME).is_file()
         or any((root / name).exists() for name in SKILL_NAMES)
@@ -566,7 +634,7 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
     operations = []
     conflicts = []
     retired_existing = [name for name in RETIRED_USER_SKILLS if (root / name).exists()]
-    for name in SKILL_NAMES:
+    for name in selected_names:
         destination = root / name
         legacy_destination = root / LEGACY_SKILL_RENAMES.get(name, "")
         has_legacy_name = (
@@ -625,6 +693,7 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
             "target": agent_target_label(agent, source),
             "status": "conflict",
             "show_welcome": False,
+            "install_mode": install_mode,
             "skills": [
                 {"name": name, "status": status} for name, status in operations
             ],
@@ -644,6 +713,7 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
             "status": status,
             "dry_run": True,
             "show_welcome": not had_offerloop_install,
+            "install_mode": install_mode,
             "skills": [
                 {"name": name, "status": item_status}
                 for name, item_status in operations
@@ -656,14 +726,22 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
         all(status == "already_installed" for _, status in operations)
         and support_status == "already_installed"
     ):
-        if not (root / MANIFEST_NAME).is_file():
+        if not _manifest_matches_install(
+            root / MANIFEST_NAME,
+            agent,
+            source_digests,
+            install_mode,
+        ):
             root.mkdir(parents=True, exist_ok=True)
-            _write_manifest(root, agent, source_digests)
+            _write_manifest(
+                root, agent, source_digests, install_mode=install_mode
+            )
         return {
             "agent": agent,
             "target": agent_target_label(agent, source),
             "status": "already_installed",
             "show_welcome": False,
+            "install_mode": install_mode,
             "skills": [
                 {"name": name, "status": status} for name, status in operations
             ],
@@ -697,6 +775,13 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
             shutil.copytree(
                 ADMIN_SCRIPTS_SOURCE,
                 staged_support / "scripts",
+                symlinks=False,
+                ignore=_ignore_copy,
+                dirs_exist_ok=True,
+            )
+            shutil.copytree(
+                ADMIN_REFERENCES_SOURCE,
+                staged_support / "references",
                 symlinks=False,
                 ignore=_ignore_copy,
                 dirs_exist_ok=True,
@@ -805,7 +890,7 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
     elif "installed" in statuses:
         overall = "installed"
     if overall != "already_installed" or not (root / MANIFEST_NAME).is_file():
-        _write_manifest(root, agent, source_digests)
+        _write_manifest(root, agent, source_digests, install_mode=install_mode)
 
     result = {
         "agent": agent,
@@ -826,23 +911,49 @@ def install_agent(agent: str, *, environ=None, dry_run=False, upgrade=False) -> 
                 for name, status in operations
             )
         ),
+        "install_mode": install_mode,
         "skills": [{"name": name, "status": status} for name, status in operations],
         "runtime": {"name": SUPPORT_NAME, "status": support_status},
     }
     return result
 
 
-def verify_agent(agent: str, *, environ=None) -> dict:
+def verify_agent(
+    agent: str,
+    *,
+    environ=None,
+    skill_names=None,
+    install_mode=None,
+) -> dict:
     """Verify one Agent installation without writing files."""
     source = dict(os.environ if environ is None else environ)
     root = agent_root(agent, source)
     assert root is not None
-    report = install_agent(agent, environ=source, dry_run=True)
+    manifest = None
+    manifest_path = root / MANIFEST_NAME
+    if manifest_path.is_file():
+        try:
+            candidate = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            candidate = None
+        if isinstance(candidate, dict):
+            manifest = candidate
+    if skill_names is None and manifest:
+        skill_names = tuple(manifest.get("skills", {})) or None
+    selected_names = _selected_skill_names(skill_names)
+    if install_mode is None:
+        install_mode = manifest.get("install_mode", "full") if manifest else "full"
+    report = install_agent(
+        agent,
+        environ=source,
+        dry_run=True,
+        skill_names=selected_names,
+        install_mode=install_mode,
+    )
     source_digests = {
-        name: tree_digest(SKILLS_SOURCE / name) for name in SKILL_NAMES
+        name: tree_digest(SKILLS_SOURCE / name) for name in selected_names
     }
     manifest_status = "missing"
-    manifest_path = root / MANIFEST_NAME
     if manifest_path.is_file():
         try:
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -850,13 +961,14 @@ def verify_agent(agent: str, *, environ=None) -> dict:
             manifest_status = "invalid"
         else:
             expected_skills = {
-                name: {"sha256": source_digests[name]} for name in SKILL_NAMES
+                name: {"sha256": source_digests[name]} for name in selected_names
             }
             if (
-                manifest.get("schema_version") == 1
+                manifest.get("schema_version") == 2
                 and manifest.get("installer_version") == INSTALLER_VERSION
                 and manifest.get("offerloop_version") == offerloop_version()
                 and manifest.get("agent") == agent
+                and manifest.get("install_mode") == install_mode
                 and manifest.get("skills") == expected_skills
                 and manifest.get("runtime")
                 == {"sha256": runtime_source_digest()}

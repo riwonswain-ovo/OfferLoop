@@ -120,4 +120,11 @@ export class FeishuProgressRepository {
       body: JSON.stringify({ fields: toFeishuFields(fields) }),
     });
   }
+
+  async delete(recordId) {
+    const url =
+      `${OPEN_API_ROOT}/bitable/v1/apps/${this.baseToken}`
+      + `/tables/${this.tableId}/records/${recordId}`;
+    await this.request(url, { method: "DELETE" });
+  }
 }

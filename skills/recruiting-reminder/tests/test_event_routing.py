@@ -45,7 +45,6 @@ class EventRoutingTest(unittest.TestCase):
                 "平台",
                 "链接",
                 "注意事项",
-                "投递简历版本",
                 "面试准备文档",
                 "面试复盘文档",
                 "完成状态",
@@ -174,7 +173,6 @@ class EventRoutingTest(unittest.TestCase):
         self.assertEqual(fields["环节"], "二面")
         self.assertEqual(fields["求职记录ID"], '["rec_progress"]')
         self.assertEqual(fields["关联求职记录"], "示例公司－AI 产品经理")
-        self.assertEqual(fields["投递简历版本"], "")
         self.assertEqual(fields["面试准备文档"], "")
         self.assertEqual(fields["面试复盘文档"], "")
         self.assertEqual(fields["子表 record_id"], "")

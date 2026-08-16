@@ -103,7 +103,7 @@ const findUpcomingInterviews = (
 
 /**
  * 与「面试与复盘」页的「下一场面试准备」就绪检查保持一致：
- * 岗位 JD 优先读投递进度记录，简历版本与准备文档读笔面试记录。
+ * 岗位 JD 优先读投递进度记录，准备文档读笔面试记录。
  */
 const getInterviewReadiness = (
   nextInterview: WorkbenchRecord,
@@ -113,11 +113,6 @@ const getInterviewReadiness = (
     key: 'jd',
     label: '岗位 JD',
     ready: hasRecordValue(nextProgress ?? nextInterview, '岗位 JD'),
-  },
-  {
-    key: 'resume',
-    label: '简历版本',
-    ready: hasRecordValue(nextInterview, '投递简历版本'),
   },
   {
     key: 'prepDoc',

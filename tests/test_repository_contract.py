@@ -772,7 +772,7 @@ class RepositoryContractTest(unittest.TestCase):
         for retired in ("`offerloop-setup`", "`offerloop-workspace`", "`pm-sense`"):
             self.assertNotIn(retired, welcome)
 
-    def test_all_offerloop_business_skills_enforce_the_profile_gate_first(self):
+    def test_all_offerloop_business_skills_route_profile_gate_by_install_mode(self):
         gated_skills = (
             "job-collection",
             "recruiting-reminder",
@@ -785,10 +785,12 @@ class RepositoryContractTest(unittest.TestCase):
         )
         for name in gated_skills:
             skill = (SKILLS / name / "SKILL.md").read_text(encoding="utf-8")
+            self.assertIn("installation-mode.md", skill, name)
             self.assertIn("profile-gate.md", skill, name)
             self.assertIn("本 Skill 的第一项动作", skill, name)
-            self.assertIn("不得启动", skill, name)
-            self.assertIn("一次只问一个问题并自动保存", skill, name)
+            self.assertIn("`full` 模式", skill, name)
+            self.assertIn("`single` 模式跳过全局画像门禁", skill, name)
+            self.assertIn("`career-profile`", skill, name)
 
         career = (SKILLS / "career-profile" / "SKILL.md").read_text(
             encoding="utf-8"
@@ -803,7 +805,8 @@ class RepositoryContractTest(unittest.TestCase):
             / "references"
             / "profile-gate.md"
         ).read_text(encoding="utf-8")
-        self.assertIn("8 个 OfferLoop", gate)
+        self.assertIn("下面 8 个", gate)
+        self.assertIn("输出为 `single` 时立即跳过", gate)
         self.assertIn("至少存在一条用户明确提供并已确认的有效认识", gate)
         self.assertIn("状态就是 `ready`", gate)
         self.assertIn("不适用于安装器", gate)
@@ -888,9 +891,8 @@ class RepositoryContractTest(unittest.TestCase):
         field_contract = (
             SKILLS / "job-collection" / "references" / "field-contract.md"
         ).read_text(encoding="utf-8")
-        self.assertIn("03｜定制简历", field_contract)
-        self.assertIn("01｜互联网产品经理简历", field_contract)
-        self.assertNotIn("02｜简历合集", field_contract)
+        self.assertIn("`进展状态` 是用户维护的当前状态唯一真源", field_contract)
+        self.assertIn("简历选择属于具体简历任务的上下文", field_contract)
 
     def test_user_voice_contract_is_consumed_by_generated_personal_content(self):
         consumers = (
@@ -924,7 +926,7 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertIn("企业清单和求职进展已作为唯一 Base 对象", collection)
         self.assertIn("Base 是求职事实真源", contract)
         self.assertIn("不得复制 Base 或记录", onboarding)
-        self.assertIn("原生 Agent 深链接", onboarding)
+        self.assertIn("原生 Agent 会话", onboarding)
 
     def test_readme_and_migration_describe_the_current_workspace(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
@@ -934,9 +936,10 @@ class RepositoryContractTest(unittest.TestCase):
             "求职进展",
             "笔面试中心",
             "能力成长",
-            "不恢复本机 Agent Worker",
         ):
             self.assertIn(expected, readme)
+        self.assertNotIn("工作台", readme)
+        self.assertNotIn("offerloop-workbench", readme)
         self.assertNotIn("Skills-11", readme)
         self.assertNotIn("`pm-sense`：", readme)
 
@@ -951,9 +954,26 @@ class RepositoryContractTest(unittest.TestCase):
             "python3 scripts/install_offerloop.py --agent codex --verify",
             readme,
         )
-        self.assertIn("--deploy-workbench", readme)
+        self.assertNotIn("--deploy-workbench", readme)
         self.assertIn("幂等", readme)
         self.assertIn("不会复制三张 Base", readme)
+
+    def test_legacy_two_skill_users_have_a_safe_nine_skill_migration_path(self):
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        migration = (ROOT / "MIGRATION.md").read_text(encoding="utf-8")
+        for text in (readme, migration):
+            self.assertIn("`job-collection`", text)
+            self.assertIn("`recruiting-reminder`", text)
+            self.assertIn("--mode full --dry-run", text)
+            self.assertIn("--mode full --upgrade", text)
+            self.assertIn("scripts/install_offerloop.py --agent codex --verify", text)
+            self.assertIn(".offerloop-backups/<时间戳>/", text)
+            self.assertIn("needs_setup", text)
+        self.assertIn("旧双 Base", migration)
+        self.assertIn("processed_emails.json", migration)
+        self.assertIn("Schema v6 与旧内容兼容", migration)
+        self.assertNotIn("schema v5", migration)
+        self.assertNotIn("--confirm-schema-v5", migration)
 
     def test_workbench_task_links_do_not_require_the_private_repository(self):
         task_link = (
@@ -977,7 +997,6 @@ class RepositoryContractTest(unittest.TestCase):
             "## 安装与升级",
             "## 固定知识库结构",
             "## Loop Runtime",
-            "## 工作台边界",
         )
         positions = [readme.index(section) for section in sections]
         self.assertEqual(positions, sorted(positions))
@@ -990,8 +1009,8 @@ class RepositoryContractTest(unittest.TestCase):
         for text in (readme, onboarding):
             self.assertIn("三张", text)
             self.assertIn("Base", text)
-            self.assertIn("工作台", text)
-            self.assertIn("Agent Worker", text)
+            self.assertNotIn("工作台", text)
+            self.assertNotIn("Agent Worker", text)
         self.assertIn("--setup", onboarding)
         self.assertIn("--verify", onboarding)
         self.assertIn("`.offerloop-runtime`", onboarding)
@@ -1047,7 +1066,7 @@ class RepositoryContractTest(unittest.TestCase):
             SKILLS / "offerloop-workspace" / "assets" / "homepage-template.md"
         ).read_text(encoding="utf-8")
         self.assertIn("# OfferLoop 使用指南", template)
-        self.assertIn("OFFERLOOP:OPTIONAL:WORKBENCH", template)
+        self.assertNotIn("工作台", template)
         self.assertIn("## 9 个长期 Skill", template)
         for name in (
             "career-profile",
@@ -1327,7 +1346,7 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertIn("不能断言面试官认定造假", review)
         self.assertIn("resume-tailor", review)
 
-    def test_resume_version_is_user_maintained_in_both_business_bases(self):
+    def test_resume_choice_is_not_persisted_in_business_bases(self):
         collection = (SKILLS / "job-collection" / "SKILL.md").read_text(
             encoding="utf-8"
         )
@@ -1335,9 +1354,9 @@ class RepositoryContractTest(unittest.TestCase):
             encoding="utf-8"
         )
         for text in (collection, reminder):
-            self.assertIn("`投递简历版本`", text)
-            self.assertIn("SingleSelect", text)
-            self.assertIn("不读取飞书知识库", text)
+            self.assertNotIn("投递简历版本", text)
+        self.assertIn("`进展状态`", collection)
+        self.assertIn("`进展状态`", reminder)
 
     def test_deployable_templates_do_not_reconfigure_git_hooks(self):
         templates = (

@@ -118,7 +118,11 @@ describe('JobProgressSyncService', (): void => {
     }
     expect(parseRequestData(createCall)).toMatchObject({
       fields: {
+        进展状态: '待反馈',
+        最近完成节点: '投递完成',
         当前阶段: '已投递',
+        下一环节: '待反馈',
+        流程结果: '进行中',
         公司: '示例公司',
         投递岗位: '',
         投递日期: Date.parse('2026-07-17T00:00:00+08:00'),
@@ -195,6 +199,7 @@ describe('JobProgressSyncService', (): void => {
     }
     expect(parseRequestData(updateCall)).toMatchObject({
       fields: {
+        进展状态: '待二面',
         当前阶段: '二面',
         公司: '新公司名',
         投递岗位: 'AI 产品经理',
@@ -289,6 +294,85 @@ describe('JobProgressSyncService', (): void => {
         '投递记录 ID': 'manual:job-two',
       },
     });
+  });
+
+  it('deletes an untouched generated default when the source is no longer submitted', async (): Promise<void> => {
+    const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
+      const url: string = String(config.url ?? '');
+      if (url.endsWith('/auth/v3/tenant_access_token/internal')) {
+        return { code: 0, tenant_access_token: 'tenant-token', expire: 7200 };
+      }
+      if (url.includes('/source-base/tables/source-table/records/rec_source')) {
+        return { code: 0, data: { record: { record_id: 'rec_source', fields: { 投递进度: '已拒绝' } } } };
+      }
+      if (url.includes('/records/search')) {
+        return { code: 0, data: { items: [{
+          record_id: 'rec_default',
+          fields: {
+            '投递记录 ID': 'enterprise:rec_source:default',
+            进展状态: '待反馈',
+            最近完成节点: '投递完成',
+            当前阶段: '已投递',
+            下一环节: '待反馈',
+            流程结果: '进行中',
+            投递岗位: '',
+            '岗位 JD': '',
+          },
+        }] } };
+      }
+      return { code: 0, data: {} };
+    });
+
+    await expect(mock.service.sync({ sourceRecordId: 'rec_source' })).resolves.toEqual({
+      ok: true,
+      action: 'deleted',
+      recordId: 'rec_default',
+      matchedCount: 1,
+      deletedCount: 1,
+      protectedCount: 0,
+    });
+    expect(mock.calls.some(
+      (config: InternalAxiosRequestConfig): boolean =>
+        String(config.method).toUpperCase() === 'DELETE'
+        && String(config.url ?? '').endsWith('/rec_default'),
+    )).toBe(true);
+  });
+
+  it('protects progressed or user-maintained records when the source is no longer submitted', async (): Promise<void> => {
+    const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
+      const url: string = String(config.url ?? '');
+      if (url.endsWith('/auth/v3/tenant_access_token/internal')) {
+        return { code: 0, tenant_access_token: 'tenant-token', expire: 7200 };
+      }
+      if (url.includes('/source-base/tables/source-table/records/rec_source')) {
+        return { code: 0, data: { record: { record_id: 'rec_source', fields: { 投递进度: '感兴趣' } } } };
+      }
+      if (url.includes('/records/search')) {
+        return { code: 0, data: { items: [{
+          record_id: 'rec_progressed',
+          fields: {
+            '投递记录 ID': 'enterprise:rec_source:default',
+            进展状态: '待一面',
+            最近完成节点: '笔试完成',
+            投递岗位: 'AI 产品经理',
+          },
+        }] } };
+      }
+      return { code: 0, data: {} };
+    });
+
+    await expect(mock.service.sync({ sourceRecordId: 'rec_source' })).resolves.toEqual({
+      ok: true,
+      action: 'review_required',
+      recordId: 'rec_progressed',
+      matchedCount: 1,
+      deletedCount: 0,
+      protectedCount: 1,
+    });
+    expect(mock.calls.some(
+      (config: InternalAxiosRequestConfig): boolean =>
+        String(config.method).toUpperCase() === 'DELETE',
+    )).toBe(false);
   });
 
   it('sends the daily card after a complete single-owner member check', async (): Promise<void> => {
@@ -430,6 +514,7 @@ describe('JobProgressSyncService', (): void => {
               record: {
                 record_id: 'recProgress',
                 fields: {
+                  进展状态: '待一面',
                   最近完成节点: '笔试完成',
                   下一环节: '一面',
                   流程结果: '进行中',
@@ -469,7 +554,11 @@ describe('JobProgressSyncService', (): void => {
       fields: { 完成状态: '已完成' },
     });
     expect(parseRequestData(progressUpdate as InternalAxiosRequestConfig)).toEqual({
-      fields: { 最近完成节点: '一面完成', 下一环节: '待反馈' },
+      fields: {
+        进展状态: '待反馈',
+        最近完成节点: '一面完成',
+        下一环节: '待反馈',
+      },
     });
   });
 

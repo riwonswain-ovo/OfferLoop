@@ -17,11 +17,10 @@ description: 面向任意行业与职能岗位进行真实模拟或逐题训练�
 
 ## 用户画像前置门禁
 
-本 Skill 的第一项动作是完整读取
-`../.offerloop-runtime/references/profile-gate.md` 并执行用户画像前置门禁。必须在读取本 Skill
-其他参考、询问模拟输入、读取个人材料或开始第一题前完成。画像为 `missing` 或 `empty` 时
-不得启动本 Skill，转由 `career-profile` 一次只问一个问题并自动保存；门禁通过后才返回本次
-模拟面试任务。
+本 Skill 的第一项动作是读取 `../.offerloop-runtime/references/installation-mode.md` 并运行模式
+检查。`full` 模式继续完整执行 `profile-gate.md`；画像缺失或为空时转由 `career-profile`。
+`single` 模式跳过全局画像门禁，只使用用户本轮提供或明确选择的材料开始模拟，默认在 Chat 中
+完成并交付复盘。
 
 ## 开工前材料路由
 
@@ -144,7 +143,7 @@ Playbook、题型全景、领域视角、模式、问题模式或情境库与 JD
 
 1. 读取 `lark-wiki` 和 `lark-doc` Skill；有事件或 Base 操作时再读取 `lark-base`。
 2. 检查 `current_resumes`、兼容目录键 `resume_deepthink`、`interview_prep` 和 `mock_lab`
-   中本轮实际需要的 locator。schema v5、依赖或权限未就绪时路由到安装器 `--setup`，不要
+   中本轮实际需要的 locator。schema v6、依赖或权限未就绪时路由到安装器 `--setup`，不要
    自行扩大权限。
 3. 使用简历时，列出 `03｜定制简历` 中的版本让用户选择，按标题精确匹配后读取全文。
 4. 从 `04｜经历深挖` 中只选择岗位方向匹配、且与选定简历或本次 JD 相关的文档；先读标题和

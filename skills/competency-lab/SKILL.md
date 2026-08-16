@@ -11,11 +11,9 @@ description: 为任意行业与职能岗位抽象能力模型、诊断求职者�
 
 ## 用户画像前置门禁
 
-本 Skill 的第一项动作是完整读取
-`../.offerloop-runtime/references/profile-gate.md` 并执行用户画像前置门禁。必须在读取本 Skill
-其他参考、询问训练方向、生成题目、读取能力观察或写入训练产物前完成。画像为 `missing` 或
-`empty` 时不得启动本 Skill，转由 `career-profile` 一次只问一个问题并自动保存；门禁通过后
-才返回本次岗位能力训练。
+本 Skill 的第一项动作是读取 `../.offerloop-runtime/references/installation-mode.md` 并运行模式
+检查。`full` 模式继续完整执行 `profile-gate.md`；画像缺失或为空时转由 `career-profile`。
+`single` 模式跳过全局画像门禁，只询问本次训练需要的岗位/JD 与现有证据，默认在 Chat 中交付。
 
 ## 开工前材料路由
 

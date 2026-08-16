@@ -1,24 +1,28 @@
 # OfferLoop 管理能力接入（安装器内部）
 
-OfferLoop v2 安装 9 个长期用户 Skill。初始化、升级、验证和工作台部署由 `scripts/install_offerloop.py` 与安装目录中的 `.offerloop-runtime` 承担，不再要求用户调用一次性 Skill。
+OfferLoop 支持完整模式和单 Skill 模式。初始化、升级和验证由仓库中的
+`scripts/setup_offerloop.py` 与安装目录中的 `.offerloop-runtime` 承担。系统不再要求用户调用一次性 Skill。
+完整模式安装 9 个长期用户 Skill、三张 Base 和私有知识库。
 
 ## 安装命令
 
 ```bash
-python3 scripts/install_offerloop.py --agent codex --setup
-python3 scripts/install_offerloop.py --agent codex --upgrade
-python3 scripts/install_offerloop.py --agent codex --verify
-python3 scripts/install_offerloop.py --deploy-workbench /path/to/miaoda-project
+python3 scripts/setup_offerloop.py --agent codex --mode full
+python3 scripts/setup_offerloop.py --agent codex --mode full --upgrade
+python3 scripts/setup_offerloop.py --agent codex --mode full --verify
 ```
+
+旧版 `python3 scripts/install_offerloop.py --agent codex --setup`、`--upgrade` 和 `--verify` 仍可
+管理本地 Skill，但不代表飞书工作区已完成。
 
 重复执行必须幂等：保留原三张 Base 的 token、记录、知识库文档和用户配置，不创建重复节点。
 
 ## 用户画像首次使用门禁
 
-初始化只负责创建或接管 `02｜用户画像` 目录，不用空模板替用户编造画像。初始化完成后，任一
-OfferLoop 业务 Skill 的第一项动作都是检查画像文档：缺失、空白或只有占位字段时暂停原 Skill，
-转由 `career-profile` 在 Chat 中一次只问一个问题，并在每条确认信息后自动保存。至少写入一条
-用户确认的有效信息后即可返回原任务；画像仍可保持 `incomplete` 并在以后逐步补全。
+完整模式初始化只负责创建或接管 `02｜用户画像` 目录，不用空模板替用户编造画像。初始化完成后，
+8 个业务 Skill 先检查画像文档：缺失、空白或只有占位字段时暂停原 Skill，转由
+`career-profile` 在 Chat 中一次只问一个问题，并在每条确认信息后自动保存。单 Skill 模式跳过
+全局画像门禁，默认只在 Chat 中交付。
 
 ## 飞书身份与权限
 
@@ -52,4 +56,4 @@ OfferLoop 业务 Skill 的第一项动作都是检查画像文档：缺失、空
 - 求职进展闭环：邀请与完成分离，状态不得因重复或乱序事件倒退。
 - 能力成长闭环：面试产出待验证观察，能力训练读取未解决观察并产生复测项。
 
-生成式任务必须通过原生 Agent 深链接进入，不部署或恢复本机 Agent Worker。
+生成式任务通过原生 Agent 会话进入。

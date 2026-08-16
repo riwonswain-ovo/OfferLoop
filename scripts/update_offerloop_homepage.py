@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render the schema-v5 OfferLoop guide into the configured Feishu homepage."""
+"""Render the schema-v6 OfferLoop guide into the configured Feishu homepage."""
 
 from __future__ import annotations
 
@@ -8,7 +8,6 @@ from html import escape
 import json
 from pathlib import Path
 import subprocess
-import sys
 
 
 SKILLS = (
@@ -41,8 +40,8 @@ def config_path() -> Path:
 
 def load_config(path: Path) -> dict:
     data = json.loads(path.read_text(encoding="utf-8"))
-    if data.get("schema_version") != 5:
-        raise ValueError("OfferLoop config must be migrated to schema v5 first")
+    if data.get("schema_version") != 6:
+        raise ValueError("OfferLoop config must be migrated to schema v6 first")
     return data
 
 
@@ -83,17 +82,9 @@ def render(config: dict) -> str:
             f'<p><button action="OpenLink" src="{escape(url, quote=True)}">'
             f"{label}</button></p>"
         )
-    workbench_url = str(config.get("workbench_url", "")).strip()
-    workbench = (
-        f'<p><button action="OpenLink" src="{escape(workbench_url, quote=True)}">'
-        "打开 OfferLoop 工作台</button></p>"
-        if workbench_url.startswith("https://")
-        else "<p>工作台尚未登记；不影响三张 Base 与知识库使用。</p>"
-    )
     return (
         "<title>00｜OfferLoop 使用指南</title>"
-        "<p>OfferLoop 用三张 Base 保存求职事实，用本私有知识库保存画像、简历、经历、训练与复盘；"
-        "工作台只展示结果、原因和下一步。</p>"
+        "<p>OfferLoop 用三张 Base 保存求职事实，用本私有知识库保存画像、简历、经历、训练与复盘。</p>"
         '<callout emoji="📌" background-color="light-blue" border-color="blue">'
         "<p><b>三个固定数据入口</b></p>"
         + "".join(buttons)
@@ -109,11 +100,8 @@ def render(config: dict) -> str:
         "<table><thead><tr><th>Skill</th><th>作用</th></tr></thead><tbody>"
         + skill_rows
         + "</tbody></table><h2>进展维护规则</h2>"
-        "<p>当前状态由“最近完成节点 + 下一环节 + 流程结果”生成。收到邀请不等于完成；"
-        "旧“已结束”记录若无法判断结果，会进入迁移复核，不自行猜测。</p>"
-        "<h2>工作台</h2>"
-        + workbench
-        + "<p>工作台不运行本机 Agent Worker。生成式任务通过原生 Agent 深链接打开并自动带入上下文。</p>"
+        "<p>“进展状态”是当前状态唯一真源；“最近完成节点”只记录已经可靠完成的最晚节点。"
+        "收到邀请不等于完成；旧记录无法判断时进入“状态待确认”，不自行猜测。</p>"
     )
 
 
@@ -131,10 +119,15 @@ def call_cli(args: list[str]) -> dict:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=config_path())
+    parser.add_argument(
+        "--profile",
+        help="override the configured lark-cli profile for this document update",
+    )
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
     config = load_config(args.config)
+    profile = args.profile or str(config["lark_profile"])
     content = render(config)
     result = {
         "ready": True,
@@ -155,7 +148,7 @@ def main(argv: list[str] | None = None) -> int:
                 "--content",
                 content,
                 "--profile",
-                str(config["lark_profile"]),
+                profile,
                 "--as",
                 "user",
             ]
@@ -170,7 +163,7 @@ def main(argv: list[str] | None = None) -> int:
                 "--detail",
                 "simple",
                 "--profile",
-                str(config["lark_profile"]),
+                profile,
                 "--as",
                 "user",
             ]
@@ -178,7 +171,7 @@ def main(argv: list[str] | None = None) -> int:
         body = fetched.get("data", {}).get("document", {}).get("content", "")
         result["verified"] = all(
             marker in body
-            for marker in ("9 个长期 Skill", "三条闭环", "迁移复核")
+            for marker in ("9 个长期 Skill", "三条闭环", "进展状态")
         )
     if args.json:
         print(json.dumps(result, ensure_ascii=False))

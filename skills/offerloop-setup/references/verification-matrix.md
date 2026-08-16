@@ -15,7 +15,8 @@
 | --- | --- | --- | --- |
 | 主表可读取 | user / bot | 先用 `base +url-resolve` 解析配置的 Base URL，再用 `base +base-get` | 两种身份中本能力实际使用的一种可读取 |
 | 目标表存在 | user / bot | `base +table-list` | 找到已配置的招聘信息表 |
-| 字段契约 | user / bot | `base +field-list` | 能读取字段列表；缺字段记为 `needs_action`，不自动补建 |
+| 企业字段契约 | user / bot | `base +field-list` | 六张企业表均为相同 13 字段，Select 选项集合一致；缺失记为 `needs_action` |
+| 求职进展 schema v6 | user / bot | `base +field-list` 后把 JSON 传给 `scripts/validate_progress_schema.py` | 返回 `status=ready` |
 | 视图可读取 | user / bot | `base +view-list` | 可读取至少一个视图；不创建、不改筛选 |
 | 求职进展定位 | 本地 | 查看预检报告的 `local.progress_locator` | 已登记核心空间中的求职进展 Base；缺失时为 `needs_action`，不猜测记录 |
 
@@ -27,6 +28,13 @@ lark-cli base +base-get --base-token '<BASE_TOKEN>' --as user
 lark-cli base +table-list --base-token '<BASE_TOKEN>' --as user
 lark-cli base +field-list --base-token '<BASE_TOKEN>' --table-id '<TABLE_ID>' --as user
 lark-cli base +view-list --base-token '<BASE_TOKEN>' --table-id '<TABLE_ID>' --as user
+```
+
+求职进展字段验收不得只看字段数量：
+
+```bash
+lark-cli base +field-list --base-token '<PROGRESS_BASE_TOKEN>' --table-id '<PROGRESS_TABLE_ID>' --as user \
+  | python3 scripts/validate_progress_schema.py --input -
 ```
 
 如果这项能力由飞书应用写入，再使用同一组只读命令配合 `--profile '<PROFILE>' --as bot` 核验应用身份；不要为了验证而创建测试记录。
@@ -104,7 +112,7 @@ coaching 状态。
 | --- | --- | --- | --- |
 | 即时桥接定位已配置 | 本地 | 离线预检 | 已登记 profile、两张 Base、同步应用、HTTPS endpoint 与 workflow ID |
 | 工作流列表可读取 | bot | `base +workflow-list` | 可读取目标表工作流列表 |
-| 即时工作流已启用 | bot | `base +workflow-get` | 登记的 workflow 状态为 enabled，触发条件为投递进度变成已投递 |
+| 即时工作流已启用 | bot | `base +workflow-get` | 登记的 workflow 状态为 enabled，触发条件监听投递进度的所有变更 |
 | 自动化运行历史可读取 | bot | `base +workflow-run-history` | 可读取历史状态，不重跑工作流 |
 | 应用身份有效 | bot | `lark-cli whoami` | 返回当前 bot 身份，不泄露凭据 |
 

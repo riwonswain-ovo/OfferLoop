@@ -80,9 +80,9 @@ class JobCollectionConfigTest(unittest.TestCase):
         self.assertIn("信息更新时间 desc, 公司 asc", content)
         self.assertIn("没有配置 `progress_base_url` 时跳过跨 Base 对账", content)
         self.assertIn("不能因此阻塞", content)
-        self.assertIn("`投递简历版本`", content)
+        self.assertNotIn("投递简历版本", content)
+        self.assertIn("`进展状态`", content)
         self.assertIn("SingleSelect", content)
-        self.assertIn("不读取飞书知识库", content)
 
     def test_reference_docs_publish_the_exact_enterprise_schema(self):
         for path in (FIELD_CONTRACT, EXCEL_INSERT):
@@ -140,8 +140,9 @@ class JobCollectionConfigTest(unittest.TestCase):
         self.assertEqual(positions, sorted(positions))
         self.assertIn("# 岗位选择偏好｜<显示名>", schema)
         self.assertIn("岗位选择偏好｜<显示名>", job)
-        self.assertIn("不得询问毕业年份、专业、岗位经历", job)
-        self.assertIn("不提问任何求职偏好", job)
+        self.assertIn("完整模式", job)
+        self.assertIn("单 Skill 模式", job)
+        self.assertIn("最小筛选条件", job)
         self.assertIn("不再负责下面任何字段的提问、解释或确认", init)
         self.assertIn("机器可读运行镜像", init)
         self.assertIn("target_cities 与 city_filter_mode", init)

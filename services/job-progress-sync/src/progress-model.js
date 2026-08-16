@@ -32,6 +32,23 @@ export const PROCESS_RESULTS = Object.freeze([
   "岗位关闭",
 ]);
 
+export const PROGRESS_STATUSES = Object.freeze([
+  "待反馈",
+  "待笔试",
+  "待面试",
+  "待群面",
+  "待一面",
+  "待二面",
+  "待三面",
+  "待 HR 面",
+  "待 OC",
+  "Offer",
+  "未通过",
+  "主动放弃",
+  "岗位关闭",
+  "状态待确认",
+]);
+
 const COMPLETED_RANK = new Map(COMPLETED_NODES.map((value, index) => [value, index]));
 const STAGE_TO_COMPLETED = new Map([
   ["笔试", "笔试完成"],
@@ -54,8 +71,26 @@ const LEGACY_STAGE_MAP = new Map([
   ["Offer", ["面试完成", "Offer"]],
   ["已结束", ["投递完成", "无"]],
 ]);
+const NEXT_TO_PROGRESS_STATUS = new Map([
+  ["待反馈", "待反馈"],
+  ["笔试", "待笔试"],
+  ["面试", "待面试"],
+  ["群面", "待群面"],
+  ["一面", "待一面"],
+  ["二面", "待二面"],
+  ["三面", "待三面"],
+  ["HR面", "待 HR 面"],
+  ["OC", "待 OC"],
+  ["Offer", "Offer"],
+]);
+const MANUAL_PROGRESS_STATUSES = new Set([
+  "Offer", "未通过", "主动放弃", "岗位关闭", "状态待确认",
+]);
 
 export function deriveCurrentStatus(progress) {
+  if (PROGRESS_STATUSES.includes(String(progress["进展状态"] ?? ""))) {
+    return String(progress["进展状态"]);
+  }
   const result = String(progress["流程结果"] ?? "进行中");
   if (!["进行中", "OC"].includes(result)) {
     return result;
@@ -75,6 +110,18 @@ export function normalizeProgressFields(fields = {}) {
     normalized["下一环节"] ||= next;
   }
   normalized["流程结果"] ||= "进行中";
+  if (!normalized["进展状态"]) {
+    const result = String(normalized["流程结果"] ?? "");
+    if (["Offer", "未通过", "主动放弃", "岗位关闭"].includes(result)) {
+      normalized["进展状态"] = result;
+    } else if (String(fields["当前阶段"] ?? "") === "已结束") {
+      normalized["进展状态"] = "状态待确认";
+    } else {
+      normalized["进展状态"] = NEXT_TO_PROGRESS_STATUS.get(
+        String(normalized["下一环节"] ?? "待反馈"),
+      ) ?? "状态待确认";
+    }
+  }
   return normalized;
 }
 
@@ -83,8 +130,12 @@ export function applyInvitation(fields, stage) {
     throw new Error(`unsupported invitation stage: ${stage}`);
   }
   const normalized = normalizeProgressFields(fields);
-  if (!["进行中", "OC"].includes(normalized["流程结果"])) return normalized;
-  return { ...normalized, "下一环节": stage };
+  if (MANUAL_PROGRESS_STATUSES.has(normalized["进展状态"])) return normalized;
+  return {
+    ...normalized,
+    "进展状态": NEXT_TO_PROGRESS_STATUS.get(stage),
+    "下一环节": stage,
+  };
 }
 
 export function applyCompletion(fields, stage, nextStage = "待反馈") {
@@ -99,6 +150,7 @@ export function applyCompletion(fields, stage, nextStage = "待反馈") {
   if (candidateRank < currentRank) return normalized;
   return {
     ...normalized,
+    "进展状态": NEXT_TO_PROGRESS_STATUS.get(nextStage) ?? "状态待确认",
     "最近完成节点": completed,
     "下一环节": nextStage,
   };

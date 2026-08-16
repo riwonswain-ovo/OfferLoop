@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   CalendarDays,
   ExternalLink,
-  FileText,
   Info,
   LayoutGrid,
   RefreshCw,
@@ -349,8 +348,6 @@ const WorkbenchApplicationsPage: React.FC = () => {
                             '投递日期',
                             record.fields['投递日期'],
                           );
-                          const resumeVersion: string =
-                            cellToText(record.fields['投递简历版本']);
                           return (
                             <article
                               key={record.recordId}
@@ -372,10 +369,6 @@ const WorkbenchApplicationsPage: React.FC = () => {
                                 <p className="flex items-center gap-1">
                                   <CalendarDays className="size-3" />
                                   投递日期 {submittedAt || '待填写'}
-                                </p>
-                                <p className="flex items-center gap-1">
-                                  <FileText className="size-3" />
-                                  简历版本 {resumeVersion || '待确认'}
                                 </p>
                               </div>
                               <a

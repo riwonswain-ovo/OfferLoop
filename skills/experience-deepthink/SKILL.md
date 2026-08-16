@@ -29,10 +29,9 @@ Internal mechanism determines judgment. Publication layer expresses the conclusi
 
 ## 用户画像前置门禁
 
-本 Skill 的第一项动作是完整读取
-`../.offerloop-runtime/references/profile-gate.md` 并执行用户画像前置门禁。必须在读取下列本 Skill
-参考、询问经历与岗位、读取个人材料或开始深挖前完成。画像为 `missing` 或 `empty` 时不得启动
-本 Skill，转由 `career-profile` 一次只问一个问题并自动保存；门禁通过后才返回本次经历深挖。
+本 Skill 的第一项动作是读取 `../.offerloop-runtime/references/installation-mode.md` 并运行模式
+检查。`full` 模式继续完整执行 `profile-gate.md`；画像缺失或为空时转由 `career-profile`。
+`single` 模式跳过全局画像门禁，直接从用户本轮讲述和目标岗位开始，默认在 Chat 中交付。
 
 开始深挖时完整读取：
 
