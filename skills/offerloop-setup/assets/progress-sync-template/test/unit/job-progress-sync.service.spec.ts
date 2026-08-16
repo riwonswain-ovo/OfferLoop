@@ -62,6 +62,13 @@ function parseRequestData(config: InternalAxiosRequestConfig): unknown {
   return typeof config.data === 'string' ? JSON.parse(config.data) : config.data;
 }
 
+function requestedReminderStatus(config: InternalAxiosRequestConfig): string {
+  const data = parseRequestData(config) as {
+    filter?: { conditions?: Array<{ value?: string[] }> };
+  };
+  return String(data.filter?.conditions?.[0]?.value?.[0] ?? '');
+}
+
 describe('JobProgressSyncService', (): void => {
   beforeEach((): void => {
     installTestEnv();
@@ -472,15 +479,13 @@ describe('JobProgressSyncService', (): void => {
   });
 
   it('reconciles a completed native Feishu task into reminder and progress Bases', async (): Promise<void> => {
-    let reminderSearchCount = 0;
     const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
       const url: string = String(config.url ?? '');
       if (url.endsWith('/auth/v3/tenant_access_token/internal')) {
         return { code: 0, tenant_access_token: 'tenant-token', expire: 7200 };
       }
       if (url.includes('/reminder-table/records/search')) {
-        reminderSearchCount += 1;
-        return reminderSearchCount === 1
+        return requestedReminderStatus(config) === '待完成'
           ? {
             code: 0,
             data: {
@@ -489,7 +494,7 @@ describe('JobProgressSyncService', (): void => {
                 fields: {
                   完成状态: '待完成',
                   环节: '一面',
-                  求职记录ID: 'recProgress',
+                  求职记录ID: '["recProgress"]',
                   飞书任务GUID: 'task-main',
                   未参加任务GUID: 'task-missed',
                   开始时间: Date.parse('2026-08-11T14:30:00+08:00'),
@@ -562,6 +567,195 @@ describe('JobProgressSyncService', (): void => {
     });
   });
 
+  it('syncs pending invitations to all linked progress records without regression', async (): Promise<void> => {
+    const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
+      const url: string = String(config.url ?? '');
+      const method: string = String(config.method ?? '').toUpperCase();
+      if (url.endsWith('/auth/v3/tenant_access_token/internal')) {
+        return { code: 0, tenant_access_token: 'tenant-token', expire: 7200 };
+      }
+      if (url.includes('/reminder-table/records/search')) {
+        return requestedReminderStatus(config) === '待完成'
+          ? {
+            code: 0,
+            data: {
+              items: [
+                {
+                  record_id: 'recExam',
+                  fields: {
+                    完成状态: '待完成',
+                    环节: '笔试',
+                    求职记录ID: '["recProgressA","recProgressB"]',
+                    飞书任务GUID: 'task-main',
+                    未参加任务GUID: 'task-missed',
+                    飞书任务链接: 'https://applink.feishu.cn/client/todo/detail?guid=task-main',
+                    截止时间: Date.parse('2026-08-18T20:00:00+08:00'),
+                  },
+                },
+                {
+                  record_id: 'recSecondInterview',
+                  fields: {
+                    完成状态: '待完成',
+                    环节: '二面',
+                    求职记录ID: '["recProgressA"]',
+                    飞书任务GUID: 'task-next',
+                    未参加任务GUID: 'task-next-missed',
+                    飞书任务链接: 'https://applink.feishu.cn/client/todo/detail?guid=task-next',
+                    开始时间: Date.parse('2026-08-19T10:00:00+08:00'),
+                  },
+                },
+              ],
+              has_more: false,
+            },
+          }
+          : { code: 0, data: { items: [], has_more: false } };
+      }
+      if (url.includes('/progress-table/records/recProgress')) {
+        const recordId: string = url.endsWith('recProgressA')
+          ? 'recProgressA'
+          : 'recProgressB';
+        if (method === 'GET') {
+          return {
+            code: 0,
+            data: {
+              record: {
+                record_id: recordId,
+                fields: {
+                  进展状态: recordId === 'recProgressA' ? '待一面' : '待反馈',
+                  最近完成节点: recordId === 'recProgressA' ? '一面完成' : '投递完成',
+                  下一环节: recordId === 'recProgressA' ? '一面' : '待反馈',
+                },
+              },
+            },
+          };
+        }
+        return { code: 0, data: { record: { record_id: recordId, fields: {} } } };
+      }
+      if (url.includes('/task/v2/tasks/task-main')) {
+        return { code: 0, data: { task: { guid: 'task-main', status: 'todo' } } };
+      }
+      if (url.includes('/task/v2/tasks/task-missed')) {
+        return { code: 0, data: { task: { guid: 'task-missed', status: 'todo' } } };
+      }
+      if (url.includes('/task/v2/tasks/task-next-missed')) {
+        return { code: 0, data: { task: { guid: 'task-next-missed', status: 'todo' } } };
+      }
+      if (url.includes('/task/v2/tasks/task-next')) {
+        return { code: 0, data: { task: { guid: 'task-next', status: 'todo' } } };
+      }
+      throw new Error(`unexpected request: ${method} ${url}`);
+    });
+
+    await expect(mock.service.reconcileTaskStates()).resolves.toEqual({
+      scanned: 2,
+      provisioned: 0,
+      completed: 0,
+      missed: 0,
+      postponed: 0,
+      skipped: 0,
+    });
+    const progressUpdates = mock.calls.filter(
+      (config: InternalAxiosRequestConfig): boolean =>
+        String(config.method).toUpperCase() === 'PUT'
+        && String(config.url ?? '').includes('/progress-table/records/'),
+    );
+    expect(progressUpdates).toHaveLength(2);
+    const updateA = progressUpdates.find(
+      (config: InternalAxiosRequestConfig): boolean =>
+        String(config.url ?? '').endsWith('/progress-table/records/recProgressA'),
+    );
+    const updateB = progressUpdates.find(
+      (config: InternalAxiosRequestConfig): boolean =>
+        String(config.url ?? '').endsWith('/progress-table/records/recProgressB'),
+    );
+    expect(parseRequestData(updateA as InternalAxiosRequestConfig)).toEqual({
+      fields: { 进展状态: '待二面', 下一环节: '二面' },
+    });
+    expect(parseRequestData(updateB as InternalAxiosRequestConfig)).toEqual({
+      fields: { 进展状态: '待笔试', 下一环节: '笔试' },
+    });
+  });
+
+  it('syncs manually completed events and preserves later progress', async (): Promise<void> => {
+    const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
+      const url: string = String(config.url ?? '');
+      const method: string = String(config.method ?? '').toUpperCase();
+      if (url.endsWith('/auth/v3/tenant_access_token/internal')) {
+        return { code: 0, tenant_access_token: 'tenant-token', expire: 7200 };
+      }
+      if (url.includes('/reminder-table/records/search')) {
+        return requestedReminderStatus(config) === '已完成'
+          ? {
+            code: 0,
+            data: {
+              items: [{
+                record_id: 'recCompletedInterview',
+                fields: {
+                  完成状态: '已完成',
+                  环节: '二面',
+                  求职记录ID: '["recProgressA","recProgressB"]',
+                },
+              }],
+              has_more: false,
+            },
+          }
+          : { code: 0, data: { items: [], has_more: false } };
+      }
+      if (url.endsWith('/progress-table/records/recProgressA') && method === 'GET') {
+        return {
+          code: 0,
+          data: {
+            record: {
+              record_id: 'recProgressA',
+              fields: { 进展状态: '待二面', 最近完成节点: '一面完成', 下一环节: '二面' },
+            },
+          },
+        };
+      }
+      if (url.endsWith('/progress-table/records/recProgressB') && method === 'GET') {
+        return {
+          code: 0,
+          data: {
+            record: {
+              record_id: 'recProgressB',
+              fields: { 进展状态: '待反馈', 最近完成节点: '三面完成', 下一环节: '待反馈' },
+            },
+          },
+        };
+      }
+      if (url.includes('/progress-table/records/recProgress') && method === 'PUT') {
+        return { code: 0, data: { record: { record_id: 'updated', fields: {} } } };
+      }
+      throw new Error(`unexpected request: ${method} ${url}`);
+    });
+
+    await expect(mock.service.reconcileTaskStates()).resolves.toEqual({
+      scanned: 1,
+      provisioned: 0,
+      completed: 1,
+      missed: 0,
+      postponed: 0,
+      skipped: 0,
+    });
+    const updateA = mock.calls.find(
+      (config: InternalAxiosRequestConfig): boolean =>
+        String(config.method).toUpperCase() === 'PUT'
+        && String(config.url ?? '').endsWith('/progress-table/records/recProgressA'),
+    );
+    expect(parseRequestData(updateA as InternalAxiosRequestConfig)).toEqual({
+      fields: { 进展状态: '待反馈', 最近完成节点: '二面完成', 下一环节: '待反馈' },
+    });
+    expect(mock.calls.some(
+      (config: InternalAxiosRequestConfig): boolean =>
+        String(config.method).toUpperCase() === 'PUT'
+        && String(config.url ?? '').endsWith('/progress-table/records/recProgressB'),
+    )).toBe(false);
+    expect(mock.calls.some(
+      (config: InternalAxiosRequestConfig): boolean =>
+        String(config.url ?? '').includes('/task/v2/tasks/'),
+    )).toBe(false);
+  });
+
   it('idempotently provisions native Feishu tasks for an unmapped reminder', async (): Promise<void> => {
     const dueAt: number = Date.parse('2026-08-15T10:00:00+08:00');
     const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
@@ -571,7 +765,7 @@ describe('JobProgressSyncService', (): void => {
         return { code: 0, tenant_access_token: 'tenant-token', expire: 7200 };
       }
       if (url.includes('/reminder-table/records/search')) {
-        return {
+        return requestedReminderStatus(config) === '待完成' ? {
           code: 0,
           data: {
             items: [{
@@ -586,7 +780,7 @@ describe('JobProgressSyncService', (): void => {
             }],
             has_more: false,
           },
-        };
+        } : { code: 0, data: { items: [], has_more: false } };
       }
       if (url.endsWith('/task/v2/tasks?user_id_type=open_id') && method === 'POST') {
         return {

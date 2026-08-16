@@ -221,6 +221,18 @@ const MANUAL_PROGRESS_STATUSES: Set<string> = new Set([
   'Offer', '未通过', '主动放弃', '岗位关闭', '状态待确认',
 ]);
 
+const PROGRESS_STATUS_RANK: Record<string, number> = {
+  '待反馈': 0,
+  '待笔试': 1,
+  '待面试': 1,
+  '待群面': 2,
+  '待一面': 3,
+  '待二面': 4,
+  '待三面': 5,
+  '待 HR 面': 6,
+  '待 OC': 7,
+};
+
 const COMPLETED_NODE_RANK: Record<string, number> = {
   '投递完成': 1,
   '笔试完成': 2,
@@ -304,6 +316,34 @@ function readOptions(value: unknown): string[] {
   return option ? [option] : [];
 }
 
+function readProgressRecordIds(value: unknown): string[] {
+  const ids: string[] = [];
+  const append = (candidate: unknown): void => {
+    if (Array.isArray(candidate)) {
+      candidate.forEach(append);
+      return;
+    }
+    const text: string = readText(candidate);
+    if (text) {
+      ids.push(text);
+    }
+  };
+  if (typeof value === 'string') {
+    const text: string = value.trim();
+    if (!text) {
+      return [];
+    }
+    try {
+      append(JSON.parse(text) as unknown);
+    } catch {
+      append(text);
+    }
+  } else {
+    append(value);
+  }
+  return [...new Set(ids)];
+}
+
 function canDeleteGeneratedDefault(
   record: FeishuRecord,
   sourceRecordId: string,
@@ -361,6 +401,16 @@ function readDateMillis(value: unknown): number | null {
   }
   const parsed: number = Date.parse(text);
   return Number.isNaN(parsed) ? null : parsed;
+}
+
+function compareReminderTime(left: FeishuRecord, right: FeishuRecord): number {
+  const leftTime: number = readDateMillis(
+    left.fields['开始时间'] ?? left.fields['截止时间'],
+  ) ?? Number.MAX_SAFE_INTEGER;
+  const rightTime: number = readDateMillis(
+    right.fields['开始时间'] ?? right.fields['截止时间'],
+  ) ?? Number.MAX_SAFE_INTEGER;
+  return leftTime - rightTime;
 }
 
 function escapeCardMarkdown(value: unknown): string {
@@ -764,7 +814,21 @@ export class JobProgressSyncService {
       postponed: 0,
       skipped: 0,
     };
-    const records: FeishuRecord[] = await this.listPendingReminderRecords();
+    const records: FeishuRecord[] = await this.listReminderRecordsByStatus('待完成');
+    const completedRecords: FeishuRecord[] = await this.listReminderRecordsByStatus('已完成');
+    await this.syncPendingInvitations(records);
+    for (const record of completedRecords) {
+      result.scanned += 1;
+      try {
+        await this.applyReminderOutcome(record, 'completed', records);
+        result.completed += 1;
+      } catch (error: unknown) {
+        result.skipped += 1;
+        this.logger.warn(
+          `skipped completed reminder reconciliation for ${record.record_id}: ${errorMessage(error)}`,
+        );
+      }
+    }
     for (const record of records) {
       result.scanned += 1;
       try {
@@ -780,12 +844,12 @@ export class JobProgressSyncService {
           ? await this.getTask(missedTaskGuid)
           : null;
         if (missedTask?.status === 'done') {
-          await this.applyReminderOutcome(mappedRecord, 'not_attended');
+          await this.applyReminderOutcome(mappedRecord, 'not_attended', records);
           result.missed += 1;
           continue;
         }
         if (task.status === 'done') {
-          await this.applyReminderOutcome(mappedRecord, 'completed');
+          await this.applyReminderOutcome(mappedRecord, 'completed', records);
           result.completed += 1;
           continue;
         }
@@ -828,7 +892,7 @@ export class JobProgressSyncService {
     if (members[0].member_id !== this.config.dailyCheckinOwnerOpenId) {
       throw new ServiceUnavailableException('daily check-in sole human is not OfferLoop owner');
     }
-    const records: FeishuRecord[] = await this.listPendingReminderRecords();
+    const records: FeishuRecord[] = await this.listReminderRecordsByStatus('待完成');
     const date: string = formatShanghaiDate();
     const card: Record<string, unknown> = buildDailyCheckinCard(
       date,
@@ -891,6 +955,7 @@ export class JobProgressSyncService {
   private async applyReminderOutcome(
     reminderRecord: FeishuRecord,
     action: 'completed' | 'not_attended',
+    pendingReminderRecords?: FeishuRecord[],
   ): Promise<ReminderOutcomeResult> {
     const currentCompletionStatus: string = readText(reminderRecord.fields['完成状态']);
     const targetCompletionStatus: string = action === 'completed' ? '已完成' : '已错过';
@@ -909,16 +974,9 @@ export class JobProgressSyncService {
     if (action === 'completed' && !completedNode) {
       throw new BadRequestException(`unsupported reminder stage: ${stage || 'unknown'}`);
     }
-    const progressRecordId: string = readText(reminderRecord.fields['求职记录ID']);
-    const progressRecord: FeishuRecord | null = progressRecordId
-      ? await this.getProgressRecord(progressRecordId)
-      : null;
-    const progressStatus: string = progressRecord
-      ? progressStatusFor(progressRecord.fields)
-      : '';
-    if (MANUAL_PROGRESS_STATUSES.has(progressStatus)) {
-      throw new BadRequestException(`progress status is ${progressStatus}`);
-    }
+    const progressRecordIds: string[] = readProgressRecordIds(
+      reminderRecord.fields['求职记录ID'],
+    );
     const alreadyUpdated: boolean = currentCompletionStatus === targetCompletionStatus;
     if (!alreadyUpdated) {
       await this.updateReminderRecord(reminderRecord.record_id, {
@@ -926,7 +984,7 @@ export class JobProgressSyncService {
       });
     }
 
-    if (!progressRecordId || !progressRecord) {
+    if (progressRecordIds.length === 0) {
       return {
         alreadyUpdated,
         nextStep: '待反馈',
@@ -934,33 +992,137 @@ export class JobProgressSyncService {
         targetCompletionStatus,
       };
     }
-    const pendingRecords: FeishuRecord[] = (await this.listPendingReminderRecords())
-      .filter((record: FeishuRecord): boolean =>
-        readText(record.fields['求职记录ID']) === progressRecordId
-        && record.record_id !== reminderRecord.record_id)
-      .sort((left: FeishuRecord, right: FeishuRecord): number =>
-        (readDateMillis(left.fields['开始时间'] ?? left.fields['截止时间']) ?? Number.MAX_SAFE_INTEGER)
-        - (readDateMillis(right.fields['开始时间'] ?? right.fields['截止时间']) ?? Number.MAX_SAFE_INTEGER));
-    const nextStep: string = EVENT_STAGE_TO_NEXT_STEP[
-      readText(pendingRecords[0]?.fields['环节'])
-    ] ?? '待反馈';
-    const progressFields: Record<string, unknown> = {
-      '进展状态': NEXT_STEP_TO_PROGRESS_STATUS[nextStep] ?? '状态待确认',
-      '下一环节': nextStep,
-    };
-    if (action === 'completed') {
-      progressFields['最近完成节点'] = chooseLaterCompletedNode(
-        readText(progressRecord.fields['最近完成节点']),
-        completedNode,
-      );
+    const pendingRecords: FeishuRecord[] = pendingReminderRecords
+      ?? await this.listReminderRecordsByStatus('待完成');
+    let progressRecordFound: boolean = false;
+    let firstNextStep: string = '待反馈';
+    for (const progressRecordId of progressRecordIds) {
+      try {
+        const progressRecord: FeishuRecord = await this.getProgressRecord(progressRecordId);
+        const progressStatus: string = progressStatusFor(progressRecord.fields);
+        if (MANUAL_PROGRESS_STATUSES.has(progressStatus)) {
+          continue;
+        }
+        progressRecordFound = true;
+        const currentCompletedNode: string = readText(
+          progressRecord.fields['最近完成节点'],
+        );
+        const targetCompletedNode: string = action === 'completed'
+          ? chooseLaterCompletedNode(currentCompletedNode, completedNode)
+          : currentCompletedNode;
+        const targetCompletedRank: number = COMPLETED_NODE_RANK[targetCompletedNode] ?? 0;
+        const linkedPendingRecords: FeishuRecord[] = pendingRecords
+          .filter((record: FeishuRecord): boolean => {
+            if (
+              record.record_id === reminderRecord.record_id
+              || !readProgressRecordIds(record.fields['求职记录ID']).includes(progressRecordId)
+            ) {
+              return false;
+            }
+            const eventCompletedNode: string = EVENT_STAGE_TO_COMPLETED_NODE[
+              readText(record.fields['环节'])
+            ] ?? '';
+            const eventCompletedRank: number = COMPLETED_NODE_RANK[eventCompletedNode] ?? 0;
+            return eventCompletedRank === 0 || eventCompletedRank >= targetCompletedRank;
+          })
+          .sort(compareReminderTime);
+        const nextStep: string = EVENT_STAGE_TO_NEXT_STEP[
+          readText(linkedPendingRecords[0]?.fields['环节'])
+        ] ?? '待反馈';
+        if (firstNextStep === '待反馈') {
+          firstNextStep = nextStep;
+        }
+        const progressFields: Record<string, unknown> = {
+          '进展状态': NEXT_STEP_TO_PROGRESS_STATUS[nextStep] ?? '状态待确认',
+          '下一环节': nextStep,
+        };
+        if (action === 'completed') {
+          const eventProgressStatus: string = NEXT_STEP_TO_PROGRESS_STATUS[
+            EVENT_STAGE_TO_NEXT_STEP[stage]
+          ] ?? '';
+          const completionAdvances: boolean = targetCompletedNode !== currentCompletedNode;
+          const finishesCurrentStep: boolean = currentCompletedNode === completedNode
+            && progressStatus === eventProgressStatus;
+          if (!completionAdvances && !finishesCurrentStep) {
+            continue;
+          }
+          progressFields['最近完成节点'] = targetCompletedNode;
+        }
+        const progressChanged: boolean = Object.entries(progressFields).some(
+          ([fieldName, value]: [string, unknown]): boolean =>
+            readText(progressRecord.fields[fieldName]) !== readText(value),
+        );
+        if (progressChanged) {
+          await this.updateProgressRecord(progressRecordId, progressFields);
+        }
+      } catch (error: unknown) {
+        this.logger.warn(
+          `skipped reminder outcome progress sync for ${progressRecordId}: ${errorMessage(error)}`,
+        );
+      }
     }
-    await this.updateProgressRecord(progressRecordId, progressFields);
     return {
       alreadyUpdated,
-      nextStep,
-      progressRecordFound: true,
+      nextStep: firstNextStep,
+      progressRecordFound,
       targetCompletionStatus,
     };
+  }
+
+  private async syncPendingInvitations(records: FeishuRecord[]): Promise<void> {
+    const pendingByProgressId: Map<string, FeishuRecord[]> = new Map();
+    for (const record of [...records].sort(compareReminderTime)) {
+      for (const progressRecordId of readProgressRecordIds(record.fields['求职记录ID'])) {
+        const linkedRecords: FeishuRecord[] = pendingByProgressId.get(progressRecordId) ?? [];
+        linkedRecords.push(record);
+        pendingByProgressId.set(progressRecordId, linkedRecords);
+      }
+    }
+    for (const [progressRecordId, linkedRecords] of pendingByProgressId) {
+      try {
+        const progressRecord: FeishuRecord = await this.getProgressRecord(progressRecordId);
+        const currentStatus: string = progressStatusFor(progressRecord.fields);
+        if (MANUAL_PROGRESS_STATUSES.has(currentStatus)) {
+          continue;
+        }
+        const currentRank: number = PROGRESS_STATUS_RANK[currentStatus] ?? -1;
+        const reminderRecord: FeishuRecord | undefined = linkedRecords.find(
+          (record: FeishuRecord): boolean => {
+            const nextStep: string = EVENT_STAGE_TO_NEXT_STEP[
+              readText(record.fields['环节'])
+            ] ?? '';
+            const candidateStatus: string = NEXT_STEP_TO_PROGRESS_STATUS[nextStep] ?? '';
+            const candidateRank: number = PROGRESS_STATUS_RANK[candidateStatus] ?? -1;
+            return candidateRank >= currentRank;
+          },
+        );
+        if (!reminderRecord) {
+          continue;
+        }
+        const nextStep: string = EVENT_STAGE_TO_NEXT_STEP[
+          readText(reminderRecord.fields['环节'])
+        ] ?? '';
+        const targetStatus: string = NEXT_STEP_TO_PROGRESS_STATUS[nextStep] ?? '';
+        if (!targetStatus) {
+          continue;
+        }
+        const progressFields: Record<string, unknown> = {
+          '进展状态': targetStatus,
+          '下一环节': nextStep,
+        };
+        const progressChanged: boolean = Object.entries(progressFields).some(
+          ([fieldName, value]: [string, unknown]): boolean =>
+            readText(progressRecord.fields[fieldName]) !== readText(value),
+        );
+        if (progressChanged) {
+          await this.updateProgressRecord(progressRecordId, progressFields);
+        }
+      } catch (error: unknown) {
+        this.logger.warn(
+          `skipped invitation progress sync for ${progressRecordId}: ${errorMessage(error)}`,
+        );
+      }
+    }
   }
 
   private async getTask(taskGuid: string): Promise<FeishuTask> {
@@ -1080,7 +1242,7 @@ export class JobProgressSyncService {
     };
   }
 
-  private async listPendingReminderRecords(): Promise<FeishuRecord[]> {
+  private async listReminderRecordsByStatus(status: '待完成' | '已完成'): Promise<FeishuRecord[]> {
     const records: FeishuRecord[] = [];
     let pageToken: string = '';
     for (let page: number = 0; page < 100; page += 1) {
@@ -1098,7 +1260,7 @@ export class JobProgressSyncService {
             conditions: [{
               field_name: '完成状态',
               operator: 'is',
-              value: ['待完成'],
+              value: [status],
             }],
           },
         },
