@@ -30,7 +30,6 @@ test("reconciles the completed JD written test into its linked progress record",
           fields: {
             "进展状态": "待笔试",
             "最近完成节点": "投递完成",
-            "下一环节": "笔试",
           },
         };
       },
@@ -46,7 +45,6 @@ test("reconciles the completed JD written test into its linked progress record",
     fields: {
       "进展状态": "待反馈",
       "最近完成节点": "笔试完成",
-      "下一环节": "待反馈",
     },
   }]);
 });
@@ -54,8 +52,8 @@ test("reconciles the completed JD written test into its linked progress record",
 test("one event can independently reconcile multiple linked applications", async () => {
   const updates = [];
   const records = new Map([
-    ["recA", { record_id: "recA", fields: { "进展状态": "待笔试", "最近完成节点": "投递完成", "下一环节": "笔试" } }],
-    ["recB", { record_id: "recB", fields: { "进展状态": "Offer", "最近完成节点": "面试完成", "下一环节": "Offer" } }],
+    ["recA", { record_id: "recA", fields: { "进展状态": "待笔试", "最近完成节点": "投递完成" } }],
+    ["recB", { record_id: "recB", fields: { "进展状态": "Offer", "最近完成节点": "面试完成" } }],
   ]);
   const result = await reconcileInterviewEvents({
     eventRepository: {
@@ -118,7 +116,6 @@ test("a failed linked record does not block another application", async () => {
           fields: {
             "进展状态": "待笔试",
             "最近完成节点": "投递完成",
-            "下一环节": "笔试",
           },
         };
       },

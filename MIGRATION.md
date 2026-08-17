@@ -106,7 +106,7 @@ python3 scripts/setup_offerloop.py --agent codex --mode single --skill job-colle
 4. 对原 Base 建立并验证备份；
 5. 原地升级为三张业务 Base，不复制记录或另建同名 Base；
 6. 以企业 record ID 和来源邮件 ID 幂等迁移历史记录；
-7. 按 schema v6 验证 `进展状态`、`最近完成节点`、`公告链接` 和兼容字段；
+7. 按 schema v6 验证 `进展状态`、`最近完成节点`、`公告链接`，并确认旧状态字段已移除；
 8. 小流量验证同公司多岗位、人工字段保护、改期、日历更新和重复事件；
 9. 验收通过后才切换日常写入。
 
@@ -120,10 +120,10 @@ python3 scripts/setup_offerloop.py --agent codex --mode full --verify
 任何 Base、知识库节点或 locator 变化都会使验收记录失效，必须重新只读核验。历史已投递记录无法
 可靠恢复投递日期时保持空白；轮次不明的旧面试不猜测为一面或二面。
 
-## 6. Schema v6 与旧内容兼容
+## 6. Schema v6 状态模型
 
 - `进展状态` 是当前求职状态唯一真源。
-- 旧 `当前阶段`、`下一环节`、`流程结果` 和 `当前状态` 暂时保留，仅用于迁移和旧客户端兼容。
+- 已完成迁移的求职进展不再保留旧状态字段；所有客户端、同步服务和视图只读写 schema v6 字段。
 - 简历选择不写入业务 Base；旧的空字段可以在确认无有效数据后删除。
 - 旧 `resume-deepthink` 更名为 `experience-deepthink`；安装器会备份旧目录，不删除线上文档。
 - 旧 `pm-sense` 和 `aptitude-lab` 的训练能力由 `competency-lab` 承接。

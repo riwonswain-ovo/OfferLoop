@@ -52,10 +52,8 @@ const COMPANY_COLUMNS: DatasetColumn[] = [
 ];
 
 const PROGRESS_COLUMNS: DatasetColumn[] = [
-  { key: '当前状态', label: '当前状态' },
+  { key: '进展状态', label: '进展状态' },
   { key: '最近完成节点', label: '最近完成' },
-  { key: '下一环节', label: '下一环节' },
-  { key: '流程结果', label: '流程结果' },
   { key: '公司', label: '公司', width: 'min-w-36' },
   { key: '投递岗位', label: '投递岗位', width: 'min-w-48' },
   { key: '投递日期', label: '投递日期' },
@@ -106,10 +104,13 @@ const PROGRESS_STAGE_ORDER: string[] = [
   '待一面',
   '待二面',
   '待三面',
-  '待HR面',
-  '待OC',
+  '待 HR 面',
+  '待 OC',
   'Offer',
-  '已结束',
+  '未通过',
+  '主动放弃',
+  '岗位关闭',
+  '状态待确认',
 ];
 
 const LINK_FIELDS: string[] = [
@@ -252,7 +253,7 @@ const WorkbenchTable: React.FC<WorkbenchTableProps> = ({
                 : [];
               const isBadge: boolean = [
                 '投递进度',
-                '当前阶段',
+                '进展状态',
                 '环节',
                 '完成状态',
               ].includes(column.key);
@@ -308,7 +309,8 @@ const ProgressKanban: React.FC<DatasetViewProps> = ({
 }) => {
   const groupedRecords: Map<string, WorkbenchRecord[]> = new Map();
   dataset.records.forEach((record: WorkbenchRecord): void => {
-    const stage: string = cellToText(record.fields['当前阶段']) || '待确认';
+    const stage: string = cellToText(record.fields['进展状态'])
+      || '状态待确认';
     groupedRecords.set(stage, [...(groupedRecords.get(stage) ?? []), record]);
   });
   const stages: string[] = [

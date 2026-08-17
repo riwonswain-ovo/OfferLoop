@@ -145,9 +145,6 @@ describe('JobProgressSyncService', (): void => {
       fields: {
         进展状态: '待反馈',
         最近完成节点: '投递完成',
-        当前阶段: '已投递',
-        下一环节: '待反馈',
-        流程结果: '进行中',
         公司: '示例公司',
         投递岗位: '',
         投递日期: Date.parse('2026-07-17T00:00:00+08:00'),
@@ -190,7 +187,8 @@ describe('JobProgressSyncService', (): void => {
               {
                 record_id: 'rec_progress',
                 fields: {
-                  当前阶段: '二面',
+                  进展状态: '待二面',
+                  最近完成节点: '一面完成',
                   公司: '旧公司名',
                   投递岗位: 'AI 产品经理',
                   投递日期: Date.parse('2026-07-10T00:00:00+08:00'),
@@ -225,7 +223,7 @@ describe('JobProgressSyncService', (): void => {
     expect(parseRequestData(updateCall)).toMatchObject({
       fields: {
         进展状态: '待二面',
-        当前阶段: '二面',
+        最近完成节点: '一面完成',
         公司: '新公司名',
         投递岗位: 'AI 产品经理',
         投递日期: Date.parse('2026-07-10T00:00:00+08:00'),
@@ -267,7 +265,8 @@ describe('JobProgressSyncService', (): void => {
               {
                 record_id: 'rec_job_one',
                 fields: {
-                  当前阶段: '一面',
+                  进展状态: '待一面',
+                  最近完成节点: '笔试完成',
                   公司: '旧公司名',
                   投递岗位: 'AI 产品经理',
                   投递日期: Date.parse('2026-07-10T00:00:00+08:00'),
@@ -278,7 +277,8 @@ describe('JobProgressSyncService', (): void => {
               {
                 record_id: 'rec_job_two',
                 fields: {
-                  当前阶段: '已投递',
+                  进展状态: '待反馈',
+                  最近完成节点: '投递完成',
                   公司: '旧公司名',
                   投递岗位: '策略产品经理',
                   投递日期: Date.parse('2026-07-11T00:00:00+08:00'),
@@ -337,9 +337,6 @@ describe('JobProgressSyncService', (): void => {
             '投递记录 ID': 'enterprise:rec_source:default',
             进展状态: '待反馈',
             最近完成节点: '投递完成',
-            当前阶段: '已投递',
-            下一环节: '待反馈',
-            流程结果: '进行中',
             投递岗位: '',
             '岗位 JD': '',
           },
@@ -666,7 +663,6 @@ describe('JobProgressSyncService', (): void => {
               fields: {
                 进展状态: '待一面',
                 最近完成节点: '笔试完成',
-                下一环节: '一面',
               },
             },
           },
@@ -809,7 +805,6 @@ describe('JobProgressSyncService', (): void => {
                 fields: {
                   进展状态: '待反馈',
                   最近完成节点: recordId === 'recProgressA' ? '一面完成' : '投递完成',
-                  下一环节: '待反馈',
                 },
               },
             },
@@ -843,10 +838,10 @@ describe('JobProgressSyncService', (): void => {
         String(config.url ?? '').endsWith('/progress-table/records/recProgressB'),
     );
     expect(parseRequestData(updateA as InternalAxiosRequestConfig)).toEqual({
-      fields: { 进展状态: '待二面', 下一环节: '二面' },
+      fields: { 进展状态: '待二面' },
     });
     expect(parseRequestData(updateB as InternalAxiosRequestConfig)).toEqual({
-      fields: { 进展状态: '待笔试', 下一环节: '笔试' },
+      fields: { 进展状态: '待笔试' },
     });
   });
 
@@ -882,7 +877,7 @@ describe('JobProgressSyncService', (): void => {
           data: {
             record: {
               record_id: 'recProgressA',
-              fields: { 进展状态: '待二面', 最近完成节点: '一面完成', 下一环节: '二面' },
+              fields: { 进展状态: '待二面', 最近完成节点: '一面完成' },
             },
           },
         };
@@ -893,7 +888,7 @@ describe('JobProgressSyncService', (): void => {
           data: {
             record: {
               record_id: 'recProgressB',
-              fields: { 进展状态: '待反馈', 最近完成节点: '三面完成', 下一环节: '待反馈' },
+              fields: { 进展状态: '待反馈', 最近完成节点: '三面完成' },
             },
           },
         };
@@ -918,7 +913,7 @@ describe('JobProgressSyncService', (): void => {
         && String(config.url ?? '').endsWith('/progress-table/records/recProgressA'),
     );
     expect(parseRequestData(updateA as InternalAxiosRequestConfig)).toEqual({
-      fields: { 进展状态: '待反馈', 最近完成节点: '二面完成', 下一环节: '待反馈' },
+      fields: { 进展状态: '待反馈', 最近完成节点: '二面完成' },
     });
     expect(mock.calls.some(
       (config: InternalAxiosRequestConfig): boolean =>
@@ -963,7 +958,6 @@ describe('JobProgressSyncService', (): void => {
               fields: {
                 进展状态: '待一面',
                 最近完成节点: '笔试完成',
-                下一环节: '一面',
               },
             },
           },
@@ -991,7 +985,6 @@ describe('JobProgressSyncService', (): void => {
     expect(parseRequestData(progressUpdate as InternalAxiosRequestConfig)).toEqual({
       fields: {
         进展状态: '状态待确认',
-        下一环节: '无',
       },
     });
   });
@@ -1028,7 +1021,6 @@ describe('JobProgressSyncService', (): void => {
               fields: {
                 进展状态: '待一面',
                 最近完成节点: '笔试完成',
-                下一环节: '一面',
               },
             },
           },
@@ -1062,7 +1054,6 @@ describe('JobProgressSyncService', (): void => {
       fields: {
         进展状态: '待反馈',
         最近完成节点: '一面完成',
-        下一环节: '待反馈',
       },
     });
   });
@@ -1109,7 +1100,6 @@ describe('JobProgressSyncService', (): void => {
               fields: {
                 进展状态: '待笔试',
                 最近完成节点: '投递完成',
-                下一环节: '笔试',
               },
             },
           },
@@ -1177,7 +1167,6 @@ describe('JobProgressSyncService', (): void => {
               fields: {
                 进展状态: '待一面',
                 最近完成节点: '笔试完成',
-                下一环节: '一面',
               },
             },
           },

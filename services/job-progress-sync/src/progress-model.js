@@ -23,15 +23,6 @@ export const NEXT_STAGES = Object.freeze([
   "无",
 ]);
 
-export const PROCESS_RESULTS = Object.freeze([
-  "进行中",
-  "OC",
-  "Offer",
-  "未通过",
-  "主动放弃",
-  "岗位关闭",
-]);
-
 export const PROGRESS_STATUSES = Object.freeze([
   "待反馈",
   "待笔试",
@@ -60,17 +51,6 @@ const STAGE_TO_COMPLETED = new Map([
   ["面试", "面试完成"],
 ]);
 
-const LEGACY_STAGE_MAP = new Map([
-  ["已投递", ["投递完成", "待反馈"]],
-  ["笔试", ["投递完成", "笔试"]],
-  ["群面", ["笔试完成", "群面"]],
-  ["一面", ["笔试完成", "一面"]],
-  ["二面", ["一面完成", "二面"]],
-  ["三面", ["二面完成", "三面"]],
-  ["HR面", ["三面完成", "HR面"]],
-  ["Offer", ["面试完成", "Offer"]],
-  ["已结束", ["投递完成", "无"]],
-]);
 const NEXT_TO_PROGRESS_STATUS = new Map([
   ["待反馈", "待反馈"],
   ["笔试", "待笔试"],
@@ -141,13 +121,6 @@ function completedNodeForStage(stage) {
   return STAGE_TO_COMPLETED.get(stage) ?? (stage === "面试" ? "面试完成" : "");
 }
 
-function nextStageForProgressStatus(status) {
-  for (const [stage, candidate] of NEXT_TO_PROGRESS_STATUS) {
-    if (candidate === status) return stage;
-  }
-  return status === "状态待确认" ? "无" : "待反馈";
-}
-
 export function parseProgressRecordIds(value) {
   if (Array.isArray(value)) return [...new Set(value.map(readText).filter(Boolean))];
   const text = readText(value);
@@ -216,45 +189,18 @@ export function projectProgressFromEvents(fields = {}, events = []) {
     ...normalized,
     "进展状态": progressStatus,
     "最近完成节点": completed,
-    "下一环节": nextStageForProgressStatus(progressStatus),
   };
 }
 
 export function deriveCurrentStatus(progress) {
-  if (PROGRESS_STATUSES.includes(String(progress["进展状态"] ?? ""))) {
-    return String(progress["进展状态"]);
-  }
-  const result = String(progress["流程结果"] ?? "进行中");
-  if (!["进行中", "OC"].includes(result)) {
-    return result;
-  }
-  const completed = String(progress["最近完成节点"] ?? "投递完成");
-  const next = String(progress["下一环节"] ?? "待反馈");
-  if (next === "无") return completed;
-  return `${completed}待${next}`;
+  const status = String(progress["进展状态"] ?? "");
+  return PROGRESS_STATUSES.includes(status) ? status : "状态待确认";
 }
 
 export function normalizeProgressFields(fields = {}) {
   const normalized = { ...fields };
-  if (!normalized["最近完成节点"] || !normalized["下一环节"]) {
-    const [completed, next] = LEGACY_STAGE_MAP.get(String(fields["当前阶段"] ?? ""))
-      ?? ["投递完成", "待反馈"];
-    normalized["最近完成节点"] ||= completed;
-    normalized["下一环节"] ||= next;
-  }
-  normalized["流程结果"] ||= "进行中";
-  if (!normalized["进展状态"]) {
-    const result = String(normalized["流程结果"] ?? "");
-    if (["Offer", "未通过", "主动放弃", "岗位关闭"].includes(result)) {
-      normalized["进展状态"] = result;
-    } else if (String(fields["当前阶段"] ?? "") === "已结束") {
-      normalized["进展状态"] = "状态待确认";
-    } else {
-      normalized["进展状态"] = NEXT_TO_PROGRESS_STATUS.get(
-        String(normalized["下一环节"] ?? "待反馈"),
-      ) ?? "状态待确认";
-    }
-  }
+  normalized["进展状态"] = deriveCurrentStatus(normalized);
+  normalized["最近完成节点"] ||= "投递完成";
   return normalized;
 }
 
@@ -271,7 +217,6 @@ export function applyInvitation(fields, stage) {
   return {
     ...normalized,
     "进展状态": candidate,
-    "下一环节": stage,
   };
 }
 
@@ -290,7 +235,6 @@ export function applyCompletion(fields, stage, nextStage = "待反馈") {
     ...normalized,
     "进展状态": NEXT_TO_PROGRESS_STATUS.get(nextStage) ?? "状态待确认",
     "最近完成节点": completed,
-    "下一环节": nextStage,
   };
 }
 
