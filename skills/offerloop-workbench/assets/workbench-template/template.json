@@ -1,6 +1,8 @@
 {
   "schema_version": 1,
   "template_id": "offerloop-workbench",
+  "lifecycle": "retired",
+  "retired_at": "2026-08-17",
   "display_name": "OfferLoop 招聘工作台",
   "stack": "nestjs-react-fullstack",
   "requires_fresh_miaoda_binding": true,

@@ -138,18 +138,16 @@ class OfferLoopWorkspaceTest(unittest.TestCase):
                     "wiki_space_id": "space_example",
                     "workspace_home_node_token": "wikcnExample",
                     "workspace_core_data_node_token": "wikcnCore",
-                    "workbench_url": "https://example.com/workbench",
                 },
             )
 
             self.assertEqual(result["lark_profile"], "codex")
             self.assertEqual(result["wiki_space_id"], "space_example")
-            self.assertEqual(result["workbench_url"], "https://example.com/workbench")
             self.assertEqual(oct(path.stat().st_mode & 0o777), "0o600")
             with self.assertRaisesRegex(ValueError, "secret"):
                 workspace.register_resources(path, {"WEBHOOK_SECRET": "nope"})
 
-    def test_readiness_separates_required_core_from_optional_workbench(self):
+    def test_readiness_ignores_retired_workbench_locator(self):
         workspace = load_workspace_module()
         config = {
             "lark_profile": "codex",
@@ -162,7 +160,7 @@ class OfferLoopWorkspaceTest(unittest.TestCase):
         }
         result = workspace.readiness(config)
         self.assertTrue(result["core_ready"])
-        self.assertFalse(result["optional"]["workbench_url"])
+        self.assertNotIn("workbench_url", result["optional"])
 
     def test_future_window_filter_rolls_the_upper_bound_without_document_edits(self):
         workspace = load_workspace_module()

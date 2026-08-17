@@ -13,17 +13,6 @@ README = ROOT / "README.md"
 MIGRATION = ROOT / "MIGRATION.md"
 INSTALLER = ROOT / "scripts" / "install_offerloop.py"
 SETUP = ROOT / "scripts" / "setup_offerloop.py"
-WORKBENCH_TASK = (
-    ROOT
-    / "skills"
-    / "offerloop-workbench"
-    / "assets"
-    / "workbench-template"
-    / "client"
-    / "src"
-    / "lib"
-    / "codex-task.ts"
-)
 PUBLIC_REPOSITORY = "https://github.com/riwonswain-ovo/OfferLoop.git"
 SETUP_SCRIPT = "scripts/setup_offerloop.py"
 
@@ -45,7 +34,6 @@ def main() -> None:
         raise AssertionError("repository is missing the two-mode setup entrypoint")
     readme = README.read_text(encoding="utf-8")
     migration = MIGRATION.read_text(encoding="utf-8")
-    workbench_task = WORKBENCH_TASK.read_text(encoding="utf-8")
 
     packaged = tuple(installer.SKILL_NAMES)
     tracked_skill_files = subprocess.check_output(
@@ -101,7 +89,7 @@ def main() -> None:
     for marker in (
         "双 Skill 用户的最短迁移路径",
         "scripts/install_offerloop.py --agent codex --verify",
-        "Schema v6 与旧内容兼容",
+        "Schema v6 状态模型",
     ):
         if marker not in migration:
             raise AssertionError(f"MIGRATION.md is missing current migration guidance: {marker}")
@@ -109,9 +97,6 @@ def main() -> None:
         raise AssertionError("MIGRATION.md must not direct users to the retired schema v5 flow")
     if "工作台" in readme or "offerloop-workbench" in readme:
         raise AssertionError("README must not expose internal application experiments")
-    if "OfferLoop-development" in workbench_task:
-        raise AssertionError("shipped workbench must not require the private repository")
-
     print(
         "README install contract accepted: public full download, sparse single-Skill "
         f"download, explicit Agent target, {len(packaged)} Skills, online verification, "
