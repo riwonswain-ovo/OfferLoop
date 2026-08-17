@@ -190,9 +190,7 @@ def _active_company_candidates(event, progress_records):
 
 def _is_active_progress(fields):
     status = str(fields.get("进展状态", "")).strip()
-    if status:
-        return status in PROGRESS_STATUS_ORDER
-    return fields.get("当前阶段") not in {"Offer", "已结束"}
+    return status in PROGRESS_STATUS_ORDER
 
 
 def _position_matches(event_position, candidate_position):

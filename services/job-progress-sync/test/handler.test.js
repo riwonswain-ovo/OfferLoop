@@ -140,9 +140,6 @@ test("deletes an untouched generated default after leaving submitted status", as
         fields: {
           "进展状态": "待反馈",
           "最近完成节点": "投递完成",
-          "当前阶段": "已投递",
-          "下一环节": "待反馈",
-          "流程结果": "进行中",
           "投递岗位": "",
           "岗位 JD": "",
           "企业清单 record_id": "rec_source",
@@ -295,9 +292,6 @@ test("creates a progress record for the first submitted event", async () => {
     {
       "进展状态": "待反馈",
       "最近完成节点": "投递完成",
-      "下一环节": "待反馈",
-      "流程结果": "进行中",
-      "当前阶段": "已投递",
       "公司": "示例公司",
       "投递岗位": "",
       "投递日期": "2026-07-17",
@@ -318,7 +312,8 @@ test("repeat submission preserves user fields and later interview stage", async 
       return [{
         record_id: "rec_progress",
         fields: {
-          "当前阶段": "二面",
+          "进展状态": "待二面",
+          "最近完成节点": "一面完成",
           "公司": "旧公司名",
           "投递岗位": "AI 产品经理",
           "投递日期": "2026-07-10",
@@ -359,7 +354,7 @@ test("repeat submission preserves user fields and later interview stage", async 
       matched_count: 1,
     },
   });
-  assert.equal(updates[0].fields["当前阶段"], "二面");
+  assert.equal("当前阶段" in updates[0].fields, false);
   assert.equal(updates[0].fields["投递岗位"], "AI 产品经理");
   assert.equal(updates[0].fields["投递日期"], "2026-07-10");
   assert.equal(updates[0].fields["岗位 JD"], "负责 AI 产品规划");
@@ -377,8 +372,6 @@ test("identical retry does not write the progress record again", async () => {
   const existingFields = {
     "进展状态": "待反馈",
     "最近完成节点": "投递完成",
-    "下一环节": "待反馈",
-    "流程结果": "进行中",
     "公司": "示例公司",
     "投递岗位": "",
     "投递日期": "2026-07-17",
@@ -435,7 +428,8 @@ test("updates every distinct job under the same enterprise record", async () => 
         {
           record_id: "rec_job_one",
           fields: {
-            "当前阶段": "一面",
+            "进展状态": "待一面",
+            "最近完成节点": "笔试完成",
             "公司": "旧公司名",
             "投递岗位": "AI 产品经理",
             "投递日期": "2026-07-10",
@@ -446,7 +440,8 @@ test("updates every distinct job under the same enterprise record", async () => 
         {
           record_id: "rec_job_two",
           fields: {
-            "当前阶段": "已投递",
+            "进展状态": "待反馈",
+            "最近完成节点": "投递完成",
             "公司": "旧公司名",
             "投递岗位": "策略产品经理",
             "投递日期": "2026-07-11",

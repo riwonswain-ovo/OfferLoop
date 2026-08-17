@@ -272,15 +272,20 @@ describe('WorkbenchService', () => {
 
   it('loads the applications page with filtered stage totals without scanning every record', async () => {
     const stageTotals: { [key: string]: number } = {
-      已投递: 28,
-      笔试: 15,
-      群面: 8,
-      一面: 16,
-      二面: 9,
-      三面: 4,
-      HR面: 3,
+      待反馈: 28,
+      待笔试: 15,
+      待面试: 0,
+      待群面: 8,
+      待一面: 16,
+      待二面: 9,
+      待三面: 4,
+      '待 HR 面': 3,
+      '待 OC': 0,
       Offer: 2,
-      已结束: 8,
+      未通过: 5,
+      主动放弃: 2,
+      岗位关闭: 1,
+      状态待确认: 0,
     };
     const get = jest.fn((url: string, options?: {
       params?: { filter?: string };
@@ -368,7 +373,7 @@ describe('WorkbenchService', () => {
               items: [{
                 record_id: 'progress-1',
                 fields: {
-                  当前阶段: '一面',
+                  进展状态: '待一面',
                   公司: '字节跳动',
                   投递岗位: '产品经理',
                 },
@@ -394,17 +399,20 @@ describe('WorkbenchService', () => {
     expect(response.progress.records[0].recordId).toBe('progress-1');
     expect(response.upcomingEvents.records[0].recordId).toBe('event-1');
     expect(response.stageCounts).toEqual([
-      { stage: '待反馈', count: 0 },
+      { stage: '待反馈', count: 28 },
       { stage: '待笔试', count: 15 },
       { stage: '待面试', count: 0 },
       { stage: '待群面', count: 8 },
       { stage: '待一面', count: 16 },
       { stage: '待二面', count: 9 },
       { stage: '待三面', count: 4 },
-      { stage: '待HR面', count: 3 },
-      { stage: '待OC', count: 0 },
+      { stage: '待 HR 面', count: 3 },
+      { stage: '待 OC', count: 0 },
       { stage: 'Offer', count: 2 },
-      { stage: '已结束', count: 0 },
+      { stage: '未通过', count: 5 },
+      { stage: '主动放弃', count: 2 },
+      { stage: '岗位关闭', count: 1 },
+      { stage: '状态待确认', count: 0 },
     ]);
     const upcomingCall = get.mock.calls.find(
       ([url]: [string]): boolean =>
@@ -420,7 +428,7 @@ describe('WorkbenchService', () => {
         { filter?: unknown }?,
       ]) => url.includes('page_size=1') && Boolean(body?.filter),
     );
-    expect(countCalls).toHaveLength(13);
+    expect(countCalls).toHaveLength(14);
   });
 
   it('keeps knowledge digest optional when its Base is not configured', async () => {

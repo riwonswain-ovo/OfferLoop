@@ -173,15 +173,8 @@ const WorkbenchApplicationsPage: React.FC = () => {
   const groupedRecords: Map<string, WorkbenchRecord[]> = useMemo(() => {
     const grouped: Map<string, WorkbenchRecord[]> = new Map();
     (dataset?.records ?? []).forEach((record: WorkbenchRecord): void => {
-      const result: string = cellToText(record.fields['流程结果']) || '进行中';
-      const next: string = cellToText(record.fields['下一环节']) || '待反馈';
-      const stage: string = result === 'Offer'
-        ? 'Offer'
-        : ['未通过', '主动放弃', '岗位关闭'].includes(result)
-          ? '已结束'
-          : next === '待反馈'
-            ? '待反馈'
-            : `待${next}`;
+      const stage: string = cellToText(record.fields['进展状态'])
+        || '状态待确认';
       grouped.set(stage, [...(grouped.get(stage) ?? []), record]);
     });
     return grouped;

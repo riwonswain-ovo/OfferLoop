@@ -8,7 +8,7 @@
 - `application-progress-loop`：邀请、完成事件与不可倒退的求职状态。
 - `capability-growth-loop`：能力观察、专项训练待办与复测。
 
-`loop-store.js` 提供原子持久化和合法边校验；`progress-model.js` 负责拆分“最近完成节点 / 下一环节 / 流程结果 / 当前状态”；`daily-checkin.js` 负责每日确认的安全预检和回调幂等。
+`loop-store.js` 提供原子持久化和合法边校验；`progress-model.js` 以“进展状态 / 最近完成节点”维护求职进展；`daily-checkin.js` 负责每日确认的安全预检和回调幂等。
 
 ## 每日进展确认
 

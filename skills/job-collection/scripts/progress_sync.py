@@ -6,27 +6,14 @@ from __future__ import annotations
 from datetime import date
 
 
-LEGACY_STAGE_TO_PROGRESS = {
-    "已投递": ("投递完成", "待反馈", "进行中"),
-    "笔试": ("投递完成", "待笔试", "进行中"),
-    "群面": ("笔试完成", "待群面", "进行中"),
-    "一面": ("笔试完成", "待一面", "进行中"),
-    "二面": ("一面完成", "待二面", "进行中"),
-    "三面": ("二面完成", "待三面", "进行中"),
-    "HR面": ("三面完成", "待 HR 面", "进行中"),
-    "Offer": ("面试完成", "Offer", "Offer"),
-    "已结束": ("投递完成", "状态待确认", ""),
+PROGRESS_STATUSES = {
+    "待反馈", "待笔试", "待面试", "待群面", "待一面", "待二面",
+    "待三面", "待 HR 面", "待 OC", "Offer", "未通过", "主动放弃",
+    "岗位关闭", "状态待确认",
 }
-PROGRESS_STATUS_TO_NEXT = {
-    "待反馈": "待反馈",
-    "待笔试": "笔试",
-    "待面试": "面试",
-    "待群面": "群面",
-    "待一面": "一面",
-    "待二面": "二面",
-    "待三面": "三面",
-    "待 HR 面": "HR面",
-    "待 OC": "OC",
+WRITABLE_PROGRESS_FIELDS = {
+    "进展状态", "最近完成节点", "公司", "投递岗位", "岗位 JD", "投递日期",
+    "公告链接", "投递链接", "企业清单 record_id", "投递记录 ID",
 }
 
 
@@ -46,38 +33,26 @@ def can_delete_generated_default(record, source_record_id: str) -> bool:
     fields = record.get("fields", {})
     progress_status = str(fields.get("进展状态", "") or "").strip()
     completed = str(fields.get("最近完成节点", "") or "").strip()
-    stage = str(fields.get("当前阶段", "") or "").strip()
-    next_stage = str(fields.get("下一环节", "") or "").strip()
-    process_result = str(fields.get("流程结果", "") or "").strip()
     return (
         str(fields.get("投递记录 ID", "") or "").strip()
         == default_application_id(source_record_id)
         and not str(fields.get("投递岗位", "") or "").strip()
         and not str(fields.get("岗位 JD", "") or "").strip()
-        and progress_status in {"", "待反馈"}
-        and completed in {"", "投递完成"}
-        and stage in {"", "已投递"}
-        and next_stage in {"", "待反馈"}
-        and process_result in {"", "进行中"}
+        and progress_status == "待反馈"
+        and completed == "投递完成"
     )
 
 
 def normalized_progress_fields(fields: dict) -> dict:
-    """Backfill the v6 state model without overwriting user-maintained state."""
-    result = dict(fields)
-    completed, status, process_result = LEGACY_STAGE_TO_PROGRESS.get(
-        str(fields.get("当前阶段", "")),
-        ("投递完成", "待反馈", "进行中"),
-    )
-    if not result.get("最近完成节点"):
-        result["最近完成节点"] = completed
-    if not result.get("进展状态"):
-        result["进展状态"] = status
-    next_stage = PROGRESS_STATUS_TO_NEXT.get(status)
-    if next_stage and not result.get("下一环节"):
-        result["下一环节"] = next_stage
-    if process_result and not result.get("流程结果"):
-        result["流程结果"] = process_result
+    """Normalize schema v6 state without consulting retired compatibility fields."""
+    result = {
+        name: value
+        for name, value in fields.items()
+        if name in WRITABLE_PROGRESS_FIELDS
+    }
+    status = str(result.get("进展状态", "") or "").strip()
+    result["进展状态"] = status if status in PROGRESS_STATUSES else "状态待确认"
+    result["最近完成节点"] = result.get("最近完成节点") or "投递完成"
     return result
 
 
@@ -89,9 +64,6 @@ def build_progress_record(source, submitted_on: date | None):
     return {
         "进展状态": "待反馈",
         "最近完成节点": "投递完成",
-        "当前阶段": "已投递",
-        "下一环节": "待反馈",
-        "流程结果": "进行中",
         "公司": company,
         "投递岗位": "",
         "投递日期": submitted_on.isoformat() if submitted_on else "",
@@ -117,8 +89,6 @@ def merge_progress_record(
     result["投递链接"] = source.get("fields", {}).get("投递链接", "")
     result["企业清单 record_id"] = source["record_id"]
     result["投递记录 ID"] = application_id
-    if not result.get("当前阶段"):
-        result["当前阶段"] = "已投递"
     if not result.get("投递日期") and submitted_on:
         result["投递日期"] = submitted_on.isoformat()
     result.setdefault("投递岗位", "")

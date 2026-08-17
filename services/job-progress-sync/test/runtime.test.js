@@ -177,7 +177,6 @@ test("reconciles a manually completed interview-center event end to end", async 
                 fields: {
                   "进展状态": "待笔试",
                   "最近完成节点": "投递完成",
-                  "下一环节": "笔试",
                 },
               },
             },
@@ -212,6 +211,5 @@ test("reconciles a manually completed interview-center event end to end", async 
   assert.deepEqual(updates, [{
     "进展状态": "待反馈",
     "最近完成节点": "笔试完成",
-    "下一环节": "待反馈",
   }]);
 });

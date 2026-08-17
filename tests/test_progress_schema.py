@@ -71,6 +71,20 @@ class ProgressSchemaTest(unittest.TestCase):
             result["issues"],
         )
 
+    def test_rejects_retired_v5_state_fields(self):
+        fields = valid_fields() + [
+            {"name": name, "type": "select"}
+            for name in ("当前阶段", "下一环节", "流程结果", "当前状态")
+        ]
+
+        result = validator.validate(fields)
+
+        for name in ("当前阶段", "下一环节", "流程结果", "当前状态"):
+            self.assertIn(
+                {"field": name, "issue": "forbidden"},
+                result["issues"],
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

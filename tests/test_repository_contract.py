@@ -893,6 +893,26 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertIn("`进展状态` 是用户维护的当前状态唯一真源", field_contract)
         self.assertIn("简历选择属于具体简历任务的上下文", field_contract)
 
+    def test_progress_schema_consumers_do_not_use_retired_state_fields(self):
+        consumers = (
+            ROOT / "services/job-progress-sync/src/handler.js",
+            ROOT / "services/job-progress-sync/src/interview-reconcile.js",
+            ROOT / "services/job-progress-sync/src/progress-model.js",
+            SKILLS / "job-collection/scripts/progress_sync.py",
+            SKILLS / "recruiting-reminder/scripts/event_model.py",
+            SKILLS
+            / "offerloop-setup/assets/progress-sync-template/server/modules"
+            / "job-progress-sync/job-progress-sync.service.ts",
+            SKILLS
+            / "offerloop-workbench/assets/workbench-template/server/modules"
+            / "workbench/workbench.service.ts",
+        )
+        retired = ("当前阶段", "下一环节", "流程结果", "当前状态")
+        for path in consumers:
+            content = path.read_text(encoding="utf-8")
+            for field_name in retired:
+                self.assertNotIn(field_name, content, f"{path}: {field_name}")
+
     def test_user_voice_contract_is_consumed_by_generated_personal_content(self):
         consumers = (
             "experience-deepthink",
@@ -972,7 +992,7 @@ class RepositoryContractTest(unittest.TestCase):
             self.assertIn("needs_setup", text)
         self.assertIn("旧双 Base", migration)
         self.assertIn("processed_emails.json", migration)
-        self.assertIn("Schema v6 与旧内容兼容", migration)
+        self.assertIn("Schema v6 状态模型", migration)
         self.assertNotIn("schema v5", migration)
         self.assertNotIn("--confirm-schema-v5", migration)
 

@@ -47,7 +47,13 @@ COMPLETED_NODE_OPTIONS = {
     "三面完成",
     "HR面完成",
 }
-FORBIDDEN_FIELDS = {"投递简历版本"}
+FORBIDDEN_FIELDS = {
+    "投递简历版本",
+    "当前阶段",
+    "下一环节",
+    "流程结果",
+    "当前状态",
+}
 
 
 def _fields(payload: object) -> list[dict]:

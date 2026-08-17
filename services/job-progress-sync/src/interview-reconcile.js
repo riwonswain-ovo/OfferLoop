@@ -9,7 +9,6 @@ function projection(fields) {
   return {
     "进展状态": fields["进展状态"],
     "最近完成节点": fields["最近完成节点"],
-    "下一环节": fields["下一环节"],
   };
 }
 

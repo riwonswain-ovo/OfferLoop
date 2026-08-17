@@ -187,7 +187,8 @@ test("creates a progress record with a stable client token and Feishu date value
     },
   });
   const fields = {
-    "当前阶段": "已投递",
+    "进展状态": "待反馈",
+    "最近完成节点": "投递完成",
     "公司": "示例公司",
     "投递岗位": "",
     "投递日期": "2026-07-17",

@@ -59,7 +59,7 @@ const FILTERS_BY_SOURCE: Record<
   progress: [
     { key: '公司', label: '全部公司' },
     { key: '投递岗位', label: '全部岗位' },
-    { key: '当前阶段', label: '全部阶段' },
+    { key: '进展状态', label: '全部状态' },
   ],
   events: [
     { key: '公司', label: '全部公司' },

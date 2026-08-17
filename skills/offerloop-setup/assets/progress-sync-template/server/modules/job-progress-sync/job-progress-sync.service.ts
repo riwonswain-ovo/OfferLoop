@@ -238,18 +238,6 @@ const NEXT_STEP_TO_PROGRESS_STATUS: Record<string, string> = {
   'OC': '待 OC',
 };
 
-const LEGACY_STAGE_TO_PROGRESS_STATUS: Record<string, string> = {
-  '已投递': '待反馈',
-  '笔试': '待笔试',
-  '群面': '待群面',
-  '一面': '待一面',
-  '二面': '待二面',
-  '三面': '待三面',
-  'HR面': '待 HR 面',
-  'Offer': 'Offer',
-  '已结束': '状态待确认',
-};
-
 const MANUAL_PROGRESS_STATUSES: Set<string> = new Set([
   'Offer', '未通过', '主动放弃', '岗位关闭',
 ]);
@@ -293,16 +281,7 @@ function stableClientToken(sourceRecordId: string): string {
 
 function progressStatusFor(fields: Record<string, unknown>): string {
   const current: string = readText(fields['进展状态']);
-  if (current) {
-    return current;
-  }
-  const result: string = readText(fields['流程结果']);
-  if (['Offer', '未通过', '主动放弃', '岗位关闭'].includes(result)) {
-    return result;
-  }
-  return LEGACY_STAGE_TO_PROGRESS_STATUS[readText(fields['当前阶段'])]
-    ?? NEXT_STEP_TO_PROGRESS_STATUS[readText(fields['下一环节'])]
-    ?? '待反馈';
+  return current || '状态待确认';
 }
 
 function readText(value: unknown): string {
@@ -376,17 +355,11 @@ function canDeleteGeneratedDefault(
   const fields: Record<string, unknown> = record.fields ?? {};
   const progressStatus: string = readText(fields['进展状态']);
   const completed: string = readText(fields['最近完成节点']);
-  const stage: string = readText(fields['当前阶段']);
-  const next: string = readText(fields['下一环节']);
-  const result: string = readText(fields['流程结果']);
   return readText(fields['投递记录 ID']) === `enterprise:${sourceRecordId}:default`
     && !readText(fields['投递岗位'])
     && !readText(fields['岗位 JD'])
-    && (!progressStatus || progressStatus === '待反馈')
-    && (!completed || completed === '投递完成')
-    && (!stage || stage === '已投递')
-    && (!next || next === '待反馈')
-    && (!result || result === '进行中');
+    && progressStatus === '待反馈'
+    && completed === '投递完成';
 }
 
 function readUrl(value: unknown): string {
@@ -851,9 +824,6 @@ export class JobProgressSyncService {
       const fields: Record<string, unknown> = {
         '进展状态': '待反馈',
         '最近完成节点': '投递完成',
-        '当前阶段': '已投递',
-        '下一环节': '待反馈',
-        '流程结果': '进行中',
         '公司': company,
         '投递岗位': '',
         '投递日期': submittedDate,
@@ -871,7 +841,7 @@ export class JobProgressSyncService {
     for (const existing of existingRecords) {
       const existingComparable: Record<string, unknown> = {
         '进展状态': progressStatusFor(existing.fields),
-        '当前阶段': readText(existing.fields['当前阶段']) || '已投递',
+        '最近完成节点': readText(existing.fields['最近完成节点']) || '投递完成',
         '公司': readText(existing.fields['公司']),
         '投递岗位': readText(existing.fields['投递岗位']),
         '投递日期': existing.fields['投递日期'] || submittedDate,
@@ -1259,7 +1229,6 @@ export class JobProgressSyncService {
           : NEXT_STEP_TO_PROGRESS_STATUS[nextStep] ?? '状态待确认';
         const progressFields: Record<string, unknown> = {
           '进展状态': targetProgressStatus,
-          '下一环节': targetProgressStatus === '状态待确认' ? '无' : nextStep,
         };
         if (action === 'completed') {
           const eventProgressStatus: string = NEXT_STEP_TO_PROGRESS_STATUS[
@@ -1340,7 +1309,6 @@ export class JobProgressSyncService {
         }
         const progressFields: Record<string, unknown> = {
           '进展状态': targetStatus,
-          '下一环节': nextStep,
         };
         const progressChanged: boolean = Object.entries(progressFields).some(
           ([fieldName, value]: [string, unknown]): boolean =>
