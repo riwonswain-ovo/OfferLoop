@@ -1062,7 +1062,7 @@ class OfferLoopSetupTest(unittest.TestCase):
                 [path for path in root.rglob("*") if path.is_symlink()], []
             )
 
-    def test_progress_sync_template_uses_native_tasks_without_card_callback(self):
+    def test_progress_sync_template_uses_base_card_callback_without_native_tasks(self):
         root = (
             ROOT
             / "skills"
@@ -1072,8 +1072,9 @@ class OfferLoopSetupTest(unittest.TestCase):
         )
         manifest = json.loads((root / "template.json").read_text(encoding="utf-8"))
         required = set(manifest["required_environment"])
-        self.assertIn("REMINDER_TASKLIST_GUID", required)
-        self.assertNotIn("FEISHU_CALLBACK_VERIFICATION_TOKEN", required)
+        self.assertNotIn("REMINDER_TASKLIST_GUID", required)
+        self.assertIn("FEISHU_VERIFICATION_TOKEN", required)
+        self.assertIn("REMINDER_RECONCILE_SECRET", required)
         self.assertNotIn("OFFERLOOP_CALLBACK_RELAY_SECRET", required)
 
         service = (
@@ -1090,11 +1091,13 @@ class OfferLoopSetupTest(unittest.TestCase):
             / "job-progress-sync"
             / "job-progress-sync.module.ts"
         ).read_text(encoding="utf-8")
-        self.assertIn("ensureReminderTaskMapping", service)
-        self.assertIn("/task/v2/tasks?user_id_type=open_id", service)
-        self.assertIn("type: 'open_url'", service)
-        self.assertNotIn("handleCardActionCallback", service)
-        self.assertNotIn("JobProgressSyncCallbackController", module)
+        self.assertNotIn("ensureReminderTaskMapping", service)
+        self.assertNotIn("/task/v2/tasks", service)
+        self.assertIn("type: 'callback'", service)
+        self.assertIn("handleDailyCheckinAction", service)
+        self.assertIn("reconcileReminderRecord", service)
+        self.assertNotIn("子表 record_id", service)
+        self.assertNotIn("getReminderChildTableId", service)
         self.assertFalse(
             (
                 root
@@ -1112,7 +1115,13 @@ class OfferLoopSetupTest(unittest.TestCase):
             / "references"
             / "one-click-deploy.md"
         ).read_text(encoding="utf-8")
-        self.assertIn("offerloop-task-reconcile", deploy)
+        self.assertIn("offerloop-base-reconcile", deploy)
+        self.assertIn("/openapi/job-progress-sync/reminder-reconcile", deploy)
+        self.assertIn("笔面试安排", deploy)
+        self.assertIn("X-OfferLoop-Workflow-Secret", deploy)
+        self.assertIn("SetRecordTrigger", deploy)
+        self.assertIn("仅用于补偿漏事件", deploy)
+        self.assertIn("card.action.trigger", deploy)
         self.assertNotIn("apps/offerloop-card-ingress", deploy)
         self.assertNotIn("CARD_INGRESS_PUBLIC_URL", deploy)
 

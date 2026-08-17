@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 
+const MAX_DAILY_CARD_EVENTS = 15;
+
 export const WORKFLOWS = Object.freeze({
   OPPORTUNITY: "opportunity-loop",
   APPLICATION_PROGRESS: "application-progress-loop",
@@ -101,31 +103,37 @@ export function buildAgentDeepLinkPayload(task) {
   };
 }
 
-function actionButton(label, action, eventId, type = "default") {
+function actionButton(label, action, recordId, type = "default") {
   return {
     tag: "button",
     text: { tag: "plain_text", content: label },
     type,
     size: "small",
-    behaviors: [{ type: "callback", value: { action, event_id: eventId } }],
+    behaviors: [{ type: "callback", value: { action, record_id: recordId } }],
   };
 }
 
-export function buildDailyCheckinCard({ date, overdue = [], today = [], upcoming = [] }) {
+export function buildDailyCheckinCard({
+  date,
+  today_plan = [],
+  unfinished = [],
+  expired = [],
+  completed_today = [],
+  today = [],
+}) {
   const groups = [
-    ["逾期", overdue, "red"],
-    ["今天", today, "yellow"],
-    ["近期", upcoming, "blue"],
+    ["今日计划", today_plan.length ? today_plan : today, "orange", false],
+    ["计划未完成", unfinished, "yellow", false],
+    ["已过真实截止", expired, "red", false],
+    ["今日已完成", completed_today, "green", true],
   ];
+  const totalEventCount = groups.reduce((total, [, items]) => total + items.length, 0);
   const elements = [];
-  let remainingSlots = 3;
-  for (const [label, items, color] of groups) {
-    if (items.length === 0 || remainingSlots === 0) continue;
-    const selected = items.slice(0, remainingSlots);
-    remainingSlots -= selected.length;
-    for (const item of selected) {
-      const eventId = String(item.event_id ?? item.record_id ?? "");
-      if (!eventId) throw new Error("daily check-in event id is required");
+  for (const [label, items, color, completed] of groups) {
+    for (const item of items) {
+      if (elements.length >= MAX_DAILY_CARD_EVENTS) break;
+      const recordId = String(item.record_id ?? item.event_id ?? "");
+      if (!recordId) throw new Error("daily check-in record id is required");
       const title = [item.company, item.position, item.stage].filter(Boolean).join("｜");
       elements.push({
         tag: "column_set",
@@ -140,21 +148,20 @@ export function buildDailyCheckinCard({ date, overdue = [], today = [], upcoming
           vertical_spacing: "4px",
           elements: [
             { tag: "markdown", content: `**<font color='${color}'>${label}</font> · ${title || "待处理安排"}**\n<font color='grey'>${item.time_label ?? "时间待确认"}</font>` },
-            {
+            completed ? { tag: "markdown", content: "<font color='green'>✓ 已完成并同步</font>" } : {
               tag: "column_set",
               flex_mode: "flow",
               horizontal_spacing: "4px",
               columns: [
-                { tag: "column", width: "auto", elements: [actionButton("已完成", "completed", eventId, "primary_filled")] },
-                { tag: "column", width: "auto", elements: [actionButton("延期", "postponed", eventId)] },
-                { tag: "column", width: "auto", elements: [actionButton("未参加", "not_attended", eventId, "danger")] },
-                { tag: "column", width: "auto", elements: [actionButton("无变化", "no_change", eventId)] },
+                { tag: "column", width: "auto", elements: [actionButton("已完成", "completed", recordId, "primary_filled")] },
+                { tag: "column", width: "auto", elements: [actionButton("尚未完成", "incomplete", recordId)] },
               ],
             },
           ],
         }],
       });
     }
+    if (elements.length >= MAX_DAILY_CARD_EVENTS) break;
   }
   if (elements.length === 0) {
     elements.push({
@@ -168,6 +175,14 @@ export function buildDailyCheckinCard({ date, overdue = [], today = [], upcoming
         padding: "12px",
         elements: [{ tag: "markdown", content: "**今天没有待完成的笔试或面试安排。**" }],
       }],
+    });
+  }
+  const hiddenCount = totalEventCount - Math.min(totalEventCount, MAX_DAILY_CARD_EVENTS);
+  if (hiddenCount > 0) {
+    elements.push({
+      tag: "markdown",
+      content: `<font color='grey'>另有 ${hiddenCount} 条安排未在本卡片展开，请打开笔面试中心查看。</font>`,
+      text_size: "notation",
     });
   }
   elements.push({
@@ -232,12 +247,12 @@ export function parseCheckinCardAction(event) {
     };
   }
   const value = typeof event.action_value === "string" ? JSON.parse(event.action_value) : event.action_value;
-  if (!value?.event_id || !["completed", "postponed", "not_attended", "no_change"].includes(value.action)) {
+  if (!value?.record_id || !["completed", "incomplete"].includes(value.action)) {
     throw new Error("unsupported check-in action");
   }
   return {
     kind: "event_action",
-    event_id: value.event_id,
+    record_id: value.record_id,
     action: value.action,
     requires_confirmation: false,
     idempotency_key: actionIdempotencyKey({ messageId: event.message_id, actionId: value.action, eventId: event.event_id }),

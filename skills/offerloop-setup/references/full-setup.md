@@ -16,11 +16,12 @@
 
 ## 执行顺序
 
-1. 完整读取同目录的 `onboarding.md`、`one-click-deploy.md` 和
-   `verification-matrix.md`，并读取 `progress-schema-v6.md`；但跳过其中所有工作台、妙搭、
+1. 完整读取同目录的 `onboarding.md`、`one-click-deploy.md`、`verification-matrix.md`、
+   `progress-schema-v6.md` 和 `reminder-schema.md`；但跳过其中所有工作台、妙搭、
    公网部署和自动化步骤。
 2. 确认或创建三张独立 Base：`OfferLoop 企业清单`、`OfferLoop 求职进展`、
-   `OfferLoop 笔面试中心`。按 schema v6 创建字段、视图和必要的关联，保留已有有效数据。
+   `OfferLoop 笔面试中心`。求职进展按 schema v6 创建；笔面试中心按 `reminder-schema.md` 创建
+   `笔面试安排` 单表和受管视图，保留已有有效数据。
 3. 确认或创建私有知识库，并建立固定目录：
 
    ```text

@@ -35,12 +35,12 @@ export async function handleDailyCheckinAction({ event, store, eventRepository }
     };
   }
   if (action.kind === "no_change") return { status: "recorded_no_change" };
-  if (action.action === "no_change") return { status: "recorded_no_change" };
+  if (action.action === "incomplete") {
+    return { status: "still_pending", record_id: action.record_id };
+  }
   const update = {
-    completed: { completion_status: "已完成" },
-    postponed: { completion_status: "待完成", postpone_requested: true },
-    not_attended: { completion_status: "已错过" },
+    completed: { "完成状态": "已完成" },
   }[action.action];
-  await eventRepository.update(action.event_id, update);
-  return { status: "updated", event_id: action.event_id, update };
+  await eventRepository.update(action.record_id, update);
+  return { status: "updated", record_id: action.record_id, update };
 }

@@ -107,6 +107,93 @@
           }
         }
       }
+    },
+    "/openapi/job-progress-sync/reminder-reconcile": {
+      "post": {
+        "operationId": "reconcileReminder",
+        "summary": "根据笔面试安排记录的完成状态实时推进求职进展",
+        "parameters": [
+          {
+            "name": "x-offerloop-workflow-secret",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "仅存放在妙搭环境变量和 Base workflow 中的对账密钥"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "优先传记录定位字段；若飞书运行时未填充动态变量，服务端对唯一的笔面试安排主表执行幂等全量对账。",
+                "properties": {
+                  "recordId": {
+                    "type": "string",
+                    "description": "发生完成状态变更的笔面试安排记录 ID",
+                    "example": "recReminderExample"
+                  },
+                  "recordLink": {
+                    "type": "string",
+                    "description": "发生完成状态变更的笔面试安排记录链接",
+                    "example": "https://example.feishu.cn/base/baseToken?table=tblExample&record=recReminderExample"
+                  },
+                  "sourceEmailId": {
+                    "type": "string",
+                    "description": "飞书工作流未提供内置记录标识时，用来源邮件 ID 精确定位记录"
+                  },
+                  "recordTitle": {
+                    "type": "string",
+                    "description": "来源邮件 ID 缺失时，用唯一安排名称定位记录"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "笔面试安排记录与关联求职进展已完成即时对账"
+          },
+          "400": {
+            "description": "笔面试安排记录 ID、记录链接或完成状态无效"
+          },
+          "401": {
+            "description": "缺少或提供了错误的 workflow 对账密钥"
+          },
+          "503": {
+            "description": "飞书接口暂时不可用"
+          }
+        }
+      }
+    },
+    "/openapi/job-progress-sync/card-action": {
+      "post": {
+        "operationId": "cardAction",
+        "summary": "处理 OfferLoop 每日确认卡片回调或飞书 challenge 验证",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "飞书 card.action.trigger schema 2.0 事件或 challenge 请求"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "回调已处理；完成操作同步 Base，尚未完成操作不产生写入"
+          },
+          "400": {
+            "description": "回调身份、群聊、按钮值或记录状态无效"
+          }
+        }
+      }
     }
   }
 }

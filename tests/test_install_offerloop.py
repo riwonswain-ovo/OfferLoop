@@ -93,7 +93,7 @@ class OfferLoopInstallerTest(unittest.TestCase):
             self.assertEqual(manifest["agent"], "claude-code")
             self.assertNotIn(directory, json.dumps(manifest))
 
-    def test_install_includes_native_feishu_task_sync_contract(self):
+    def test_install_includes_base_daily_checkin_contract(self):
         with tempfile.TemporaryDirectory() as directory:
             environment = {"HOME": directory, "PATH": ""}
             self.installer.install_agent("codex", environ=environment)
@@ -103,10 +103,14 @@ class OfferLoopInstallerTest(unittest.TestCase):
                 reminder / "references" / "task-sync-contract.md"
             ).read_text(encoding="utf-8")
 
-            self.assertIn("原生飞书任务与每日卡片", skill)
-            self.assertIn("飞书任务GUID", skill)
-            self.assertIn("client_token", contract)
-            self.assertIn("offerloop-task-reconcile", contract)
+            self.assertIn("Base 驱动的每日卡片", skill)
+            self.assertNotIn("飞书任务GUID", skill)
+            self.assertIn("card.action.trigger", contract)
+            self.assertIn("offerloop-base-reconcile", contract)
+            self.assertIn("/openapi/job-progress-sync/reminder-reconcile", contract)
+            self.assertIn("笔面试安排", contract)
+            self.assertIn("X-OfferLoop-Workflow-Secret", contract)
+            self.assertIn("其他视图立即显示相同值", contract)
             self.assertNotIn("OFFERLOOP_CALLBACK_RELAY_SECRET", contract)
 
     def test_conflict_is_safe_and_upgrade_creates_backup(self):

@@ -18,15 +18,13 @@ export class JobProgressSyncAutomation {
     );
   }
 
-  @BindTrigger('offerloop-task-reconcile')
-  async reconcileTaskStates(): Promise<void> {
+  @BindTrigger('offerloop-base-reconcile')
+  async reconcileBaseStates(): Promise<void> {
     const result = await this.progressSyncService.reconcileTaskStates();
     this.logger.log(
-      `OfferLoop task reconciliation scanned=${result.scanned}`
-      + ` provisioned=${result.provisioned}`
+      `OfferLoop Base reconciliation scanned=${result.scanned}`
       + ` completed=${result.completed}`
       + ` missed=${result.missed}`
-      + ` postponed=${result.postponed}`
       + ` skipped=${result.skipped}`,
     );
   }
