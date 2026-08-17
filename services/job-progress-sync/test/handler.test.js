@@ -22,6 +22,63 @@ test("rejects a request with the wrong webhook secret", async () => {
   });
 });
 
+test("runs an authenticated interview reconciliation", async () => {
+  const calls = [];
+  const response = await handleSyncRequest(
+    {
+      headers: { "x-offerloop-secret": "expected" },
+      body: { event: "interview.reconcile", record_id: "rec_event" },
+    },
+    {
+      webhookSecret: "expected",
+      repository: {},
+      async interviewReconciler(input) {
+        calls.push(input);
+        return { action: "updated", updated_count: 1 };
+      },
+    },
+  );
+  assert.deepEqual(calls, [{ recordId: "rec_event" }]);
+  assert.deepEqual(response, {
+    status: 200,
+    body: { ok: true, action: "updated", updated_count: 1 },
+  });
+});
+
+test("reports missing interview reconciliation configuration", async () => {
+  const response = await handleSyncRequest(
+    {
+      headers: { "x-offerloop-secret": "expected" },
+      body: { event: "interview.reconcile" },
+    },
+    { webhookSecret: "expected", repository: {} },
+  );
+  assert.equal(response.status, 503);
+});
+
+test("runs a full reminder reconciliation when no record id is supplied", async () => {
+  const calls = [];
+  const response = await handleSyncRequest(
+    {
+      headers: { "x-offerloop-secret": "expected" },
+      body: { event: "interview.reconcile" },
+    },
+    {
+      webhookSecret: "expected",
+      repository: {},
+      async interviewReconciler(input) {
+        calls.push(input);
+        return { action: "unchanged", updated_count: 0 };
+      },
+    },
+  );
+  assert.deepEqual(calls, [{ recordId: "" }]);
+  assert.deepEqual(response, {
+    status: 200,
+    body: { ok: true, action: "unchanged", updated_count: 0 },
+  });
+});
+
 
 test("rejects a submitted event without a source record id", async () => {
   const response = await handleSyncRequest(

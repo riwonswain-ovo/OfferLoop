@@ -18,7 +18,7 @@ import unicodedata
 from urllib.parse import urlparse
 
 
-CONTRACT_VERSION = 1
+CONTRACT_VERSION = 2
 INTERVIEW_STAGES = {"群面", "一面", "二面", "三面", "HR面"}
 UNKNOWN_STAGE = "面试（轮次待确认）"
 FIELDS_BY_KIND = {
@@ -59,8 +59,7 @@ def _parse_time(value):
 def _minimal_record(record):
     fields = record.get("fields", {})
     return {
-        "main_record_id": str(record.get("record_id", "")),
-        "child_record_id": str(fields.get("子表 record_id", "") or ""),
+        "record_id": str(record.get("record_id", "")),
         "company": str(fields.get("公司", "") or ""),
         "position": str(fields.get("岗位", "") or ""),
         "stage": str(fields.get("环节", "") or ""),
@@ -202,29 +201,19 @@ def build_backfill_plan(payload):
     event = payload.get("event")
     if not isinstance(event, dict):
         raise ValueError("event must be a JSON object")
-    main_id = str(event.get("main_record_id", "")).strip()
-    child_id = str(event.get("child_record_id", "")).strip()
+    record_id = str(event.get("record_id", "")).strip()
     stage = str(event.get("stage", "")).strip()
-    if not main_id:
-        raise ValueError("main_record_id is required")
+    if not record_id:
+        raise ValueError("record_id is required")
     if stage == "笔试":
         raise ValueError("document fields must remain empty for exam events")
     if stage not in INTERVIEW_STAGES | {UNKNOWN_STAGE}:
         raise ValueError("unsupported interview stage")
-    if stage in INTERVIEW_STAGES and not child_id:
-        return {
-            "plan_status": "needs_action",
-            "reason": "interview child record_id is missing",
-            "operations": [],
-        }
-
     current = payload.get("current", {})
     if not isinstance(current, dict):
         raise ValueError("current must be a JSON object")
     field = FIELDS_BY_KIND[kind]
-    targets = [("main", main_id, current.get("main", ""))]
-    if stage in INTERVIEW_STAGES:
-        targets.append(("child", child_id, current.get("child", "")))
+    targets = [("reminder", record_id, current.get("value", ""))]
 
     operations = []
     conflicts = []

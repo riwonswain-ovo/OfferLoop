@@ -30,9 +30,18 @@ REMINDER_FIELDS = (
     "来源邮件ID",
     "日历状态",
     "已建日程ID",
-    "子表 record_id",
 )
-CHILD_TABLES = ("笔试", "群面", "一面", "二面", "三面", "HR面")
+REMINDER_TABLE_NAME = "笔面试安排"
+REMINDER_VIEW_FILTERS = {
+    "全部安排": (),
+    "笔试": ("笔试",),
+    "群面": ("群面",),
+    "一面": ("一面",),
+    "二面": ("二面",),
+    "三面": ("三面",),
+    "HR 面": ("HR面",),
+    "其他面试": ("面试（轮次待确认）",),
+}
 ARRANGEMENT_NAME_FORMULA = """IF(
   ISBLANK([岗位]),
   [公司] & "－" & [环节],
@@ -58,9 +67,10 @@ EVENT_STAGE_TO_PROGRESS_STATUS = {
     "HR面": "待 HR 面",
 }
 MANUAL_PROGRESS_STATUSES = {
-    "Offer", "未通过", "主动放弃", "岗位关闭", "状态待确认"
+    "Offer", "未通过", "主动放弃", "岗位关闭"
 }
-COMPLETION_STATUSES = {"待完成", "已完成", "已错过"}
+NUMBERED_INTERVIEW_STAGES = {"一面": 1, "二面": 2, "三面": 3}
+UNKNOWN_INTERVIEW_STAGES = {"面试", "面试（轮次待确认）"}
 
 
 def _normalized(value):
@@ -89,7 +99,7 @@ def _stage_from_text(event_type, raw_stage):
 
 
 def route_event(extracted):
-    """Normalize an already-extracted mail event and choose its child table."""
+    """Normalize an extracted mail event for the single reminder table."""
     source_mail_id = str(extracted.get("source_mail_id", "")).strip()
     company = str(extracted.get("company", "")).strip()
     if not source_mail_id:
@@ -105,7 +115,36 @@ def route_event(extracted):
         "source_mail_id": source_mail_id,
         "company": company,
         "stage": stage,
-        "child_table": stage if stage in CHILD_TABLES else None,
+        "target_table": REMINDER_TABLE_NAME,
+    }
+
+
+def assign_default_interview_stage(event, existing_events):
+    """Assign a stable round to a newly created generic interview.
+
+    ``existing_events`` must already be narrowed to the same progress record.
+    Call this only after duplicate and reschedule detection, so reminder and
+    reschedule messages never consume another round.
+    """
+    if event.get("stage") not in UNKNOWN_INTERVIEW_STAGES:
+        return dict(event)
+
+    highest_round = 0
+    for existing in existing_events:
+        fields = existing.get("fields", existing)
+        stage = str(fields.get("环节", fields.get("stage", ""))).strip()
+        explicit_round = NUMBERED_INTERVIEW_STAGES.get(stage)
+        if explicit_round:
+            highest_round = max(highest_round, explicit_round)
+        elif stage in UNKNOWN_INTERVIEW_STAGES:
+            highest_round += 1
+
+    next_round = highest_round + 1
+    stage = {1: "一面", 2: "二面", 3: "三面"}.get(next_round, "面试")
+    return {
+        **event,
+        "stage": stage,
+        "target_table": REMINDER_TABLE_NAME,
     }
 
 
@@ -233,62 +272,8 @@ def next_progress_status(current_status, event_stage):
     return current_status
 
 
-def decide_completion_status_sync(
-    main_status,
-    child_status,
-    *,
-    last_synced_status=None,
-):
-    """Choose a bidirectional status update without silently losing an edit.
-
-    ``last_synced_status`` is the last value verified on both records.  When the
-    records diverge, the side that moved away from that baseline is the source
-    of the new value.  A missing baseline or two different edits is a conflict,
-    because choosing either side would discard a user's change.
-    """
-    main_valid = main_status in COMPLETION_STATUSES
-    child_valid = child_status in COMPLETION_STATUSES
-    baseline_valid = last_synced_status in COMPLETION_STATUSES
-
-    if main_valid and child_valid and main_status == child_status:
-        return {
-            "status": main_status,
-            "source": "both",
-            "action": "already_synced",
-        }
-    if main_valid and not child_valid:
-        return {"status": main_status, "source": "main", "action": "sync"}
-    if child_valid and not main_valid:
-        return {"status": child_status, "source": "child", "action": "sync"}
-
-    if main_valid and child_valid and baseline_valid:
-        main_changed = main_status != last_synced_status
-        child_changed = child_status != last_synced_status
-        if main_changed and not child_changed:
-            return {"status": main_status, "source": "main", "action": "sync"}
-        if child_changed and not main_changed:
-            return {"status": child_status, "source": "child", "action": "sync"}
-
-    return {"status": None, "source": None, "action": "conflict"}
-
-
-def reconciled_completion_status(
-    main_status,
-    child_status,
-    *,
-    last_synced_status=None,
-):
-    """Return the safe target status, or ``None`` when edits conflict."""
-    decision = decide_completion_status_sync(
-        main_status,
-        child_status,
-        last_synced_status=last_synced_status,
-    )
-    return decision["status"]
-
-
-def build_main_record_fields(event, progress_links):
-    """Map one normalized event to writable fields of the unified main table."""
+def build_reminder_record_fields(event, progress_links):
+    """Map one normalized event to writable fields of the single reminder table."""
     record_ids = list(progress_links.get("record_ids", []))
     names = list(progress_links.get("names", []))
     return {
@@ -316,5 +301,4 @@ def build_main_record_fields(event, progress_links):
         "来源邮件ID": event["source_mail_id"],
         "日历状态": "未建日程",
         "已建日程ID": "",
-        "子表 record_id": "",
     }

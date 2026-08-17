@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { FeishuProgressRepository } from "../src/feishu-client.js";
+import {
+  FeishuInterviewEventRepository,
+  FeishuProgressRepository,
+} from "../src/feishu-client.js";
 
 
 test("finds all progress records by the enterprise record id field", async () => {
@@ -71,6 +74,68 @@ test("returns an empty list when no matching progress record exists", async () =
   });
 
   assert.deepEqual(await repository.findAllByEnterpriseRecordId("rec_missing"), []);
+});
+
+test("reads a progress record by its exact record id", async () => {
+  const requests = [];
+  const repository = new FeishuProgressRepository({
+    baseToken: "app_example",
+    tableId: "tblExample",
+    accessTokenProvider: async () => "tenant-token",
+    fetchImpl: async (url, options) => {
+      requests.push({ url, options });
+      return {
+        ok: true,
+        async json() {
+          return { code: 0, data: { record: { record_id: "rec_progress", fields: {} } } };
+        },
+      };
+    },
+  });
+  const result = await repository.findByRecordId("rec_progress");
+  assert.equal(result.record_id, "rec_progress");
+  assert.equal(requests[0].options.method, "GET");
+  assert.match(requests[0].url, /\/records\/rec_progress$/);
+});
+
+test("paginates all interview events needed for reconciliation", async () => {
+  const requests = [];
+  const repository = new FeishuInterviewEventRepository({
+    baseToken: "app_reminder",
+    tableId: "tblAllEvents",
+    accessTokenProvider: async () => "tenant-token",
+    fetchImpl: async (url, options) => {
+      requests.push({ url, options });
+      const secondPage = url.includes("page_token=next-page");
+      return {
+        ok: true,
+        async json() {
+          return {
+            code: 0,
+            data: secondPage
+              ? { items: [{ record_id: "rec_two", fields: {} }], has_more: false }
+              : {
+                items: [{ record_id: "rec_one", fields: {} }],
+                has_more: true,
+                page_token: "next-page",
+              },
+          };
+        },
+      };
+    },
+  });
+
+  const result = await repository.listAll();
+  assert.deepEqual(result.map((item) => item.record_id), ["rec_one", "rec_two"]);
+  assert.equal(requests.length, 2);
+  assert.deepEqual(JSON.parse(requests[0].options.body).field_names, [
+    "环节",
+    "完成状态",
+    "求职记录ID",
+    "开始时间",
+    "截止时间",
+    "结束时间",
+  ]);
 });
 
 

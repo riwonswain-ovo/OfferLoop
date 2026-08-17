@@ -728,16 +728,15 @@ class RepositoryContractTest(unittest.TestCase):
             self.assertIn("通知失败", text, name)
             self.assertIn("不回滚", text, name)
 
-    def test_recruiting_status_sync_is_bidirectional_and_conflict_safe(self):
+    def test_recruiting_reminder_uses_one_table_with_shared_views(self):
         reminder = (SKILLS / "recruiting-reminder" / "SKILL.md").read_text(
             encoding="utf-8"
         )
-        self.assertIn("完成状态` 双向对账", reminder)
-        self.assertIn("completion_status_sync.json", reminder)
-        self.assertIn("主表变更可同步到子表", reminder)
-        self.assertIn("子表变更也可同步到主表", reminder)
-        self.assertIn("标记 `conflict`，不覆盖任一边", reminder)
-        self.assertNotIn("以子表 `完成状态` 为准回写主表", reminder)
+        self.assertIn("笔面试安排", reminder)
+        self.assertNotIn("completion_status_sync.json", reminder)
+        self.assertIn("全部安排（默认视图，无筛选）", reminder)
+        self.assertIn("修改的是同一个单元格", reminder)
+        self.assertNotIn("子表 record_id", reminder)
 
     def test_setup_guides_daily_checkin_safety_and_bot_permissions(self):
         onboarding = (

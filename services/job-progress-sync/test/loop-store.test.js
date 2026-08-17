@@ -45,10 +45,11 @@ test("card callbacks are idempotent and free text never writes before confirmati
   await store.load();
   const updates = [];
   const repository = { async update(id, fields) { updates.push({ id, fields }); } };
-  const event = { message_id: "m1", event_id: "callback1", action_value: { action: "completed", event_id: "event1" } };
+  const event = { message_id: "m1", event_id: "callback1", action_value: { action: "completed", record_id: "recEvent1" } };
   assert.equal((await handleDailyCheckinAction({ event, store, eventRepository: repository })).status, "updated");
   assert.equal((await handleDailyCheckinAction({ event, store, eventRepository: repository })).status, "duplicate");
   assert.equal(updates.length, 1);
+  assert.deepEqual(updates[0], { id: "recEvent1", fields: { "完成状态": "已完成" } });
   const preview = await handleDailyCheckinAction({
     event: { message_id: "m2", event_id: "callback2", form_value: { progress_text: "完成了一面" } },
     store,

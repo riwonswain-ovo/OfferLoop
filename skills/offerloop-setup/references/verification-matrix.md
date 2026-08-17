@@ -45,6 +45,7 @@ lark-cli base +field-list --base-token '<PROGRESS_BASE_TOKEN>' --table-id '<PROG
 | --- | --- | --- | --- |
 | IMAP 连通性 | 本地 | `fetch_mail.py --check-connection` | 可登录并选择配置的邮箱文件夹；不搜索、不拉取邮件 |
 | 笔面试中心可读取 | user / bot | Base 的 `+base-get`、`+table-list`、`+field-list` | 已配置目标表可读取，字段可检查 |
+| 笔面试中心单表结构 | user / bot | Base 的 `+table-list`、`+view-list`、`+view-get-filter` | 使用 `笔面试安排` 单表；`全部安排` 无筛选，其余受管视图按 `环节` 筛选 |
 | 日历可读取 | user | `calendar +agenda` 或 `calendar +freebusy` | 指定的未来 7 天范围可读取；不创建日程 |
 | 面试阶段表可读取 | user / bot | `base +table-list`、`+field-list` | 笔试、群面、一面、二面、三面、HR 面等已配置表可读取 |
 
@@ -86,7 +87,7 @@ lark-cli wiki +node-list --space-id '<SPACE_ID>' --as user
 | 训练目录 | user | `wiki +node-get` / `wiki +node-list` | 所选 Skill 的必需目录唯一且可读 |
 | Markdown 文档 | user | `docx` 只读 | 已有产物包含“产物信息”和 `run_id` |
 | 长期主档 | user | `docx` 只读 | 已登记主档可读；未创建时允许为空 |
-| 笔面试回填字段 | user / bot | Base `+field-list` | 面试准备/复盘字段与主子表 ID 字段存在 |
+| 笔面试回填字段 | user / bot | Base `+field-list` | `笔面试安排` 单表存在面试准备/复盘字段，且不存在 `子表 record_id` |
 
 只读验收不得创建空主档、训练文档或测试 Base 记录。多个同名目录保持 `needs_action`，等待用户
 选择，不能自动取第一条。

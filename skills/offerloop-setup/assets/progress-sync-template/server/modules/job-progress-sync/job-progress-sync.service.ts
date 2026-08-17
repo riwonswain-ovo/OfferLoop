@@ -5,9 +5,10 @@ import {
   Injectable,
   Logger,
   ServiceUnavailableException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { isAxiosError, type AxiosRequestConfig, type AxiosResponse } from 'axios';
-import { createHash } from 'crypto';
+import { createHash, timingSafeEqual } from 'crypto';
 import { isDeepStrictEqual } from 'util';
 import { firstValueFrom } from 'rxjs';
 
@@ -18,6 +19,7 @@ import type {
 
 const OPEN_API_ROOT = 'https://open.feishu.cn/open-apis';
 const TOKEN_URL = `${OPEN_API_ROOT}/auth/v3/tenant_access_token/internal`;
+const MAX_DAILY_CARD_EVENTS = 15;
 const REQUIRED_ENV_NAMES: string[] = [
   'FEISHU_APP_ID',
   'FEISHU_APP_SECRET',
@@ -28,10 +30,10 @@ const REQUIRED_ENV_NAMES: string[] = [
   'REMINDER_BASE_TOKEN',
   'REMINDER_TABLE_ID',
   'REMINDER_BASE_URL',
-  'REMINDER_TASKLIST_GUID',
   'DAILY_CHECKIN_CHAT_ID',
   'DAILY_CHECKIN_OWNER_OPEN_ID',
   'DAILY_CHECKIN_STATUS',
+  'REMINDER_RECONCILE_SECRET',
 ];
 
 interface FeishuTokenResponse {
@@ -62,6 +64,12 @@ interface RecordSearchData {
   page_token?: string;
 }
 
+interface RecordBatchGetData {
+  records?: FeishuRecord[];
+  forbidden_record_ids?: string[];
+  absent_record_ids?: string[];
+}
+
 interface RecordCreateData {
   record: FeishuRecord;
 }
@@ -76,11 +84,11 @@ interface DeploymentConfig {
   reminderBaseToken: string;
   reminderTableId: string;
   reminderBaseUrl: string;
-  reminderTasklistGuid: string;
-  reminderTasklistUrl: string;
   dailyCheckinChatId: string;
   dailyCheckinOwnerOpenId: string;
   dailyCheckinStatus: string;
+  verificationToken: string;
+  reminderReconcileSecret: string;
 }
 
 interface FeishuChatMember {
@@ -98,29 +106,6 @@ interface ChatMemberListData {
 
 interface MessageSendData {
   message_id?: string;
-}
-
-interface FeishuTaskTime {
-  timestamp?: string;
-}
-
-interface FeishuTask {
-  guid?: string;
-  status?: 'todo' | 'done';
-  due?: FeishuTaskTime;
-  url?: string;
-}
-
-interface TaskDetailData {
-  task: FeishuTask;
-}
-
-interface TaskCreateData {
-  task: FeishuTask;
-}
-
-interface SubtaskCreateData {
-  subtask: FeishuTask;
 }
 
 interface ReminderOutcomeResult {
@@ -146,11 +131,60 @@ export interface TaskReconcileResult {
   skipped: number;
 }
 
+export interface ReminderReconcileResult {
+  ok: true;
+  action: 'reconciled';
+  recordId: string;
+  completionStatus: string;
+}
+
+export interface CardActionCallback {
+  schema?: string;
+  header?: {
+    event_id?: string;
+    token?: string;
+    event_type?: string;
+    app_id?: string;
+  };
+  event?: {
+    operator?: { open_id?: string };
+    action?: {
+      tag?: string;
+      value?: unknown;
+    };
+    context?: {
+      open_chat_id?: string;
+      open_message_id?: string;
+    };
+  };
+}
+
+export interface CardActionResponse {
+  toast: {
+    type: 'success' | 'info';
+    content: string;
+  };
+}
+
+export interface FeishuCallbackChallenge {
+  challenge?: string;
+  token?: string;
+  type?: string;
+}
+
 function requireDeploymentConfig(env: NodeJS.ProcessEnv): DeploymentConfig {
   for (const name of REQUIRED_ENV_NAMES) {
     if (!String(env[name] ?? '').trim()) {
       throw new Error(`missing required environment variable: ${name}`);
     }
+  }
+  const verificationToken: string = String(
+    env.FEISHU_VERIFICATION_TOKEN
+      ?? env.FEISHU_CALLBACK_VERIFICATION_TOKEN
+      ?? '',
+  ).trim();
+  if (!verificationToken) {
+    throw new Error('missing required environment variable: FEISHU_VERIFICATION_TOKEN');
   }
   return {
     appId: String(env.FEISHU_APP_ID),
@@ -162,14 +196,11 @@ function requireDeploymentConfig(env: NodeJS.ProcessEnv): DeploymentConfig {
     reminderBaseToken: String(env.REMINDER_BASE_TOKEN),
     reminderTableId: String(env.REMINDER_TABLE_ID),
     reminderBaseUrl: String(env.REMINDER_BASE_URL),
-    reminderTasklistGuid: String(env.REMINDER_TASKLIST_GUID),
-    reminderTasklistUrl: String(
-      env.REMINDER_TASKLIST_URL
-      ?? `https://applink.feishu.cn/client/todo/task_list?guid=${encodeURIComponent(String(env.REMINDER_TASKLIST_GUID))}`,
-    ),
     dailyCheckinChatId: String(env.DAILY_CHECKIN_CHAT_ID),
     dailyCheckinOwnerOpenId: String(env.DAILY_CHECKIN_OWNER_OPEN_ID),
     dailyCheckinStatus: String(env.DAILY_CHECKIN_STATUS),
+    verificationToken,
+    reminderReconcileSecret: String(env.REMINDER_RECONCILE_SECRET),
   };
 }
 
@@ -180,6 +211,7 @@ const EVENT_STAGE_TO_COMPLETED_NODE: Record<string, string> = {
   '二面': '二面完成',
   '三面': '三面完成',
   'HR面': 'HR面完成',
+  '面试': '面试完成',
   '面试（轮次待确认）': '面试完成',
 };
 
@@ -190,6 +222,7 @@ const EVENT_STAGE_TO_NEXT_STEP: Record<string, string> = {
   '二面': '二面',
   '三面': '三面',
   'HR面': 'HR面',
+  '面试': '面试',
   '面试（轮次待确认）': '面试',
 };
 
@@ -218,7 +251,7 @@ const LEGACY_STAGE_TO_PROGRESS_STATUS: Record<string, string> = {
 };
 
 const MANUAL_PROGRESS_STATUSES: Set<string> = new Set([
-  'Offer', '未通过', '主动放弃', '岗位关闭', '状态待确认',
+  'Offer', '未通过', '主动放弃', '岗位关闭',
 ]);
 
 const PROGRESS_STATUS_RANK: Record<string, number> = {
@@ -272,23 +305,6 @@ function progressStatusFor(fields: Record<string, unknown>): string {
     ?? '待反馈';
 }
 
-function stableTaskClientToken(
-  reminderRecordId: string,
-  outcome: 'completed' | 'not_attended',
-): string {
-  const bytes: Buffer = Buffer.from(
-    createHash('sha256')
-      .update(`offerloop-reminder-task:${reminderRecordId}:${outcome}`)
-      .digest()
-      .subarray(0, 16),
-  );
-  bytes[6] = (bytes[6] & 0x0f) | 0x40;
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
-  const hex: string = bytes.toString('hex');
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}`
-    + `-${hex.slice(16, 20)}-${hex.slice(20)}`;
-}
-
 function readText(value: unknown): string {
   if (typeof value === 'string') {
     return value.trim();
@@ -324,9 +340,18 @@ function readProgressRecordIds(value: unknown): string[] {
       return;
     }
     const text: string = readText(candidate);
-    if (text) {
-      ids.push(text);
+    if (!text) {
+      return;
     }
+    if (text.startsWith('[') && text.endsWith(']')) {
+      try {
+        append(JSON.parse(text) as unknown);
+        return;
+      } catch {
+        // Preserve malformed legacy values for the existing validation path.
+      }
+    }
+    ids.push(text);
   };
   if (typeof value === 'string') {
     const text: string = value.trim();
@@ -413,6 +438,16 @@ function compareReminderTime(left: FeishuRecord, right: FeishuRecord): number {
   return leftTime - rightTime;
 }
 
+function compareReminderProgress(left: FeishuRecord, right: FeishuRecord): number {
+  const progressRank = (record: FeishuRecord): number => {
+    const nextStep: string = EVENT_STAGE_TO_NEXT_STEP[
+      readText(record.fields['环节'])
+    ] ?? '';
+    return PROGRESS_STATUS_RANK[NEXT_STEP_TO_PROGRESS_STATUS[nextStep]] ?? -1;
+  };
+  return progressRank(left) - progressRank(right) || compareReminderTime(left, right);
+}
+
 function escapeCardMarkdown(value: unknown): string {
   return readText(value)
     .replace(/&/gu, '&#38;')
@@ -456,16 +491,63 @@ function stableDailyMessageUuid(date: string): string {
 function buildEventBlock(
   record: FeishuRecord,
   label: string,
-  color: 'red' | 'orange' | 'yellow',
-  reminderBaseUrl: string,
+  color: 'red' | 'orange' | 'yellow' | 'green',
+  completed: boolean,
 ): Record<string, unknown> {
   const fields: Record<string, unknown> = record.fields;
   const title: string = [fields['公司'], fields['岗位'], fields['环节']]
     .map((value: unknown): string => escapeCardMarkdown(value))
     .filter(Boolean)
     .join('｜') || '待处理安排';
-  const startAt: number | null = readDateMillis(fields['开始时间'] ?? fields['截止时间']);
-  const taskUrl: string = readUrl(fields['飞书任务链接']) || reminderBaseUrl;
+  const plannedAt: number | null = readDateMillis(fields['开始时间']);
+  const deadlineAt: number | null = readDateMillis(fields['截止时间']);
+  const timeLines: string[] = [
+    plannedAt === null ? '' : `计划：${formatShanghaiDateTime(plannedAt)}`,
+    deadlineAt === null ? '' : `真实截止：${formatShanghaiDateTime(deadlineAt)}`,
+  ].filter(Boolean);
+  const actionElements: Record<string, unknown>[] = completed
+    ? [{
+      tag: 'markdown',
+      content: "<font color='green'>✓ 已完成并同步</font>",
+      text_size: 'notation',
+    }]
+    : [{
+      tag: 'column_set',
+      flex_mode: 'flow',
+      horizontal_spacing: '8px',
+      columns: [
+        {
+          tag: 'column',
+          width: 'weighted',
+          weight: 1,
+          elements: [{
+            tag: 'button',
+            text: { tag: 'plain_text', content: '已完成' },
+            type: 'primary_filled',
+            width: 'fill',
+            behaviors: [{
+              type: 'callback',
+              value: { action: 'completed', record_id: record.record_id },
+            }],
+          }],
+        },
+        {
+          tag: 'column',
+          width: 'weighted',
+          weight: 1,
+          elements: [{
+            tag: 'button',
+            text: { tag: 'plain_text', content: '尚未完成' },
+            type: 'default',
+            width: 'fill',
+            behaviors: [{
+              type: 'callback',
+              value: { action: 'incomplete', record_id: record.record_id },
+            }],
+          }],
+        },
+      ],
+    }];
   return {
     tag: 'column_set',
     flex_mode: 'none',
@@ -484,21 +566,10 @@ function buildEventBlock(
         },
         {
           tag: 'markdown',
-          content: `<font color='grey'>${formatShanghaiDateTime(startAt)}</font>`,
+          content: `<font color='grey'>${timeLines.join('　') || '时间待确认'}</font>`,
           text_size: 'notation',
         },
-        {
-          tag: 'button',
-          text: { tag: 'plain_text', content: '打开飞书任务' },
-          type: 'primary_filled',
-          width: 'fill',
-          behaviors: [{ type: 'open_url', default_url: taskUrl }],
-        },
-        {
-          tag: 'markdown',
-          content: "<font color='grey'>勾选主任务=已完成；勾选“未参加”子任务=未参加；改截止时间=延期。状态会自动同步。</font>",
-          text_size: 'notation',
-        },
+        ...actionElements,
       ],
     }],
   };
@@ -506,50 +577,69 @@ function buildEventBlock(
 
 function buildDailyCheckinCard(
   date: string,
-  records: FeishuRecord[],
+  pendingRecords: FeishuRecord[],
+  completedRecords: FeishuRecord[],
   reminderBaseUrl: string,
-  reminderTasklistUrl: string,
 ): Record<string, unknown> {
   const dayStart: number = Date.parse(`${date}T00:00:00+08:00`);
   const dayEnd: number = dayStart + 24 * 60 * 60 * 1000;
-  const upcomingEnd: number = dayStart + 8 * 24 * 60 * 60 * 1000;
+  const now: number = Date.now();
   const groups: Array<{
     label: string;
-    color: 'red' | 'orange' | 'yellow';
+    color: 'red' | 'orange' | 'yellow' | 'green';
     records: FeishuRecord[];
+    completed: boolean;
   }> = [
     {
-      label: '逾期',
-      color: 'red',
-      records: records.filter((record: FeishuRecord): boolean => {
-        const time: number | null = readDateMillis(
-          record.fields['开始时间'] ?? record.fields['截止时间'],
-        );
-        return time !== null && time < dayStart;
+      label: '今日计划',
+      color: 'orange',
+      completed: false,
+      records: pendingRecords.filter((record: FeishuRecord): boolean => {
+        const planned: number | null = readDateMillis(record.fields['开始时间']);
+        const deadline: number | null = readDateMillis(record.fields['截止时间']);
+        const time: number | null = planned ?? deadline;
+        return time !== null && time >= dayStart && time < dayEnd
+          && (deadline === null || deadline >= now);
       }),
     },
     {
-      label: '今天',
-      color: 'orange',
-      records: records.filter((record: FeishuRecord): boolean => {
-        const time: number | null = readDateMillis(
-          record.fields['开始时间'] ?? record.fields['截止时间'],
-        );
+      label: '计划未完成',
+      color: 'yellow',
+      completed: false,
+      records: pendingRecords.filter((record: FeishuRecord): boolean => {
+        const planned: number | null = readDateMillis(record.fields['开始时间']);
+        const deadline: number | null = readDateMillis(record.fields['截止时间']);
+        return planned !== null && planned < dayStart
+          && (deadline === null || deadline >= now);
+      }),
+    },
+    {
+      label: '已过真实截止',
+      color: 'red',
+      completed: false,
+      records: pendingRecords.filter((record: FeishuRecord): boolean => {
+        const deadline: number | null = readDateMillis(record.fields['截止时间']);
+        return deadline !== null && deadline < now;
+      }),
+    },
+    {
+      label: '今日已完成',
+      color: 'green',
+      completed: true,
+      records: completedRecords.filter((record: FeishuRecord): boolean => {
+        const planned: number | null = readDateMillis(record.fields['开始时间']);
+        const deadline: number | null = readDateMillis(record.fields['截止时间']);
+        const time: number | null = planned ?? deadline;
         return time !== null && time >= dayStart && time < dayEnd;
       }),
     },
-    {
-      label: '近期',
-      color: 'yellow',
-      records: records.filter((record: FeishuRecord): boolean => {
-        const time: number | null = readDateMillis(
-          record.fields['开始时间'] ?? record.fields['截止时间'],
-        );
-        return time !== null && time >= dayEnd && time < upcomingEnd;
-      }),
-    },
   ];
-  const selected: Array<{ record: FeishuRecord; label: string; color: 'red' | 'orange' | 'yellow' }> = [];
+  const selected: Array<{
+    record: FeishuRecord;
+    label: string;
+    color: 'red' | 'orange' | 'yellow' | 'green';
+    completed: boolean;
+  }> = [];
   for (const group of groups) {
     const sorted: FeishuRecord[] = [...group.records].sort(
       (left: FeishuRecord, right: FeishuRecord): number =>
@@ -557,14 +647,26 @@ function buildDailyCheckinCard(
         - (readDateMillis(right.fields['开始时间'] ?? right.fields['截止时间']) ?? 0),
     );
     for (const record of sorted) {
-      if (selected.length >= 3) break;
-      selected.push({ record, label: group.label, color: group.color });
+      const planned: number | null = readDateMillis(record.fields['开始时间']);
+      const label: string = group.label === '计划未完成'
+        && planned !== null
+        && planned >= dayStart - 24 * 60 * 60 * 1000
+        ? '昨天计划未完成'
+        : group.label;
+      selected.push({
+        record,
+        label,
+        color: group.color,
+        completed: group.completed,
+      });
     }
   }
 
-  const elements: Record<string, unknown>[] = selected.map(
+  const visibleItems = selected.slice(0, MAX_DAILY_CARD_EVENTS);
+  const hiddenCount: number = selected.length - visibleItems.length;
+  const elements: Record<string, unknown>[] = visibleItems.map(
     (item): Record<string, unknown> =>
-      buildEventBlock(item.record, item.label, item.color, reminderBaseUrl),
+      buildEventBlock(item.record, item.label, item.color, item.completed),
   );
   if (elements.length === 0) {
     elements.push({
@@ -579,9 +681,16 @@ function buildDailyCheckinCard(
         padding: '12px',
         elements: [{
           tag: 'markdown',
-          content: '**今天没有待完成的笔试或面试安排。**',
+          content: '**今天没有需要确认的笔试或面试安排。**',
         }],
       }],
+    });
+  }
+  if (hiddenCount > 0) {
+    elements.push({
+      tag: 'markdown',
+      content: `<font color='grey'>另有 ${hiddenCount} 条安排未在本卡片展开，请打开笔面试中心查看。</font>`,
+      text_size: 'notation',
     });
   }
   elements.push({
@@ -597,7 +706,7 @@ function buildDailyCheckinCard(
       elements: [
         {
           tag: 'markdown',
-          content: '**今天有新的求职进展吗？**\n笔面试结果直接在飞书任务中更新；其他进展直接回复本群即可。',
+          content: '**今天有新的求职进展吗？**\n卡片只更新 Base 状态；不会创建飞书任务，也不会自动移动日历。',
         },
         {
           tag: 'column_set',
@@ -610,20 +719,8 @@ function buildDailyCheckinCard(
               weight: 1,
               elements: [{
                 tag: 'button',
-                text: { tag: 'plain_text', content: '查看飞书任务' },
-                type: 'primary_filled',
-                width: 'fill',
-                behaviors: [{ type: 'open_url', default_url: reminderTasklistUrl }],
-              }],
-            },
-            {
-              tag: 'column',
-              width: 'weighted',
-              weight: 1,
-              elements: [{
-                tag: 'button',
                 text: { tag: 'plain_text', content: '查看笔面试中心' },
-                type: 'default',
+                type: 'primary_filled',
                 width: 'fill',
                 behaviors: [{ type: 'open_url', default_url: reminderBaseUrl }],
               }],
@@ -814,13 +911,28 @@ export class JobProgressSyncService {
       postponed: 0,
       skipped: 0,
     };
-    const records: FeishuRecord[] = await this.listReminderRecordsByStatus('待完成');
-    const completedRecords: FeishuRecord[] = await this.listReminderRecordsByStatus('已完成');
-    await this.syncPendingInvitations(records);
+    const fetchedRecords: FeishuRecord[] = await this.listReminderRecords();
+    result.scanned = fetchedRecords.length;
+    const records: FeishuRecord[] = fetchedRecords.filter(
+      (record: FeishuRecord): boolean => readText(record.fields['完成状态']) === '待完成',
+    );
+    const completedRecords: FeishuRecord[] = fetchedRecords.filter(
+      (record: FeishuRecord): boolean => readText(record.fields['完成状态']) === '已完成',
+    );
+    const missedRecords: FeishuRecord[] = fetchedRecords.filter(
+      (record: FeishuRecord): boolean => readText(record.fields['完成状态']) === '已错过',
+    );
+    const progressRecordCache: Map<string, FeishuRecord> =
+      await this.preloadProgressRecords(fetchedRecords);
+    await this.syncPendingInvitations(records, progressRecordCache);
     for (const record of completedRecords) {
-      result.scanned += 1;
       try {
-        await this.applyReminderOutcome(record, 'completed', records);
+        await this.applyReminderOutcome(
+          record,
+          'completed',
+          records,
+          progressRecordCache,
+        );
         result.completed += 1;
       } catch (error: unknown) {
         result.skipped += 1;
@@ -829,56 +941,92 @@ export class JobProgressSyncService {
         );
       }
     }
-    for (const record of records) {
-      result.scanned += 1;
+    for (const record of missedRecords) {
       try {
-        const taskMapping = await this.ensureReminderTaskMapping(record);
-        if (taskMapping.provisioned) {
-          result.provisioned += 1;
-        }
-        const mappedRecord: FeishuRecord = taskMapping.record;
-        const taskGuid: string = readText(mappedRecord.fields['飞书任务GUID']);
-        const missedTaskGuid: string = readText(mappedRecord.fields['未参加任务GUID']);
-        const task: FeishuTask = await this.getTask(taskGuid);
-        const missedTask: FeishuTask | null = missedTaskGuid
-          ? await this.getTask(missedTaskGuid)
-          : null;
-        if (missedTask?.status === 'done') {
-          await this.applyReminderOutcome(mappedRecord, 'not_attended', records);
-          result.missed += 1;
-          continue;
-        }
-        if (task.status === 'done') {
-          await this.applyReminderOutcome(mappedRecord, 'completed', records);
-          result.completed += 1;
-          continue;
-        }
-        const dueAt: number | null = readDateMillis(task.due?.timestamp);
-        const currentStartAt: number | null = readDateMillis(mappedRecord.fields['开始时间']);
-        const currentDeadlineAt: number | null = readDateMillis(mappedRecord.fields['截止时间']);
-        const currentTaskTime: number | null = currentStartAt ?? currentDeadlineAt;
-        if (dueAt !== null && dueAt !== currentTaskTime) {
-          const updatedFields: Record<string, unknown> = {};
-          if (currentStartAt !== null) {
-            updatedFields['开始时间'] = dueAt;
-            const currentEndAt: number | null = readDateMillis(mappedRecord.fields['结束时间']);
-            if (currentEndAt !== null && currentEndAt >= currentStartAt) {
-              updatedFields['结束时间'] = dueAt + (currentEndAt - currentStartAt);
-            }
-          } else {
-            updatedFields['截止时间'] = dueAt;
-          }
-          await this.updateReminderRecord(mappedRecord.record_id, updatedFields);
-          result.postponed += 1;
-        }
+        await this.applyReminderOutcome(
+          record,
+          'not_attended',
+          records,
+          progressRecordCache,
+        );
+        result.missed += 1;
       } catch (error: unknown) {
         result.skipped += 1;
         this.logger.warn(
-          `skipped task reconciliation for ${record.record_id}: ${errorMessage(error)}`,
+          `skipped missed reminder reconciliation for ${record.record_id}: ${errorMessage(error)}`,
         );
       }
     }
     return result;
+  }
+
+  async reconcileReminderRecord(recordId: string): Promise<ReminderReconcileResult> {
+    if (!/^rec[A-Za-z0-9]+$/u.test(recordId)) {
+      throw new BadRequestException('recordId is invalid');
+    }
+    const reminderRecord: FeishuRecord = await this.getReminderRecord(recordId);
+    const completionStatus: string = readText(reminderRecord.fields['完成状态']);
+    let pendingRecords: FeishuRecord[] = await this.listReminderRecordsByStatus('待完成');
+    if (
+      completionStatus === '待完成'
+      && !pendingRecords.some((record: FeishuRecord): boolean => (
+        record.record_id === reminderRecord.record_id
+      ))
+    ) {
+      pendingRecords = [...pendingRecords, reminderRecord];
+    }
+    if (completionStatus === '已完成') {
+      await this.applyReminderOutcome(reminderRecord, 'completed', pendingRecords);
+    } else if (completionStatus === '已错过') {
+      await this.applyReminderOutcome(reminderRecord, 'not_attended', pendingRecords);
+    } else if (completionStatus === '待完成') {
+      await this.syncPendingInvitations(pendingRecords);
+    } else {
+      throw new BadRequestException('reminder completion status is invalid');
+    }
+    return {
+      ok: true,
+      action: 'reconciled',
+      recordId,
+      completionStatus,
+    };
+  }
+
+  async resolveReminderRecordId(
+    sourceEmailId: string,
+    recordTitle: string,
+  ): Promise<string> {
+    const locators: Array<{ fieldName: string; value: string }> = [
+      { fieldName: '来源邮件ID', value: readText(sourceEmailId) },
+      { fieldName: '安排名称', value: readText(recordTitle) },
+    ].filter(({ value }: { value: string }): boolean => Boolean(value));
+
+    for (const locator of locators) {
+      const data: RecordSearchData = await this.feishuRequest<RecordSearchData>({
+        method: 'POST',
+        url: `${OPEN_API_ROOT}/bitable/v1/apps/`
+          + `${this.config.reminderBaseToken}/tables/${this.config.reminderTableId}`
+          + '/records/search?page_size=2',
+        data: {
+          filter: {
+            conjunction: 'and',
+            conditions: [{
+              field_name: locator.fieldName,
+              operator: 'is',
+              value: [locator.value],
+            }],
+          },
+        },
+      });
+      const matches: FeishuRecord[] = data.items ?? [];
+      if (matches.length === 1) {
+        return matches[0].record_id;
+      }
+      if (matches.length > 1) {
+        throw new BadRequestException(`${locator.fieldName} matches multiple reminder records`);
+      }
+    }
+    return '';
   }
 
   async sendDailyCheckin(): Promise<DailyCheckinResult> {
@@ -893,12 +1041,13 @@ export class JobProgressSyncService {
       throw new ServiceUnavailableException('daily check-in sole human is not OfferLoop owner');
     }
     const records: FeishuRecord[] = await this.listReminderRecordsByStatus('待完成');
+    const completedRecords: FeishuRecord[] = await this.listReminderRecordsByStatus('已完成');
     const date: string = formatShanghaiDate();
     const card: Record<string, unknown> = buildDailyCheckinCard(
       date,
       records,
+      completedRecords,
       this.config.reminderBaseUrl,
-      this.config.reminderTasklistUrl,
     );
     const data: MessageSendData = await this.feishuRequest<MessageSendData>({
       method: 'POST',
@@ -913,7 +1062,70 @@ export class JobProgressSyncService {
     return {
       status: 'sent',
       messageId: data.message_id,
-      eventCount: records.length,
+      eventCount: records.length + completedRecords.length,
+    };
+  }
+
+  verifyCallbackChallenge(payload: FeishuCallbackChallenge): { challenge: string } {
+    const challenge: string = readText(payload.challenge);
+    if (!challenge || readText(payload.token) !== this.config.verificationToken) {
+      throw new BadRequestException('invalid Feishu callback challenge');
+    }
+    return { challenge };
+  }
+
+  verifyReminderReconcileSecret(candidate: string | undefined): void {
+    const actual: Buffer = Buffer.from(String(candidate ?? ''));
+    const expected: Buffer = Buffer.from(this.config.reminderReconcileSecret);
+    if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) {
+      throw new UnauthorizedException('invalid reminder reconciliation secret');
+    }
+  }
+
+  async handleDailyCheckinAction(callback: CardActionCallback): Promise<CardActionResponse> {
+    if (
+      callback.schema !== '2.0'
+      || callback.header?.token !== this.config.verificationToken
+      || callback.header?.event_type !== 'card.action.trigger'
+      || callback.header?.app_id !== this.config.appId
+      || callback.event?.operator?.open_id !== this.config.dailyCheckinOwnerOpenId
+      || callback.event?.context?.open_chat_id !== this.config.dailyCheckinChatId
+      || callback.event?.action?.tag !== 'button'
+    ) {
+      throw new BadRequestException('invalid Feishu card action');
+    }
+    const value: Record<string, unknown> = (
+      callback.event.action.value && typeof callback.event.action.value === 'object'
+    ) ? callback.event.action.value as Record<string, unknown> : {};
+    const action: string = readText(value.action);
+    const recordId: string = readText(value.record_id);
+    if (!['completed', 'incomplete'].includes(action) || !/^rec[A-Za-z0-9]+$/u.test(recordId)) {
+      throw new BadRequestException('invalid daily check-in action value');
+    }
+    const reminderRecord: FeishuRecord = await this.getReminderRecord(recordId);
+    const status: string = readText(reminderRecord.fields['完成状态']);
+    if (action === 'incomplete') {
+      if (status !== '待完成') {
+        throw new BadRequestException('reminder is no longer pending');
+      }
+      return {
+        toast: {
+          type: 'info',
+          content: '已记录为尚未完成，明天仍会提醒；真实截止时间不变。',
+        },
+      };
+    }
+    if (status === '待完成') {
+      const pendingRecords: FeishuRecord[] = await this.listReminderRecordsByStatus('待完成');
+      await this.applyReminderOutcome(reminderRecord, 'completed', pendingRecords);
+    } else if (status !== '已完成') {
+      throw new BadRequestException('reminder cannot be marked completed');
+    }
+    return {
+      toast: {
+        type: 'success',
+        content: '已同步笔面试中心与求职进展。',
+      },
     };
   }
 
@@ -956,9 +1168,12 @@ export class JobProgressSyncService {
     reminderRecord: FeishuRecord,
     action: 'completed' | 'not_attended',
     pendingReminderRecords?: FeishuRecord[],
+    progressRecordCache?: Map<string, FeishuRecord>,
   ): Promise<ReminderOutcomeResult> {
     const currentCompletionStatus: string = readText(reminderRecord.fields['完成状态']);
-    const targetCompletionStatus: string = action === 'completed' ? '已完成' : '已错过';
+    const targetCompletionStatus: '已完成' | '已错过' = action === 'completed'
+      ? '已完成'
+      : '已错过';
     if (
       currentCompletionStatus !== '待完成'
       && currentCompletionStatus !== targetCompletionStatus
@@ -998,7 +1213,10 @@ export class JobProgressSyncService {
     let firstNextStep: string = '待反馈';
     for (const progressRecordId of progressRecordIds) {
       try {
-        const progressRecord: FeishuRecord = await this.getProgressRecord(progressRecordId);
+        const progressRecord: FeishuRecord = await this.getCachedProgressRecord(
+          progressRecordId,
+          progressRecordCache,
+        );
         const progressStatus: string = progressStatusFor(progressRecord.fields);
         if (MANUAL_PROGRESS_STATUSES.has(progressStatus)) {
           continue;
@@ -1025,16 +1243,23 @@ export class JobProgressSyncService {
             const eventCompletedRank: number = COMPLETED_NODE_RANK[eventCompletedNode] ?? 0;
             return eventCompletedRank === 0 || eventCompletedRank >= targetCompletedRank;
           })
-          .sort(compareReminderTime);
+          .sort(compareReminderProgress)
+          .reverse();
         const nextStep: string = EVENT_STAGE_TO_NEXT_STEP[
           readText(linkedPendingRecords[0]?.fields['环节'])
         ] ?? '待反馈';
         if (firstNextStep === '待反馈') {
           firstNextStep = nextStep;
         }
+        const noLaterPendingEvent: boolean = linkedPendingRecords.length === 0;
+        const targetProgressStatus: string = (
+          action === 'not_attended' && noLaterPendingEvent
+        )
+          ? '状态待确认'
+          : NEXT_STEP_TO_PROGRESS_STATUS[nextStep] ?? '状态待确认';
         const progressFields: Record<string, unknown> = {
-          '进展状态': NEXT_STEP_TO_PROGRESS_STATUS[nextStep] ?? '状态待确认',
-          '下一环节': nextStep,
+          '进展状态': targetProgressStatus,
+          '下一环节': targetProgressStatus === '状态待确认' ? '无' : nextStep,
         };
         if (action === 'completed') {
           const eventProgressStatus: string = NEXT_STEP_TO_PROGRESS_STATUS[
@@ -1054,6 +1279,7 @@ export class JobProgressSyncService {
         );
         if (progressChanged) {
           await this.updateProgressRecord(progressRecordId, progressFields);
+          Object.assign(progressRecord.fields, progressFields);
         }
       } catch (error: unknown) {
         this.logger.warn(
@@ -1069,9 +1295,12 @@ export class JobProgressSyncService {
     };
   }
 
-  private async syncPendingInvitations(records: FeishuRecord[]): Promise<void> {
+  private async syncPendingInvitations(
+    records: FeishuRecord[],
+    progressRecordCache?: Map<string, FeishuRecord>,
+  ): Promise<void> {
     const pendingByProgressId: Map<string, FeishuRecord[]> = new Map();
-    for (const record of [...records].sort(compareReminderTime)) {
+    for (const record of [...records].sort(compareReminderProgress)) {
       for (const progressRecordId of readProgressRecordIds(record.fields['求职记录ID'])) {
         const linkedRecords: FeishuRecord[] = pendingByProgressId.get(progressRecordId) ?? [];
         linkedRecords.push(record);
@@ -1080,22 +1309,25 @@ export class JobProgressSyncService {
     }
     for (const [progressRecordId, linkedRecords] of pendingByProgressId) {
       try {
-        const progressRecord: FeishuRecord = await this.getProgressRecord(progressRecordId);
+        const progressRecord: FeishuRecord = await this.getCachedProgressRecord(
+          progressRecordId,
+          progressRecordCache,
+        );
         const currentStatus: string = progressStatusFor(progressRecord.fields);
         if (MANUAL_PROGRESS_STATUSES.has(currentStatus)) {
           continue;
         }
         const currentRank: number = PROGRESS_STATUS_RANK[currentStatus] ?? -1;
-        const reminderRecord: FeishuRecord | undefined = linkedRecords.find(
-          (record: FeishuRecord): boolean => {
+        const reminderRecord: FeishuRecord | undefined = [...linkedRecords]
+          .reverse()
+          .find((record: FeishuRecord): boolean => {
             const nextStep: string = EVENT_STAGE_TO_NEXT_STEP[
               readText(record.fields['环节'])
             ] ?? '';
             const candidateStatus: string = NEXT_STEP_TO_PROGRESS_STATUS[nextStep] ?? '';
             const candidateRank: number = PROGRESS_STATUS_RANK[candidateStatus] ?? -1;
             return candidateRank >= currentRank;
-          },
-        );
+          });
         if (!reminderRecord) {
           continue;
         }
@@ -1116,6 +1348,7 @@ export class JobProgressSyncService {
         );
         if (progressChanged) {
           await this.updateProgressRecord(progressRecordId, progressFields);
+          Object.assign(progressRecord.fields, progressFields);
         }
       } catch (error: unknown) {
         this.logger.warn(
@@ -1125,124 +1358,94 @@ export class JobProgressSyncService {
     }
   }
 
-  private async getTask(taskGuid: string): Promise<FeishuTask> {
-    const data: TaskDetailData = await this.feishuRequest<TaskDetailData>({
+  private async getReminderRecord(recordId: string): Promise<FeishuRecord> {
+    const data: RecordDetailData = await this.feishuRequest<RecordDetailData>({
       method: 'GET',
-      url: `${OPEN_API_ROOT}/task/v2/tasks/${encodeURIComponent(taskGuid)}`
-        + '?user_id_type=open_id',
+      url: `${OPEN_API_ROOT}/bitable/v1/apps/`
+        + `${this.config.reminderBaseToken}/tables/${this.config.reminderTableId}`
+        + `/records/${encodeURIComponent(recordId)}`,
     });
-    return data.task;
+    return data.record;
   }
 
-  private async ensureReminderTaskMapping(
-    reminderRecord: FeishuRecord,
-  ): Promise<{ record: FeishuRecord; provisioned: boolean }> {
-    let taskGuid: string = readText(reminderRecord.fields['飞书任务GUID']);
-    let missedTaskGuid: string = readText(reminderRecord.fields['未参加任务GUID']);
-    let taskUrl: string = readUrl(reminderRecord.fields['飞书任务链接']);
-    let provisioned: boolean = false;
-
-    if (!taskGuid) {
-      const stage: string = readText(reminderRecord.fields['环节']);
-      const titleParts: string[] = [
-        stage === '笔试' ? '笔试' : '面试',
-        readText(reminderRecord.fields['公司']),
-        readText(reminderRecord.fields['岗位']),
-        stage,
-      ].filter((part: string): boolean => Boolean(part));
-      const dueAt: number | null = readDateMillis(reminderRecord.fields['开始时间'])
-        ?? readDateMillis(reminderRecord.fields['截止时间']);
-      const link: string = readUrl(reminderRecord.fields['链接']);
-      const notes: string = readText(reminderRecord.fields['注意事项']);
-      const descriptionParts: string[] = [
-        `OfferLoop 事件：${reminderRecord.record_id}`,
-        link ? `链接：${link}` : '',
-        notes ? `注意事项：${notes}` : '',
-      ].filter((part: string): boolean => Boolean(part));
-      const payload: Record<string, unknown> = {
-        summary: titleParts.join('｜'),
-        description: descriptionParts.join('\n'),
-        members: [{
-          id: this.config.dailyCheckinOwnerOpenId,
-          type: 'user',
-          role: 'assignee',
-        }],
-        tasklists: [{ tasklist_guid: this.config.reminderTasklistGuid }],
-        client_token: stableTaskClientToken(reminderRecord.record_id, 'completed'),
-        extra: Buffer.from(JSON.stringify({
-          source: 'offerloop',
-          reminder_record_id: reminderRecord.record_id,
-          outcome: 'completed',
-        }), 'utf8').toString('base64'),
-      };
-      if (dueAt !== null) {
-        payload.due = { timestamp: String(dueAt), is_all_day: false };
-      }
-      const data: TaskCreateData = await this.feishuRequest<TaskCreateData>({
+  private async listReminderRecords(): Promise<FeishuRecord[]> {
+    const records: FeishuRecord[] = [];
+    let pageToken: string = '';
+    for (let page: number = 0; page < 100; page += 1) {
+      const suffix: string = pageToken
+        ? `&page_token=${encodeURIComponent(pageToken)}`
+        : '';
+      const data: RecordSearchData = await this.feishuRequest<RecordSearchData>({
         method: 'POST',
-        url: `${OPEN_API_ROOT}/task/v2/tasks?user_id_type=open_id`,
-        data: payload,
+        url: `${OPEN_API_ROOT}/bitable/v1/apps/`
+          + `${this.config.reminderBaseToken}/tables/${this.config.reminderTableId}`
+          + `/records/search?page_size=100${suffix}`,
+        data: {},
       });
-      taskGuid = readText(data.task.guid);
-      taskUrl = readUrl(data.task.url);
-      if (!taskGuid) {
-        throw new ServiceUnavailableException('created Feishu task has no GUID');
+      records.push(...(data.items ?? []));
+      if (!data.has_more) {
+        return records;
       }
-      provisioned = true;
-    }
-
-    if (!missedTaskGuid) {
-      const data: SubtaskCreateData = await this.feishuRequest<SubtaskCreateData>({
-        method: 'POST',
-        url: `${OPEN_API_ROOT}/task/v2/tasks/${encodeURIComponent(taskGuid)}`
-          + '/subtasks?user_id_type=open_id',
-        data: {
-          summary: '未参加（仅未参加时勾选）',
-          description: '只有确定未参加本次笔试或面试时才完成此子任务。',
-          client_token: stableTaskClientToken(
-            reminderRecord.record_id,
-            'not_attended',
-          ),
-          extra: Buffer.from(JSON.stringify({
-            source: 'offerloop',
-            reminder_record_id: reminderRecord.record_id,
-            outcome: 'not_attended',
-          }), 'utf8').toString('base64'),
-        },
-      });
-      missedTaskGuid = readText(data.subtask.guid);
-      if (!missedTaskGuid) {
-        throw new ServiceUnavailableException('created Feishu subtask has no GUID');
+      pageToken = String(data.page_token ?? '');
+      if (!pageToken) {
+        throw new ServiceUnavailableException('reminder record pagination is incomplete');
       }
-      provisioned = true;
     }
-
-    if (!taskUrl) {
-      taskUrl = `https://applink.feishu.cn/client/todo/detail?guid=${encodeURIComponent(taskGuid)}`;
-    }
-    const mappingFields: Record<string, unknown> = {
-      '飞书任务GUID': taskGuid,
-      '未参加任务GUID': missedTaskGuid,
-      '飞书任务链接': { link: taskUrl, text: '打开飞书任务' },
-    };
-    const mappingChanged: boolean = (
-      readText(reminderRecord.fields['飞书任务GUID']) !== taskGuid
-      || readText(reminderRecord.fields['未参加任务GUID']) !== missedTaskGuid
-      || readUrl(reminderRecord.fields['飞书任务链接']) !== taskUrl
-    );
-    if (mappingChanged) {
-      await this.updateReminderRecord(reminderRecord.record_id, mappingFields);
-    }
-    return {
-      record: {
-        ...reminderRecord,
-        fields: { ...reminderRecord.fields, ...mappingFields },
-      },
-      provisioned,
-    };
+    throw new ServiceUnavailableException('reminder record pagination exceeded safety limit');
   }
 
-  private async listReminderRecordsByStatus(status: '待完成' | '已完成'): Promise<FeishuRecord[]> {
+  private async preloadProgressRecords(
+    reminderRecords: FeishuRecord[],
+  ): Promise<Map<string, FeishuRecord>> {
+    const progressRecordIds: string[] = [...new Set(
+      reminderRecords.flatMap((record: FeishuRecord): string[] => (
+        readProgressRecordIds(record.fields['求职记录ID'])
+      )),
+    )];
+    const cache: Map<string, FeishuRecord> = new Map();
+    for (let index: number = 0; index < progressRecordIds.length; index += 100) {
+      const batch: string[] = progressRecordIds.slice(index, index + 100);
+      const data: RecordBatchGetData = await this.feishuRequest<RecordBatchGetData>({
+        method: 'POST',
+        url: `${OPEN_API_ROOT}/bitable/v1/apps/`
+          + `${this.config.progressBaseToken}/tables/${this.config.progressTableId}`
+          + '/records/batch_get',
+        data: { record_ids: batch },
+      });
+      for (const record of data.records ?? []) {
+        if (record) {
+          cache.set(record.record_id, record);
+        }
+      }
+      const unavailableIds: string[] = [
+        ...(data.forbidden_record_ids ?? []),
+        ...(data.absent_record_ids ?? []),
+      ];
+      if (unavailableIds.length > 0) {
+        this.logger.warn(
+          `progress batch preload skipped ${unavailableIds.length} unavailable records`,
+        );
+      }
+    }
+    return cache;
+  }
+
+  private async getCachedProgressRecord(
+    recordId: string,
+    cache?: Map<string, FeishuRecord>,
+  ): Promise<FeishuRecord> {
+    const cached: FeishuRecord | undefined = cache?.get(recordId);
+    if (cached) {
+      return cached;
+    }
+    const record: FeishuRecord = await this.getProgressRecord(recordId);
+    cache?.set(recordId, record);
+    return record;
+  }
+
+  private async listReminderRecordsByStatus(
+    status: '待完成' | '已完成' | '已错过',
+  ): Promise<FeishuRecord[]> {
     const records: FeishuRecord[] = [];
     let pageToken: string = '';
     for (let page: number = 0; page < 100; page += 1) {

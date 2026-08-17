@@ -98,6 +98,19 @@ export class FeishuProgressRepository {
     return items;
   }
 
+  async findByRecordId(recordId) {
+    const url =
+      `${OPEN_API_ROOT}/bitable/v1/apps/${this.baseToken}`
+      + `/tables/${this.tableId}/records/${recordId}`;
+    try {
+      const data = await this.request(url, { method: "GET" });
+      return data.record ?? null;
+    } catch (error) {
+      if (/1254043|record.*not found/i.test(String(error?.message ?? ""))) return null;
+      throw error;
+    }
+  }
+
   async create(fields) {
     const clientToken = stableClientToken(fields["企业清单 record_id"]);
     const url =
@@ -127,4 +140,81 @@ export class FeishuProgressRepository {
       + `/tables/${this.tableId}/records/${recordId}`;
     await this.request(url, { method: "DELETE" });
   }
+}
+
+
+export class FeishuInterviewEventRepository {
+  constructor({
+    baseToken,
+    tableId,
+    accessTokenProvider,
+    fetchImpl = globalThis.fetch,
+    retryOptions,
+  }) {
+    this.baseToken = baseToken;
+    this.tableId = tableId;
+    this.accessTokenProvider = accessTokenProvider;
+    this.fetchImpl = fetchImpl;
+    this.retryOptions = retryOptions;
+  }
+
+  async request(url, options) {
+    return retryOperation(async () => {
+      const accessToken = await this.accessTokenProvider();
+      const response = await this.fetchImpl(url, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          Authorization: `Bearer ${accessToken}`,
+          ...options.headers,
+        },
+      });
+      const payload = await response.json();
+      if (!response.ok || payload.code !== 0) {
+        throw new Error(
+          `Feishu API request failed: ${payload.code ?? response.status} ${payload.msg ?? ""}`.trim(),
+        );
+      }
+      return payload.data;
+    }, this.retryOptions);
+  }
+
+  async listAll() {
+    const items = [];
+    let pageToken = "";
+    do {
+      const query = new URLSearchParams({ page_size: "500" });
+      if (pageToken) query.set("page_token", pageToken);
+      const url =
+        `${OPEN_API_ROOT}/bitable/v1/apps/${this.baseToken}`
+        + `/tables/${this.tableId}/records/search?${query}`;
+      const data = await this.request(url, {
+        method: "POST",
+        body: JSON.stringify({
+          field_names: [
+            "环节",
+            "完成状态",
+            "求职记录ID",
+            "开始时间",
+            "截止时间",
+            "结束时间",
+          ],
+        }),
+      });
+      items.push(...(data.items ?? []));
+      pageToken = data.has_more ? String(data.page_token ?? "") : "";
+    } while (pageToken);
+    return items;
+  }
+
+  async update(recordId, fields) {
+    const url =
+      `${OPEN_API_ROOT}/bitable/v1/apps/${this.baseToken}`
+      + `/tables/${this.tableId}/records/${recordId}`;
+    await this.request(url, {
+      method: "PUT",
+      body: JSON.stringify({ fields }),
+    });
+  }
+
 }

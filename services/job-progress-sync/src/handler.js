@@ -94,14 +94,27 @@ export async function handleSyncRequest(request, deps) {
     };
   }
 
-  if (!request.body?.source_record_id) {
+  const payload = request.body;
+  if (payload?.event === "interview.reconcile") {
+    if (!deps.interviewReconciler) {
+      return {
+        status: 503,
+        body: { ok: false, error: "interview reconciliation is not configured" },
+      };
+    }
+    const result = await deps.interviewReconciler({
+      recordId: readText(payload.record_id),
+    });
+    return { status: 200, body: { ok: true, ...result } };
+  }
+
+  if (!payload?.source_record_id) {
     return {
       status: 400,
       body: { ok: false, error: "source_record_id is required" },
     };
   }
 
-  const payload = request.body;
   const isSubmittedEvent = payload.event === "application.submitted";
   const isStatusChangeEvent = payload.event === "application.status_changed";
   if (!isSubmittedEvent && !isStatusChangeEvent) {
