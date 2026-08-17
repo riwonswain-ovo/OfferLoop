@@ -762,41 +762,14 @@ class OfferLoopSetupTest(unittest.TestCase):
             self.assertEqual(result["schema_version"], 2)
             self.assertEqual(oct(path.stat().st_mode & 0o777), "0o600")
 
-    def test_workbench_url_is_saved_and_preserves_progress_sync_metadata(self):
+    def test_retired_workbench_url_cannot_be_registered(self):
         with tempfile.TemporaryDirectory() as directory:
             path = configure.config_file({"XDG_CONFIG_HOME": directory})
-            configure.write_private_json(
-                path,
-                {
-                    "progress_sync": {
-                        "endpoint": "https://example.com/sync",
-                        "app_id": "app_example",
-                        "workflow_id": "workflow_example",
-                    },
-                },
-            )
-
-            result = configure.update_locator_config(
-                path,
-                {"workbench_url": "https://example.feishuapp.com/app/app_example"},
-            )
-
-            self.assertEqual(
-                result["workbench_url"], "https://example.feishuapp.com/app/app_example"
-            )
-            self.assertEqual(result["progress_sync"]["workflow_id"], "workflow_example")
-
-    def test_workbench_url_rejects_unsafe_values(self):
-        with tempfile.TemporaryDirectory() as directory:
-            path = configure.config_file({"XDG_CONFIG_HOME": directory})
-            for value in (
-                "http://example.com",
-                "javascript:alert(1)",
-                "https://user:pass@example.com/app",
-                "https://example.com/app#fragment",
-            ):
-                with self.assertRaises(ValueError, msg=value):
-                    configure.update_locator_config(path, {"workbench_url": value})
+            with self.assertRaisesRegex(ValueError, "unknown keys: workbench_url"):
+                configure.update_locator_config(
+                    path,
+                    {"workbench_url": "https://example.feishuapp.com/app/app_example"},
+                )
 
     def test_progress_sync_locators_merge_and_make_full_preflight_ready(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -827,6 +800,10 @@ class OfferLoopSetupTest(unittest.TestCase):
             )
 
             self.assertEqual(result["progress_sync"]["provider"], "miaoda")
+            self.assertEqual(
+                result["workbench_url"],
+                "https://example.feishuapp.com/app/workbench",
+            )
             self.assertEqual(oct(path.stat().st_mode & 0o777), "0o600")
             report = preflight.run_checks(environment, capability="full")
             checks = {check["id"]: check for check in report["checks"]}
@@ -1030,7 +1007,6 @@ class OfferLoopSetupTest(unittest.TestCase):
                 "reminder_base",
                 "wiki_home",
                 "core_data",
-                "workbench",
                 "progress_sync",
             },
         )
@@ -1039,8 +1015,6 @@ class OfferLoopSetupTest(unittest.TestCase):
 
     def test_bundled_app_templates_have_redacted_manifests(self):
         expected = {
-            ROOT / "skills" / "offerloop-workbench" / "assets" / "workbench-template":
-                "offerloop-workbench",
             ROOT / "skills" / "offerloop-setup" / "assets" / "progress-sync-template":
                 "offerloop-progress-sync",
         }
@@ -1052,14 +1026,28 @@ class OfferLoopSetupTest(unittest.TestCase):
             manifest = json.loads((root / "template.json").read_text(encoding="utf-8"))
             self.assertEqual(manifest["template_id"], template_id)
             self.assertTrue(manifest["required_environment"])
-            if template_id == "offerloop-workbench":
-                self.assertEqual(
-                    manifest.get("optional_environment"),
-                    ["DAILY_CHECKIN_STATUS", "DAILY_CHECKIN_PAUSE_REASON"],
-                )
-            self.assertFalse(any((root / name).exists() for name in forbidden))
+            tracked_forbidden = subprocess.check_output(
+                [
+                    "git",
+                    "ls-files",
+                    "--",
+                    *[
+                        str((root / name).relative_to(ROOT))
+                        for name in sorted(forbidden)
+                    ],
+                ],
+                cwd=ROOT,
+                text=True,
+            ).splitlines()
+            self.assertEqual(tracked_forbidden, [])
+            tracked_files = subprocess.check_output(
+                ["git", "ls-files", "--", str(root.relative_to(ROOT))],
+                cwd=ROOT,
+                text=True,
+            ).splitlines()
             self.assertEqual(
-                [path for path in root.rglob("*") if path.is_symlink()], []
+                [ROOT / path for path in tracked_files if (ROOT / path).is_symlink()],
+                [],
             )
 
     def test_progress_sync_template_uses_base_card_callback_without_native_tasks(self):
@@ -1125,79 +1113,21 @@ class OfferLoopSetupTest(unittest.TestCase):
         self.assertNotIn("apps/offerloop-card-ingress", deploy)
         self.assertNotIn("CARD_INGRESS_PUBLIC_URL", deploy)
 
-    def test_workbench_template_locks_the_known_good_calendar_contract(self):
-        root = (
-            ROOT
-            / "skills"
-            / "offerloop-workbench"
-            / "assets"
-            / "workbench-template"
-        )
-        manifest = json.loads((root / "template.json").read_text(encoding="utf-8"))
-        contract = manifest["deployment_contract"]
-        self.assertEqual(contract["kanban_page_size"], 9)
-        self.assertEqual(contract["table_page_size"], 15)
-        self.assertEqual(contract["oauth_callback_path"], "/calendar-oauth-callback")
-        self.assertEqual(
-            contract["oauth_scopes"],
-            [
-                "calendar:calendar:readonly",
-                "calendar:calendar.event:read",
-                "drive:drive",
-                "offline_access",
-            ],
-        )
-        self.assertEqual(contract["calendar_primary_method"], "POST")
-        self.assertEqual(
-            contract["token_persistence"],
-            "encrypted_refresh_token_cookie_chunks",
-        )
-
-        service = (
-            root / "server/modules/workbench/workbench-calendar.service.ts"
+    def test_legacy_workbench_is_frozen_and_not_an_active_setup_capability(self):
+        retired = (
+            ROOT / "skills" / "offerloop-workbench" / "RETIRED.md"
         ).read_text(encoding="utf-8")
-        controller = (
-            root / "server/modules/workbench/workbench.controller.ts"
-        ).read_text(encoding="utf-8")
-        client_api = (root / "client/src/api/index.ts").read_text(encoding="utf-8")
-        client_hook = (
-            root / "client/src/pages/workbench/useWorkbenchData.ts"
-        ).read_text(encoding="utf-8")
-        app = (root / "client/src/app.tsx").read_text(encoding="utf-8")
-
-        self.assertIn(
-            "calendar:calendar:readonly calendar:calendar.event:read",
-            service,
+        installer = (ROOT / "scripts" / "install_offerloop.py").read_text(
+            encoding="utf-8"
         )
-        self.assertIn("drive:drive offline_access", service)
-        self.assertIn("this.httpService.post<FeishuEnvelope<FeishuPrimaryCalendarData>>", service)
-        self.assertIn("/calendar/v4/calendars/primary", service)
-        self.assertIn("interface CalendarTokenSession", service)
-        token_session = service.split("interface CalendarTokenSession", 1)[1].split(
-            "interface CalendarTokenBundle", 1
-        )[0]
-        self.assertIn("refreshToken", token_session)
-        self.assertNotIn("accessToken", token_session)
-        self.assertIn("@Post('calendar/oauth/complete')", controller)
-        self.assertNotIn("@Get('calendar/oauth/callback')", controller)
-        self.assertIn("method: 'POST'", client_api)
-        self.assertIn("oauthCompletionStartedRef", client_hook)
-        self.assertIn("initialLoadStartedRef", client_hook)
-        self.assertIn('path="calendar-oauth-callback"', app)
-
-        guide = (
-            ROOT
-            / "skills/offerloop-workbench/references/golden-path.md"
-        ).read_text(encoding="utf-8")
-        for required_text in (
-            "csrf token not found in header",
-            "授权会话过长",
-            "POST /open-apis/calendar/v4/calendars/primary",
-            "看板视图每页最多",
-            "表格视图的三张表各自每页最多 15 条",
-            "再刷新一次",
-        ):
-            self.assertIn(required_text, guide)
+        workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("冻结并退役", retired)
+        self.assertNotIn("--deploy-workbench", installer)
+        self.assertNotIn("offerloop-workbench/assets/workbench-template", workflow)
+        self.assertNotIn("workbench", deployment_plan.CAPABILITIES)
+        self.assertNotIn("workbench", status_model.VALID_CAPABILITIES)
 
     def test_materializer_preserves_new_app_binding_and_private_files(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -1218,29 +1148,9 @@ class OfferLoopSetupTest(unittest.TestCase):
             self.assertTrue((destination / "package.json").is_file())
             self.assertFalse((destination / "template.json").exists())
 
-    def test_workbench_materializer_reports_the_deployment_contract(self):
+    def test_workbench_materializer_rejects_new_deployments(self):
         with tempfile.TemporaryDirectory() as directory:
-            destination = Path(directory)
-            (destination / ".spark").mkdir()
-            (destination / ".spark" / "meta.json").write_text(
-                '{"app_id":"app_new_user"}\n', encoding="utf-8"
-            )
-
-            result = materialize_workbench.materialize(destination, dry_run=True)
-
-            self.assertEqual(
-                result["deployment_contract"]["calendar_primary_method"], "POST"
-            )
-            self.assertEqual(
-                result["deployment_contract"]["kanban_page_size"], 9
-            )
-            self.assertEqual(
-                result["deployment_contract"]["table_page_size"], 15
-            )
-
-    def test_materializer_requires_a_real_miaoda_binding(self):
-        with tempfile.TemporaryDirectory() as directory:
-            with self.assertRaisesRegex(ValueError, "not bound"):
+            with self.assertRaisesRegex(RuntimeError, "retired on 2026-08-17"):
                 materialize_workbench.materialize(Path(directory), dry_run=True)
 
     def test_deployment_checkpoint_is_private_and_does_not_include_locators(self):

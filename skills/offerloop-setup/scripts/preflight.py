@@ -44,7 +44,6 @@ REQUIRED_BUNDLED_BY_CAPABILITY = {
         "talk-review",
         "competency-lab",
     },
-    "workbench": set(),
     "integration": {"job-collection"},
 }
 EXTERNAL_SKILLS_BY_CAPABILITY = {
@@ -52,7 +51,6 @@ EXTERNAL_SKILLS_BY_CAPABILITY = {
     "reminder": ("lark-calendar",),
     "workspace": ("lark-base", "lark-doc", "lark-wiki"),
     "coaching": (),
-    "workbench": ("lark-apps", "lark-shared"),
     "integration": ("lark-shared", "lark-apps"),
 }
 LARK_CLI_RECOVERY = (
@@ -823,22 +821,6 @@ def _capability_report(source, capability, skills_roots=None):
             )
         )
 
-    if "workbench" in selected:
-        workbench_url = config.get("workbench_url")
-        checks.append(
-            _check(
-                "local.workbench_locator",
-                "workbench",
-                "ready" if workbench_url not in (None, "") else "needs_action",
-                "可选工作台入口已登记"
-                if workbench_url not in (None, "")
-                else "可选工作台尚未部署或登记",
-                "运行 scripts/install_offerloop.py --deploy-workbench 创建、发布并验收工作台"
-                if workbench_url in (None, "")
-                else "",
-            )
-        )
-
     if "coaching" in selected:
         storage = config.get("artifact_storage")
         readiness = (
@@ -930,7 +912,6 @@ def main():
             "reminder",
             "workspace",
             "coaching",
-            "workbench",
             "full",
         ),
         help="run a capability-specific offline preflight",

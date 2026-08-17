@@ -22,7 +22,6 @@ REQUIRED_RESOURCE_KEYS = {
     "workspace_core_data_node_token",
 }
 OPTIONAL_RESOURCE_KEYS = {
-    "workbench_url",
     "workspace_calendar_table_id",
     "workspace_calendar_view_id",
     "schema_version",

@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, timezone
 import hashlib
-import importlib.util
 import json
 import os
 from pathlib import Path
@@ -1036,23 +1035,6 @@ def _print_welcome() -> None:
     print(f"“{WELCOME['next_prompt']}”")
 
 
-def deploy_workbench(destination: Path, *, dry_run: bool = False) -> dict:
-    script = (
-        SKILLS_SOURCE
-        / "offerloop-workbench"
-        / "scripts"
-        / "materialize_workbench.py"
-    )
-    spec = importlib.util.spec_from_file_location(
-        "offerloop_materialize_workbench", script
-    )
-    if spec is None or spec.loader is None:
-        raise RuntimeError("workbench materializer is unavailable")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module.materialize(destination, dry_run=dry_run)
-
-
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -1068,12 +1050,6 @@ def main(argv=None) -> int:
         help="idempotently install the nine long-lived Skills",
     )
     parser.add_argument("--upgrade", action="store_true")
-    parser.add_argument(
-        "--deploy-workbench",
-        type=Path,
-        metavar="MIAODA_PROJECT",
-        help="idempotently overlay the native-Agent workbench template",
-    )
     parser.add_argument(
         "--verify",
         action="store_true",
@@ -1100,28 +1076,6 @@ def main(argv=None) -> int:
                 f"offerloop-installer {INSTALLER_VERSION} "
                 f"(OfferLoop {offerloop_version()})"
             )
-        return 0
-    if args.deploy_workbench:
-        if args.agent or args.setup or args.upgrade or args.verify:
-            parser.error(
-                "--deploy-workbench cannot be combined with Skill installation modes"
-            )
-        try:
-            report = deploy_workbench(
-                args.deploy_workbench,
-                dry_run=args.dry_run,
-            )
-        except (OSError, ValueError, RuntimeError) as exc:
-            if args.as_json:
-                print(json.dumps(_safe_error_payload(exc, None), indent=2))
-            else:
-                print(f"OfferLoop workbench deployment failed: {exc}", file=sys.stderr)
-            return 1
-        if args.as_json:
-            print(json.dumps(report, ensure_ascii=False, indent=2))
-        else:
-            action = "would overlay" if args.dry_run else "overlaid"
-            print(f"OfferLoop workbench: {action} {report['files']} files")
         return 0
     if not args.agent:
         parser.error("at least one --agent is required")

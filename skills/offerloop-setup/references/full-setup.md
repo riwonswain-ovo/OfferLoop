@@ -1,7 +1,7 @@
 # OfferLoop 完整模式初始化
 
-本流程只负责“9 个 Skill + 三张飞书业务 Base + 一个用户私有知识库”。工作台、妙搭应用、
-公网服务、定时自动化和消息机器人都不属于必需安装内容，不得在本流程中默认部署。
+本流程只负责“9 个 Skill + 三张飞书业务 Base + 一个用户私有知识库”。旧工作台已经退役；
+妙搭同步应用、公网服务、定时自动化和消息机器人都不属于必需安装内容，不得在本流程中默认部署。
 
 ## 安全边界
 
@@ -17,7 +17,7 @@
 ## 执行顺序
 
 1. 完整读取同目录的 `onboarding.md`、`one-click-deploy.md`、`verification-matrix.md`、
-   `progress-schema-v6.md` 和 `reminder-schema.md`；但跳过其中所有工作台、妙搭、
+   `progress-schema-v6.md` 和 `reminder-schema.md`；但跳过其中所有已退役工作台、妙搭、
    公网部署和自动化步骤。
 2. 确认或创建三张独立 Base：`OfferLoop 企业清单`、`OfferLoop 求职进展`、
    `OfferLoop 笔面试中心`。求职进展按 schema v6 创建；笔面试中心按 `reminder-schema.md` 创建
