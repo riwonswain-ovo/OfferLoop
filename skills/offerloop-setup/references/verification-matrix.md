@@ -4,7 +4,7 @@
 
 ## 0. 开始前
 
-1. 先执行 `python3 scripts/preflight.py --capability <collection|reminder|workspace|coaching|workbench|full> --json`。
+1. 先执行 `python3 scripts/preflight.py --capability <collection|reminder|workspace|coaching|full> --json`。
 2. 仅对预检中已经配置、且用户本次明确要求验证的能力执行在线核验。
 3. 在线操作前确认当前 `lark-cli` 身份；涉及用户文档、知识库或日历时使用 `--as user`，涉及应用可见性或工作流时使用 `--as bot`。
 4. 所有命令输出只保留状态、资源类型、数量和错误类别；不要粘贴 URL 中的 token、邮箱地址、Cookie、授权码或 IMAP 密码。
@@ -45,6 +45,7 @@ lark-cli base +field-list --base-token '<PROGRESS_BASE_TOKEN>' --table-id '<PROG
 | --- | --- | --- | --- |
 | IMAP 连通性 | 本地 | `fetch_mail.py --check-connection` | 可登录并选择配置的邮箱文件夹；不搜索、不拉取邮件 |
 | 笔面试中心可读取 | user / bot | Base 的 `+base-get`、`+table-list`、`+field-list` | 已配置目标表可读取，字段可检查 |
+| 笔面试中心单表结构 | user / bot | Base 的 `+table-list`、`+view-list`、`+view-get-filter` | 使用 `笔面试安排` 单表；`全部安排` 无筛选，其余受管视图按 `环节` 筛选 |
 | 日历可读取 | user | `calendar +agenda` 或 `calendar +freebusy` | 指定的未来 7 天范围可读取；不创建日程 |
 | 面试阶段表可读取 | user / bot | `base +table-list`、`+field-list` | 笔试、群面、一面、二面、三面、HR 面等已配置表可读取 |
 
@@ -66,7 +67,6 @@ python3 skills/recruiting-reminder/scripts/fetch_mail.py --check-connection
 | 使用指南可读取 | user | `wiki +node-get` 或 `docx` 读取 | `00｜OfferLoop 使用指南` 存在 |
 | 核心数据目录 | user | `wiki +node-list` | `01｜核心求职数据` 下存在三张既有 Base 节点 |
 | Base 入口可读取 | user / bot | 对已配置各 Base 执行 `+url-resolve`、`+base-get` | 三张 Base 入口均指向唯一业务真源 |
-| 工作台可选状态 | 本地 | 查看 `workbench_url` | 缺失时为 `not_selected`，不影响 workspace 通过 |
 
 知识库读取示例：
 
@@ -86,27 +86,12 @@ lark-cli wiki +node-list --space-id '<SPACE_ID>' --as user
 | 训练目录 | user | `wiki +node-get` / `wiki +node-list` | 所选 Skill 的必需目录唯一且可读 |
 | Markdown 文档 | user | `docx` 只读 | 已有产物包含“产物信息”和 `run_id` |
 | 长期主档 | user | `docx` 只读 | 已登记主档可读；未创建时允许为空 |
-| 笔面试回填字段 | user / bot | Base `+field-list` | 面试准备/复盘字段与主子表 ID 字段存在 |
+| 笔面试回填字段 | user / bot | Base `+field-list` | `笔面试安排` 单表存在面试准备/复盘字段，且不存在 `子表 record_id` |
 
 只读验收不得创建空主档、训练文档或测试 Base 记录。多个同名目录保持 `needs_action`，等待用户
 选择，不能自动取第一条。
 
-## 5. `workbench`：可选飞书工作台
-
-只有用户本次明确选择工作台时执行。完整读取
-`../../offerloop-workbench/references/golden-path.md`：
-
-| 核验项 | 身份 | 只读操作 | 通过条件 |
-| --- | --- | --- | --- |
-| 页面可访问 | 浏览器 / HTTP GET | 访问已登记 HTTPS URL | 返回可加载页面外壳 |
-| 首屏性能 | 浏览器 / Trace | 查询 `GET /api/workbench` Trace | 每个数据集最多 30 条，不扫描所有视图 |
-| 三张 Base | 浏览器 | 切换三个数据集 | 只读加载既有 Base，不创建副本 |
-| 日历 OAuth | 浏览器 | 用户亲自授权并刷新一次 | 刷新后仍连接，无 CSRF、会话过长或读取错误 |
-
-未选择或未部署工作台时保持 `not_selected`，不得降低 workspace、collection、reminder 或
-coaching 状态。
-
-## 6. `integration`：求职进展即时联动
+## 5. `integration`：求职进展即时联动
 
 | 核验项 | 身份 | 只读操作 | 通过条件 |
 | --- | --- | --- | --- |
@@ -125,7 +110,7 @@ lark-cli base +workflow-list --base-token '<BASE_TOKEN>' --table-id '<TABLE_ID>'
 
 执行运行历史查询前先阅读 `lark-base` Skill 的 `references/lark-base-workflow-run-history.md`，以该参考中的当前参数为准。验收阶段禁止启用、停用、创建或执行工作流。
 
-## 7. 状态解释与交接
+## 6. 状态解释与交接
 
 - `ready`：已完成所选能力的离线检查，且本次已执行的只读在线检查通过。
 - `needs_action`：配置、字段、权限或入口缺失，需用户确认后才可修复。

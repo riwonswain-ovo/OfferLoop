@@ -20,7 +20,6 @@ CAPABILITIES = {
     "reminder",
     "workspace",
     "coaching",
-    "workbench",
     "full",
 }
 RESOURCE_LOCATORS = {
@@ -28,10 +27,8 @@ RESOURCE_LOCATORS = {
     "progress_base": "progress_base_url",
     "reminder_base": "reminder_base_url",
     "core_data": "workspace_core_data_node_token",
-    "workbench": "workbench_url",
 }
 TEMPLATE_DIRECTORIES = {
-    "workbench": "../offerloop-workbench/assets/workbench-template",
     "progress_sync": "assets/progress-sync-template",
 }
 PHASES = (
@@ -40,7 +37,6 @@ PHASES = (
     ("bases", "创建或接管求职企业清单、求职进展与笔面试中心"),
     ("workspace", "创建私有知识库、固定目录和使用指南"),
     ("coaching", "登记训练产物目录并启用 Markdown 飞书文档沉淀"),
-    ("workbench", "按用户选择发布可选招聘工作台"),
     ("progress_sync", "发布投递进度双向同步服务并创建唯一 Base workflow"),
     ("imap", "创建本地 IMAP 模板，等待用户在本机填写授权码"),
     ("acceptance", "运行只读验收；即时联动演练必须使用并清理临时记录"),
@@ -84,7 +80,6 @@ def expand_capability(capability):
             "reminder",
             "workspace",
             "coaching",
-            "workbench",
             "integration",
         }
         if capability == "full"
@@ -112,8 +107,6 @@ def _required_resources(selected):
         "wiki_home",
         "core_data",
     }
-    if "workbench" in selected:
-        required.add("workbench")
     if "integration" in selected:
         required.add("progress_sync")
     return required
@@ -145,11 +138,9 @@ def build_plan(config, capability="full"):
             for phase_id, summary in PHASES
             if (phase_id != "imap" or "reminder" in selected)
             and (phase_id != "coaching" or "coaching" in selected)
-            and (phase_id != "workbench" or "workbench" in selected)
         ],
         "confirmations": [
             "创建或接管三张 Base、必需知识库和即时同步服务前的一次总确认",
-            "选择工作台时，对妙搭应用、OAuth 和发布范围单独确认",
             "启用通知时确认接收方式、目标名称、发送身份和最终摘要模板",
             "用户填写 IMAP 授权码后的一次仅连通性检查确认",
         ],

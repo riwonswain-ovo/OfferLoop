@@ -728,16 +728,15 @@ class RepositoryContractTest(unittest.TestCase):
             self.assertIn("通知失败", text, name)
             self.assertIn("不回滚", text, name)
 
-    def test_recruiting_status_sync_is_bidirectional_and_conflict_safe(self):
+    def test_recruiting_reminder_uses_one_table_with_shared_views(self):
         reminder = (SKILLS / "recruiting-reminder" / "SKILL.md").read_text(
             encoding="utf-8"
         )
-        self.assertIn("完成状态` 双向对账", reminder)
-        self.assertIn("completion_status_sync.json", reminder)
-        self.assertIn("主表变更可同步到子表", reminder)
-        self.assertIn("子表变更也可同步到主表", reminder)
-        self.assertIn("标记 `conflict`，不覆盖任一边", reminder)
-        self.assertNotIn("以子表 `完成状态` 为准回写主表", reminder)
+        self.assertIn("笔面试安排", reminder)
+        self.assertNotIn("completion_status_sync.json", reminder)
+        self.assertIn("全部安排（默认视图，无筛选）", reminder)
+        self.assertIn("修改的是同一个单元格", reminder)
+        self.assertNotIn("子表 record_id", reminder)
 
     def test_setup_guides_daily_checkin_safety_and_bot_permissions(self):
         onboarding = (
@@ -894,6 +893,23 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertIn("`进展状态` 是用户维护的当前状态唯一真源", field_contract)
         self.assertIn("简历选择属于具体简历任务的上下文", field_contract)
 
+    def test_progress_schema_consumers_do_not_use_retired_state_fields(self):
+        consumers = (
+            ROOT / "services/job-progress-sync/src/handler.js",
+            ROOT / "services/job-progress-sync/src/interview-reconcile.js",
+            ROOT / "services/job-progress-sync/src/progress-model.js",
+            SKILLS / "job-collection/scripts/progress_sync.py",
+            SKILLS / "recruiting-reminder/scripts/event_model.py",
+            SKILLS
+            / "offerloop-setup/assets/progress-sync-template/server/modules"
+            / "job-progress-sync/job-progress-sync.service.ts",
+        )
+        retired = ("当前阶段", "下一环节", "流程结果", "当前状态")
+        for path in consumers:
+            content = path.read_text(encoding="utf-8")
+            for field_name in retired:
+                self.assertNotIn(field_name, content, f"{path}: {field_name}")
+
     def test_user_voice_contract_is_consumed_by_generated_personal_content(self):
         consumers = (
             "experience-deepthink",
@@ -973,23 +989,23 @@ class RepositoryContractTest(unittest.TestCase):
             self.assertIn("needs_setup", text)
         self.assertIn("旧双 Base", migration)
         self.assertIn("processed_emails.json", migration)
-        self.assertIn("Schema v6 与旧内容兼容", migration)
+        self.assertIn("Schema v6 状态模型", migration)
         self.assertNotIn("schema v5", migration)
         self.assertNotIn("--confirm-schema-v5", migration)
 
-    def test_workbench_task_links_do_not_require_the_private_repository(self):
-        task_link = (
-            SKILLS
-            / "offerloop-workbench"
-            / "assets"
-            / "workbench-template"
-            / "client"
-            / "src"
-            / "lib"
-            / "codex-task.ts"
+    def test_legacy_workbench_has_no_active_deployment_entrypoint(self):
+        retired = (SKILLS / "offerloop-workbench" / "RETIRED.md").read_text(
+            encoding="utf-8"
+        )
+        retirement_record = (
+            ROOT / "docs" / "cases" / "workbench-retirement-2026-08-17.md"
         ).read_text(encoding="utf-8")
-        self.assertNotIn("OfferLoop-development", task_link)
-        self.assertIn("originUrl?: string", task_link)
+        materializer = (
+            SKILLS / "offerloop-workbench" / "scripts" / "materialize_workbench.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("仅作为历史源码快照保留", retired)
+        self.assertIn("cannot be deployed", materializer)
+        self.assertIn("不改变当前同步/提醒应用", retirement_record)
 
     def test_readme_follows_the_new_user_journey(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
@@ -1114,38 +1130,12 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertIn("原 Base 的知识库快捷节点", homepage)
         self.assertIn("不得复制 Base", homepage)
 
-    def test_workbench_keeps_the_confirmed_five_page_and_external_agent_contract(self):
-        root = (
-            SKILLS
-            / "offerloop-workbench"
-            / "assets"
-            / "workbench-template"
+    def test_retired_workbench_does_not_block_active_app_ci(self):
+        workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(
+            encoding="utf-8"
         )
-        top_nav = (
-            root / "client/src/pages/workbench/WorkbenchTopNav.tsx"
-        ).read_text(encoding="utf-8")
-        home = (
-            root / "client/src/pages/workbench/WorkbenchHomeOverview.tsx"
-        ).read_text(encoding="utf-8")
-        applications = (
-            root / "client/src/pages/workbench/WorkbenchApplicationsPage.tsx"
-        ).read_text(encoding="utf-8")
-        codex_task = (
-            root / "client/src/lib/codex-task.ts"
-        ).read_text(encoding="utf-8")
-
-        for label in ("工作台", "投递管理", "材料中心", "面试与复盘", "PM Sense"):
-            self.assertIn(f"label: '{label}'", top_nav)
-        self.assertIn("OfferLoop 能力", home)
-        self.assertIn("表格视图 · 每页最多 15 条", applications)
-        self.assertIn("每页最多 9 条", applications)
-        self.assertIn("prompt", codex_task)
-        self.assertNotIn("OfferLoop-development", codex_task)
-        source_text = "\n".join(
-            path.read_text(encoding="utf-8")
-            for path in (root / "client/src").rglob("*.ts*")
-        )
-        self.assertNotIn("AgentChatPanel", source_text)
+        self.assertIn("skills/offerloop-setup/assets/progress-sync-template", workflow)
+        self.assertNotIn("skills/offerloop-workbench/assets/workbench-template", workflow)
 
     def test_only_offerloop_skills_are_packaged(self):
         discovered = {
@@ -1365,7 +1355,6 @@ class RepositoryContractTest(unittest.TestCase):
 
     def test_deployable_templates_do_not_reconfigure_git_hooks(self):
         templates = (
-            SKILLS / "offerloop-workbench" / "assets" / "workbench-template",
             SKILLS / "offerloop-setup" / "assets" / "progress-sync-template",
         )
         for template in templates:
@@ -1375,7 +1364,6 @@ class RepositoryContractTest(unittest.TestCase):
 
     def test_templates_do_not_ship_unused_remote_profile_scaffold(self):
         templates = (
-            SKILLS / "offerloop-workbench" / "assets" / "workbench-template",
             SKILLS / "offerloop-setup" / "assets" / "progress-sync-template",
         )
         for template in templates:

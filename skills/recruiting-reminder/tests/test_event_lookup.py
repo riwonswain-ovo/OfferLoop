@@ -30,7 +30,7 @@ class EventLookupTest(unittest.TestCase):
             }
         )
         self.assertEqual(result["match_status"], "found")
-        self.assertEqual(result["candidates"][0]["main_record_id"], "rec_two")
+        self.assertEqual(result["candidates"][0]["record_id"], "rec_two")
 
     def test_same_company_multiple_positions_stays_ambiguous_without_position(self):
         lookup = load_module()
@@ -52,7 +52,7 @@ class EventLookupTest(unittest.TestCase):
         self.assertEqual(result["match_status"], "ambiguous")
         self.assertEqual(len(result["candidates"]), 2)
 
-    def test_position_and_stage_narrow_to_one_and_expose_child_id(self):
+    def test_position_and_stage_narrow_to_one_record(self):
         lookup = load_module()
         result = lookup.resolve_event(
             {
@@ -68,7 +68,6 @@ class EventLookupTest(unittest.TestCase):
                             "公司": "示例科技",
                             "岗位": "AI产品经理",
                             "环节": "一面",
-                            "子表 record_id": "rec_child",
                         },
                     },
                     {
@@ -83,9 +82,7 @@ class EventLookupTest(unittest.TestCase):
             }
         )
         self.assertEqual(result["match_status"], "found")
-        self.assertEqual(
-            result["candidates"][0]["child_record_id"], "rec_child"
-        )
+        self.assertEqual(result["candidates"][0]["record_id"], "rec_one")
 
     def test_position_or_stage_mismatch_never_falls_back_to_company(self):
         lookup = load_module()
@@ -109,33 +106,29 @@ class EventLookupTest(unittest.TestCase):
                 )
                 self.assertEqual(result["match_status"], "missing")
 
-    def test_backfill_is_idempotent_and_updates_both_records(self):
+    def test_backfill_is_idempotent_and_updates_the_single_record(self):
         lookup = load_module()
         payload = {
             "kind": "prep",
             "run_id": "interview-prep-20260724123045-a1b2c3d4",
             "document_url": "https://example.feishu.cn/wiki/prep",
             "event": {
-                "main_record_id": "rec_main",
-                "child_record_id": "rec_child",
+                "record_id": "rec_reminder",
                 "stage": "一面",
             },
-            "current": {"main": "", "child": ""},
+            "current": {"value": ""},
         }
         result = lookup.build_backfill_plan(payload)
         self.assertEqual(result["plan_status"], "ready")
         self.assertEqual(
             [item["record_id"] for item in result["operations"]],
-            ["rec_main", "rec_child"],
+            ["rec_reminder"],
         )
-        payload["current"] = {
-            "main": payload["document_url"],
-            "child": payload["document_url"],
-        }
+        payload["current"] = {"value": payload["document_url"]}
         result = lookup.build_backfill_plan(payload)
         self.assertEqual(result["operations"], [])
         self.assertEqual(
-            result["already_synced_record_ids"], ["rec_main", "rec_child"]
+            result["already_synced_record_ids"], ["rec_reminder"]
         )
 
     def test_backfill_never_overwrites_conflicting_document(self):
@@ -146,22 +139,16 @@ class EventLookupTest(unittest.TestCase):
                 "run_id": "talk-review-20260724123045-a1b2c3d4",
                 "document_url": "https://example.feishu.cn/wiki/new",
                 "event": {
-                    "main_record_id": "rec_main",
-                    "child_record_id": "rec_child",
+                    "record_id": "rec_reminder",
                     "stage": "二面",
                 },
-                "current": {
-                    "main": "https://example.feishu.cn/wiki/old",
-                    "child": "",
-                },
+                "current": {"value": "https://example.feishu.cn/wiki/old"},
             }
         )
         self.assertEqual(result["plan_status"], "conflict")
-        self.assertEqual(result["conflicts"][0]["record_id"], "rec_main")
+        self.assertEqual(result["conflicts"][0]["record_id"], "rec_reminder")
         self.assertEqual(result["operations"], [])
-        self.assertEqual(
-            result["blocked_operations"][0]["record_id"], "rec_child"
-        )
+        self.assertEqual(result["blocked_operations"], [])
 
     def test_exam_backfill_is_rejected(self):
         lookup = load_module()
@@ -172,11 +159,10 @@ class EventLookupTest(unittest.TestCase):
                     "run_id": "interview-prep-20260724123045-a1b2c3d4",
                     "document_url": "https://example.feishu.cn/wiki/prep",
                     "event": {
-                        "main_record_id": "rec_main",
-                        "child_record_id": "rec_child",
+                        "record_id": "rec_reminder",
                         "stage": "笔试",
                     },
-                    "current": {"main": "", "child": ""},
+                    "current": {"value": ""},
                 }
             )
 

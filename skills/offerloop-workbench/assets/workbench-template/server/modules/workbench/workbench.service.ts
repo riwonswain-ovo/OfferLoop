@@ -54,10 +54,13 @@ const PROGRESS_STAGE_ORDER: string[] = [
   '待一面',
   '待二面',
   '待三面',
-  '待HR面',
-  '待OC',
+  '待 HR 面',
+  '待 OC',
   'Offer',
-  '已结束',
+  '未通过',
+  '主动放弃',
+  '岗位关闭',
+  '状态待确认',
 ];
 
 const SEARCH_FIELDS: Record<WorkbenchDatasetQuery['source'], string[]> = {
@@ -68,7 +71,7 @@ const SEARCH_FIELDS: Record<WorkbenchDatasetQuery['source'], string[]> = {
 
 const FILTER_FIELDS: Record<WorkbenchDatasetQuery['source'], string[]> = {
   companies: ['招聘批次', '城市', '投递进度'],
-  progress: ['公司', '投递岗位', '当前状态', '下一环节', '流程结果'],
+  progress: ['公司', '投递岗位', '进展状态', '最近完成节点'],
   events: ['公司', '环节', '完成状态'],
 };
 
@@ -351,7 +354,7 @@ export class WorkbenchService {
       ),
       this.countRecordsByField(
         metadata.progressConfig,
-        '当前阶段',
+        '进展状态',
         'Offer',
       ),
     ]);
@@ -821,36 +824,11 @@ export class WorkbenchService {
 
   private async readProgressStageCounts(
     progressConfig: DatasetConfig,
-    eventsConfig: DatasetConfig,
+    _eventsConfig: DatasetConfig,
   ): Promise<WorkbenchStageCount[]> {
-    const pendingEventCount = (stage: string): Promise<number> =>
-      this.countRecordsByConditions(eventsConfig, [
-        { fieldName: '环节', value: stage },
-        { fieldName: '完成状态', value: '待完成' },
-      ]);
-    const terminalCount = async (): Promise<number> => {
-      const values: string[] = ['未通过', '主动放弃', '岗位关闭'];
-      const counts: number[] = await Promise.all(
-        values.map((value: string): Promise<number> =>
-          this.countRecordsByField(progressConfig, '流程结果', value)),
-      );
-      return counts.reduce((sum: number, count: number): number => sum + count, 0);
-    };
-    const counters: Record<string, () => Promise<number>> = {
-      待反馈: (): Promise<number> => this.countRecordsByField(progressConfig, '下一环节', '待反馈'),
-      待笔试: (): Promise<number> => pendingEventCount('笔试'),
-      待面试: (): Promise<number> => pendingEventCount('面试（轮次待确认）'),
-      待群面: (): Promise<number> => pendingEventCount('群面'),
-      待一面: (): Promise<number> => pendingEventCount('一面'),
-      待二面: (): Promise<number> => pendingEventCount('二面'),
-      待三面: (): Promise<number> => pendingEventCount('三面'),
-      待HR面: (): Promise<number> => pendingEventCount('HR面'),
-      待OC: (): Promise<number> => this.countRecordsByField(progressConfig, '下一环节', 'OC'),
-      Offer: (): Promise<number> => this.countRecordsByField(progressConfig, '流程结果', 'Offer'),
-      已结束: terminalCount,
-    };
     const counts: number[] = await Promise.all(
-      PROGRESS_STAGE_ORDER.map((stage: string): Promise<number> => counters[stage]()),
+      PROGRESS_STAGE_ORDER.map((stage: string): Promise<number> =>
+        this.countRecordsByField(progressConfig, '进展状态', stage)),
     );
     return PROGRESS_STAGE_ORDER.map(
       (stage: string, index: number): WorkbenchStageCount => ({

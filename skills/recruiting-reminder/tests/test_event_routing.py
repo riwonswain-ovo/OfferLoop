@@ -7,9 +7,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 from event_model import (
     ARRANGEMENT_NAME_FORMULA,
-    CHILD_TABLES,
     REMINDER_FIELDS,
-    build_main_record_fields,
+    REMINDER_TABLE_NAME,
+    REMINDER_VIEW_FILTERS,
+    assign_default_interview_stage,
+    build_reminder_record_fields,
     decide_event_upsert,
     route_event,
 )
@@ -52,12 +54,17 @@ class EventRoutingTest(unittest.TestCase):
                 "来源邮件ID",
                 "日历状态",
                 "已建日程ID",
-                "子表 record_id",
             ),
         )
         self.assertEqual(
-            CHILD_TABLES,
-            ("笔试", "群面", "一面", "二面", "三面", "HR面"),
+            REMINDER_TABLE_NAME,
+            "笔面试安排",
+        )
+        self.assertEqual(REMINDER_VIEW_FILTERS["全部安排"], ())
+        self.assertEqual(REMINDER_VIEW_FILTERS["一面"], ("一面",))
+        self.assertEqual(
+            REMINDER_VIEW_FILTERS["其他面试"],
+            ("面试（轮次待确认）",),
         )
         self.assertNotIn("开始时间", ARRANGEMENT_NAME_FORMULA)
         self.assertNotIn("结束时间", ARRANGEMENT_NAME_FORMULA)
@@ -72,7 +79,7 @@ class EventRoutingTest(unittest.TestCase):
             ("面试", "HR Interview", "HR面", "HR面"),
         ]
 
-        for event_type, raw_stage, expected_stage, expected_child in cases:
+        for event_type, raw_stage, expected_stage, _ in cases:
             with self.subTest(raw_stage=raw_stage):
                 event = route_event(
                     {
@@ -83,9 +90,9 @@ class EventRoutingTest(unittest.TestCase):
                     }
                 )
                 self.assertEqual(event["stage"], expected_stage)
-                self.assertEqual(event["child_table"], expected_child)
+                self.assertEqual(event["target_table"], "笔面试安排")
 
-    def test_unknown_technical_interview_stays_only_in_main_table(self):
+    def test_unknown_technical_interview_stays_in_the_single_table(self):
         event = route_event(
             {
                 "event_type": "面试",
@@ -96,7 +103,52 @@ class EventRoutingTest(unittest.TestCase):
         )
 
         self.assertEqual(event["stage"], "面试（轮次待确认）")
-        self.assertIsNone(event["child_table"])
+        self.assertEqual(event["target_table"], "笔面试安排")
+
+    def test_generic_interviews_default_to_sequential_rounds_per_application(self):
+        event = route_event(
+            {
+                "event_type": "面试",
+                "raw_stage": "技术面试",
+                "source_mail_id": "mail-next",
+                "company": "示例公司",
+            }
+        )
+
+        first = assign_default_interview_stage(event, [])
+        second = assign_default_interview_stage(
+            event,
+            [{"fields": {"环节": "一面"}}],
+        )
+        after_group = assign_default_interview_stage(
+            event,
+            [{"fields": {"环节": "一面"}}, {"fields": {"环节": "群面"}}],
+        )
+
+        self.assertEqual(first["stage"], "一面")
+        self.assertEqual(first["target_table"], "笔面试安排")
+        self.assertEqual(second["stage"], "二面")
+        self.assertEqual(after_group["stage"], "二面")
+
+    def test_fourth_generic_interview_uses_the_schema_compatible_generic_stage(self):
+        event = route_event(
+            {
+                "event_type": "面试",
+                "raw_stage": "业务沟通",
+                "source_mail_id": "mail-four",
+                "company": "示例公司",
+            }
+        )
+        assigned = assign_default_interview_stage(
+            event,
+            [
+                {"fields": {"环节": "一面"}},
+                {"fields": {"环节": "二面"}},
+                {"fields": {"环节": "三面"}},
+            ],
+        )
+        self.assertEqual(assigned["stage"], "面试")
+        self.assertEqual(assigned["target_table"], "笔面试安排")
 
     def test_source_mail_id_is_the_normal_deduplication_key(self):
         repository = FakeEventRepository(
@@ -146,7 +198,7 @@ class EventRoutingTest(unittest.TestCase):
         self.assertEqual(decision["record_id"], "rec_original")
         self.assertEqual(decision["canonical_source_mail_id"], "mail-original")
 
-    def test_main_fields_reserve_interview_documents_and_use_json_progress_ids(self):
+    def test_reminder_fields_reserve_interview_documents_and_use_json_progress_ids(self):
         event = route_event(
             {
                 "event_type": "面试",
@@ -160,7 +212,7 @@ class EventRoutingTest(unittest.TestCase):
             }
         )
 
-        fields = build_main_record_fields(
+        fields = build_reminder_record_fields(
             event,
             {
                 "record_ids": ["rec_progress"],
@@ -175,7 +227,7 @@ class EventRoutingTest(unittest.TestCase):
         self.assertEqual(fields["关联求职记录"], "示例公司－AI 产品经理")
         self.assertEqual(fields["面试准备文档"], "")
         self.assertEqual(fields["面试复盘文档"], "")
-        self.assertEqual(fields["子表 record_id"], "")
+        self.assertNotIn("子表 record_id", fields)
 
 
 if __name__ == "__main__":

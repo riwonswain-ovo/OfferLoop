@@ -24,7 +24,6 @@ PUBLIC_LOCATOR_KEYS = {
     "wiki_space_id",
     "workspace_home_node_token",
     "workspace_core_data_node_token",
-    "workbench_url",
     "schema_version",
     "owner_open_id",
 }
@@ -84,9 +83,6 @@ def update_locator_config(path, updates):
     if unknown:
         names = ", ".join(sorted(unknown))
         raise ValueError(f"public config cannot store secret or unknown keys: {names}")
-    workbench_url = updates.get("workbench_url")
-    if workbench_url is not None:
-        validate_workbench_url(workbench_url)
     data = load_config(path)
     data.update({key: value for key, value in updates.items() if value is not None})
     write_private_json(path, data)
@@ -220,16 +216,6 @@ def update_daily_checkin_config(path, updates):
     return data
 
 
-def validate_workbench_url(value):
-    parsed = urlparse(str(value))
-    if parsed.scheme != "https" or not parsed.netloc:
-        raise ValueError("workbench_url must be an absolute https URL")
-    if parsed.username or parsed.password:
-        raise ValueError("workbench_url must not contain credentials")
-    if parsed.fragment:
-        raise ValueError("workbench_url must not contain a fragment")
-
-
 def validate_progress_sync_endpoint(value):
     parsed = urlparse(str(value))
     if parsed.scheme != "https" or not parsed.netloc:
@@ -302,7 +288,6 @@ def main():
         "--workspace-core-data-node-token",
         help="OfferLoop core business data Wiki folder",
     )
-    parser.add_argument("--workbench-url", help="published OfferLoop workbench HTTPS URL")
     parser.add_argument("--schema-version", type=int, help="OfferLoop schema version")
     parser.add_argument("--owner-open-id", help="OfferLoop owner Feishu open id")
     parser.add_argument("--progress-sync-app-id", help="published sync app ID")
@@ -339,7 +324,7 @@ def main():
     )
     parser.add_argument("--daily-checkin-chat-id", help="single-owner Feishu group oc_xxx")
     parser.add_argument("--daily-checkin-owner-open-id", help="sole human owner ou_xxx")
-    parser.add_argument("--daily-checkin-pause-reason", help="non-secret pause reason shown in the workbench")
+    parser.add_argument("--daily-checkin-pause-reason", help="non-secret pause reason shown in reminder status")
     parser.add_argument("--daily-checkin-time", choices=("21:30",), default=None)
     parser.add_argument("--daily-checkin-timezone", choices=("Asia/Shanghai",), default=None)
     parser.add_argument("--init-imap", action="store_true")
@@ -362,7 +347,6 @@ def main():
         "wiki_space_id": args.wiki_space_id,
         "workspace_home_node_token": args.workspace_home_node_token,
         "workspace_core_data_node_token": args.workspace_core_data_node_token,
-        "workbench_url": args.workbench_url,
         "schema_version": args.schema_version,
         "owner_open_id": args.owner_open_id,
     }

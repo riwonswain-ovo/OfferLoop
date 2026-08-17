@@ -6,7 +6,7 @@
 配置中的 `reminder_base_url` 读取最小字段，再把 JSON 通过 stdin 传给脚本。需要准备材料的
 调用方需要岗位上下文时，通过关联的求职记录读取 `岗位 JD`；当前使用哪份简历由用户在本轮
 准备或复盘任务中确认，不写入业务 Base。脚本统一负责
-公司/岗位规范化、候选筛选、主子表 ID 解析和幂等回填计划；其他 Skill 不复制这些规则。
+公司/岗位规范化、候选筛选、单表记录 ID 解析和幂等回填计划；其他 Skill 不复制这些规则。
 
 ## 候选查询
 
@@ -24,14 +24,13 @@
   },
   "records": [
     {
-      "record_id": "rec_main",
+      "record_id": "rec_reminder",
       "fields": {
         "公司": "",
         "岗位": "",
         "环节": "",
         "开始时间": "",
-        "来源邮件ID": "",
-        "子表 record_id": ""
+        "来源邮件ID": ""
       }
     }
   ]
@@ -50,7 +49,7 @@ event_lookup.py resolve --input - --json
 
 ## 回填计划
 
-调用方先读取主表和明确子表当前的“面试准备文档”或“面试复盘文档”，再输入：
+调用方先读取已确认记录当前的“面试准备文档”或“面试复盘文档”，再输入：
 
 ```json
 {
@@ -58,13 +57,11 @@ event_lookup.py resolve --input - --json
   "run_id": "interview-prep-20260724123045-a1b2c3d4",
   "document_url": "https://example.feishu.cn/wiki/example",
   "event": {
-    "main_record_id": "rec_main",
-    "child_record_id": "rec_child",
+    "record_id": "rec_reminder",
     "stage": "一面"
   },
   "current": {
-    "main": "",
-    "child": ""
+    "value": ""
   }
 }
 ```
@@ -80,8 +77,7 @@ event_lookup.py backfill --input - --json
 - 当前值等于目标 URL：记录为 `already_synced`，不写。
 - 当前为空：返回 patch。
 - 当前存在其他 URL：返回 `conflict`，不覆盖。
-- 明确面试轮次缺少子表 record ID：返回 `needs_action`，不产生半套写入。
-- “面试（轮次待确认）”：只计划主表。
+- “面试（轮次待确认）”与明确轮次使用相同的单表回填规则。
 - 笔试：拒绝回填。
 
 Agent 通过 `lark-base` 逐条执行 patch，并重新读取验证。部分失败时保留已成功项，记录失败的

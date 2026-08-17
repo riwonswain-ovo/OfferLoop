@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   HttpCode,
   Post,
   Query,
@@ -14,7 +15,14 @@ import type {
   JobProgressSyncResponse,
 } from '@shared/api.interface';
 
-import { JobProgressSyncService } from './job-progress-sync.service';
+import {
+  type CardActionCallback,
+  type CardActionResponse,
+  type FeishuCallbackChallenge,
+  type ReminderReconcileResult,
+  type TaskReconcileResult,
+  JobProgressSyncService,
+} from './job-progress-sync.service';
 
 function extractRecordId(body: JobProgressSyncRequest): string {
   const candidates: string[] = [body?.sourceRecordId, body?.sourceRecordLink]
@@ -72,5 +80,46 @@ export class JobProgressSyncOpenApiController {
       sourceRecordId,
       transitionedAt: body.transitionedAt,
     });
+  }
+
+  @Post('reminder-reconcile')
+  @HttpCode(200)
+  async reconcileReminder(
+    @Body() body: {
+      recordId?: string;
+      recordLink?: string;
+      sourceEmailId?: string;
+      recordTitle?: string;
+    },
+    @Query('recordId') queryRecordId?: string,
+    @Query('recordLink') queryRecordLink?: string,
+    @Headers('x-offerloop-workflow-secret') workflowSecret?: string,
+  ): Promise<ReminderReconcileResult | TaskReconcileResult> {
+    this.jobProgressSyncService.verifyReminderReconcileSecret(workflowSecret);
+    let recordId: string = extractRecordId({
+      sourceRecordId: body?.recordId || String(queryRecordId ?? ''),
+      sourceRecordLink: body?.recordLink || String(queryRecordLink ?? ''),
+    });
+    if (!recordId) {
+      recordId = await this.jobProgressSyncService.resolveReminderRecordId(
+        body?.sourceEmailId ?? '',
+        body?.recordTitle ?? '',
+      );
+    }
+    if (!recordId) {
+      return this.jobProgressSyncService.reconcileTaskStates();
+    }
+    return this.jobProgressSyncService.reconcileReminderRecord(recordId);
+  }
+
+  @Post('card-action')
+  @HttpCode(200)
+  async cardAction(
+    @Body() body: CardActionCallback & FeishuCallbackChallenge,
+  ): Promise<CardActionResponse | { challenge: string }> {
+    if (body.challenge) {
+      return this.jobProgressSyncService.verifyCallbackChallenge(body);
+    }
+    return this.jobProgressSyncService.handleDailyCheckinAction(body);
   }
 }

@@ -46,7 +46,7 @@ test("card idempotency key is stable", () => {
 test("daily check-in card uses Card 2.0 and free text requires preview confirmation", () => {
   const card = buildDailyCheckinCard({
     date: "2026-08-10",
-    today: [{ event_id: "evt_1", company: "示例公司", stage: "一面", time_label: "20:00" }],
+    today: [{ record_id: "rec_1", company: "示例公司", stage: "一面", time_label: "20:00" }],
   });
   assert.equal(card.schema, "2.0");
   assert.equal(card.body.elements.at(-1).tag, "form");
@@ -57,4 +57,25 @@ test("daily check-in card uses Card 2.0 and free text requires preview confirmat
   });
   assert.equal(parsed.kind, "free_text_preview");
   assert.equal(parsed.requires_confirmation, true);
+  const action = parseCheckinCardAction({
+    message_id: "om_1",
+    event_id: "callback_2",
+    action_value: { action: "completed", record_id: "rec_1" },
+  });
+  assert.equal(action.record_id, "rec_1");
+});
+
+test("daily check-in card shows at most fifteen records and reports the remainder", () => {
+  const card = buildDailyCheckinCard({
+    date: "2026-08-10",
+    today: Array.from({ length: 16 }, (_, index) => ({
+      record_id: `rec_${index + 1}`,
+      company: `示例公司${index + 1}`,
+      stage: "一面",
+    })),
+  });
+  const serialized = JSON.stringify(card);
+  assert.match(serialized, /另有 1 条安排未在本卡片展开/);
+  assert.match(serialized, /rec_15/);
+  assert.doesNotMatch(serialized, /rec_16/);
 });

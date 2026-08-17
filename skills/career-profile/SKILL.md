@@ -11,7 +11,7 @@ description: 作为 OfferLoop 首次使用入口，维护独立的岗位选择�
 第一项动作是读取 `../.offerloop-runtime/references/installation-mode.md` 并运行其中的模式检查。
 `full` 模式下，若三张 Base、私有知识库或 schema v6 locator 尚未通过验收，先读取
 `../.offerloop-runtime/references/full-setup.md`，展示计划并在用户确认后完成线上初始化；不要默认
-部署工作台或自动化。`single` 模式不要求飞书工作区，直接在 Chat 中进行当前对话，默认不创建或
+部署已退役工作台或自动化。`single` 模式不要求飞书工作区，直接在 Chat 中进行当前对话，默认不创建或
 更新飞书画像文档。
 
 运行相对路径前先从当前 `SKILL.md` 定位 Skill 根目录，并完整读取：

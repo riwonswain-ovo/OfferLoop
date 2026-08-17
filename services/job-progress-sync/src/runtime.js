@@ -1,5 +1,9 @@
-import { FeishuProgressRepository } from "./feishu-client.js";
+import {
+  FeishuInterviewEventRepository,
+  FeishuProgressRepository,
+} from "./feishu-client.js";
 import { handleSyncRequest } from "./handler.js";
+import { reconcileInterviewEvents } from "./interview-reconcile.js";
 import { retryOperation } from "./retry.js";
 
 
@@ -73,6 +77,24 @@ export function createSyncService({
     fetchImpl,
     retryOptions,
   });
+  const reminderBaseToken = String(env.REMINDER_BASE_TOKEN ?? "").trim();
+  const reminderTableId = String(env.REMINDER_TABLE_ID ?? "").trim();
+  const eventRepository = reminderBaseToken && reminderTableId
+    ? new FeishuInterviewEventRepository({
+      baseToken: reminderBaseToken,
+      tableId: reminderTableId,
+      accessTokenProvider,
+      fetchImpl,
+      retryOptions,
+    })
+    : null;
+  const interviewReconciler = eventRepository
+    ? ({ recordId }) => reconcileInterviewEvents({
+      eventRepository,
+      progressRepository: repository,
+      recordId,
+    })
+    : null;
 
   return async (request) => {
     const body = typeof request.body === "string"
@@ -80,7 +102,7 @@ export function createSyncService({
       : request.body;
     return handleSyncRequest(
       { ...request, body },
-      { webhookSecret: env.WEBHOOK_SECRET, repository },
+      { webhookSecret: env.WEBHOOK_SECRET, repository, interviewReconciler },
     );
   };
 }
