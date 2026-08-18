@@ -109,6 +109,12 @@ class SyncUtilsTest(unittest.TestCase):
         url = "HTTPS://Example.COM/jobs/42/?utm_source=x&job=pm#details"
         self.assertEqual(normalize_url(url), "https://example.com/jobs/42?job=pm")
 
+    def test_normalize_url_preserves_business_hash_route(self):
+        left = "https://example.com/recruit/list#/ey=position-a"
+        right = "https://example.com/recruit/list#/ey=position-b"
+        self.assertNotEqual(normalize_url(left), normalize_url(right))
+        self.assertEqual(normalize_url(left), left)
+
     def test_fingerprint_normalizes_width_case_and_punctuation(self):
         left = recruitment_fingerprint("ＡＣＭＥ 科技", "2027届秋招", "产品经理")
         right = recruitment_fingerprint("acme科技", "2027 届-秋招", "产品 经理")
