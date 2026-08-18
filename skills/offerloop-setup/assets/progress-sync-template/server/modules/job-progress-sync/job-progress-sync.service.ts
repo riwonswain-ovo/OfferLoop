@@ -166,6 +166,11 @@ export interface CardActionResponse {
   };
 }
 
+interface DailyCheckinAction {
+  action: 'completed' | 'incomplete';
+  recordId: string;
+}
+
 export interface FeishuCallbackChallenge {
   challenge?: string;
   token?: string;
@@ -772,6 +777,7 @@ export class JobProgressSyncService {
   private readonly config: DeploymentConfig;
   private cachedToken: string = '';
   private tokenExpiresAt: number = 0;
+  private readonly dailyCheckinActionsInFlight: Set<string> = new Set<string>();
 
   constructor(@Inject(HttpService) private readonly httpService: HttpService) {
     this.config = requireDeploymentConfig(process.env);
@@ -1052,7 +1058,58 @@ export class JobProgressSyncService {
     }
   }
 
+  acceptDailyCheckinAction(callback: CardActionCallback): CardActionResponse {
+    const { action, recordId }: DailyCheckinAction = this.parseDailyCheckinAction(callback);
+    if (action === 'completed') {
+      if (!this.dailyCheckinActionsInFlight.has(recordId)) {
+        this.dailyCheckinActionsInFlight.add(recordId);
+        setImmediate((): void => {
+          void this.processCompletedDailyCheckin(recordId)
+            .catch((error: unknown): void => {
+              this.logger.error(
+                `daily check-in sync failed for ${recordId}: ${errorMessage(error)}`,
+              );
+            })
+            .finally((): void => {
+              this.dailyCheckinActionsInFlight.delete(recordId);
+            });
+        });
+      }
+      return {
+        toast: {
+          type: 'success',
+          content: '已收到，正在同步笔面试中心与求职进展。',
+        },
+      };
+    }
+    return {
+      toast: {
+        type: 'info',
+        content: '已记录为尚未完成，明天仍会提醒；真实截止时间不变。',
+      },
+    };
+  }
+
   async handleDailyCheckinAction(callback: CardActionCallback): Promise<CardActionResponse> {
+    const { action, recordId }: DailyCheckinAction = this.parseDailyCheckinAction(callback);
+    if (action === 'incomplete') {
+      return {
+        toast: {
+          type: 'info',
+          content: '已记录为尚未完成，明天仍会提醒；真实截止时间不变。',
+        },
+      };
+    }
+    await this.processCompletedDailyCheckin(recordId);
+    return {
+      toast: {
+        type: 'success',
+        content: '已同步笔面试中心与求职进展。',
+      },
+    };
+  }
+
+  private parseDailyCheckinAction(callback: CardActionCallback): DailyCheckinAction {
     if (
       callback.schema !== '2.0'
       || callback.header?.token !== this.config.verificationToken
@@ -1072,31 +1129,18 @@ export class JobProgressSyncService {
     if (!['completed', 'incomplete'].includes(action) || !/^rec[A-Za-z0-9]+$/u.test(recordId)) {
       throw new BadRequestException('invalid daily check-in action value');
     }
+    return { action: action as DailyCheckinAction['action'], recordId };
+  }
+
+  private async processCompletedDailyCheckin(recordId: string): Promise<void> {
     const reminderRecord: FeishuRecord = await this.getReminderRecord(recordId);
     const status: string = readText(reminderRecord.fields['完成状态']);
-    if (action === 'incomplete') {
-      if (status !== '待完成') {
-        throw new BadRequestException('reminder is no longer pending');
-      }
-      return {
-        toast: {
-          type: 'info',
-          content: '已记录为尚未完成，明天仍会提醒；真实截止时间不变。',
-        },
-      };
-    }
     if (status === '待完成') {
       const pendingRecords: FeishuRecord[] = await this.listReminderRecordsByStatus('待完成');
       await this.applyReminderOutcome(reminderRecord, 'completed', pendingRecords);
     } else if (status !== '已完成') {
       throw new BadRequestException('reminder cannot be marked completed');
     }
-    return {
-      toast: {
-        type: 'success',
-        content: '已同步笔面试中心与求职进展。',
-      },
-    };
   }
 
   private async listAllHumanChatMembers(): Promise<FeishuChatMember[]> {

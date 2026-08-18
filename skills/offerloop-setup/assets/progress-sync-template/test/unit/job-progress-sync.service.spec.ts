@@ -59,7 +59,7 @@ function createMockService(
       });
       responseData = { code: 0, data: { records } };
     } else {
-      responseData = responder(config);
+      responseData = await responder(config);
     }
     return {
       data: responseData,
@@ -705,6 +705,79 @@ describe('JobProgressSyncService', (): void => {
       (config: InternalAxiosRequestConfig): boolean =>
         String(config.url ?? '').includes('/task/v2/'),
     )).toBe(false);
+  });
+
+  it('acknowledges a completed card action before making slow Feishu API calls', async (): Promise<void> => {
+    let releaseFirstRequest: (() => void) | undefined;
+    const firstRequestBlocked: Promise<void> = new Promise<void>((resolve): void => {
+      releaseFirstRequest = resolve;
+    });
+    const mock: MockService = createMockService(async (
+      config: InternalAxiosRequestConfig,
+    ): Promise<unknown> => {
+      const url: string = String(config.url ?? '');
+      if (url.endsWith('/auth/v3/tenant_access_token/internal')) {
+        await firstRequestBlocked;
+        return { code: 0, tenant_access_token: 'tenant-token', expire: 7200 };
+      }
+      if (url.endsWith('/reminder-table/records/recEvent')) {
+        return {
+          code: 0,
+          data: {
+            record: {
+              record_id: 'recEvent',
+              fields: { 完成状态: '已完成', 环节: '一面' },
+            },
+          },
+        };
+      }
+      throw new Error(`unexpected request: ${url}`);
+    });
+
+    const response = mock.service.acceptDailyCheckinAction({
+      schema: '2.0',
+      header: {
+        token: 'verification-token',
+        event_type: 'card.action.trigger',
+        app_id: 'cli_test',
+      },
+      event: {
+        operator: { open_id: 'ou_owner' },
+        context: { open_chat_id: 'oc_daily' },
+        action: {
+          tag: 'button',
+          value: { action: 'completed', record_id: 'recEvent' },
+        },
+      },
+    });
+
+    expect(response).toEqual({
+      toast: { type: 'success', content: '已收到，正在同步笔面试中心与求职进展。' },
+    });
+    expect(mock.service.acceptDailyCheckinAction({
+      schema: '2.0',
+      header: {
+        token: 'verification-token',
+        event_type: 'card.action.trigger',
+        app_id: 'cli_test',
+      },
+      event: {
+        operator: { open_id: 'ou_owner' },
+        context: { open_chat_id: 'oc_daily' },
+        action: {
+          tag: 'button',
+          value: { action: 'completed', record_id: 'recEvent' },
+        },
+      },
+    })).toEqual(response);
+    expect(mock.calls).toHaveLength(0);
+
+    releaseFirstRequest?.();
+    await new Promise<void>((resolve): void => setImmediate(resolve));
+    await new Promise<void>((resolve): void => setImmediate(resolve));
+    expect(mock.calls.filter((config: InternalAxiosRequestConfig): boolean => (
+      String(config.url ?? '').endsWith('/auth/v3/tenant_access_token/internal')
+    ))).toHaveLength(1);
   });
 
   it('keeps an incomplete card action pending without writing Base or calendar', async (): Promise<void> => {

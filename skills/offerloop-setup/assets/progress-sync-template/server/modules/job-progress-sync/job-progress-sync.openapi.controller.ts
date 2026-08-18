@@ -120,6 +120,6 @@ export class JobProgressSyncOpenApiController {
     if (body.challenge) {
       return this.jobProgressSyncService.verifyCallbackChallenge(body);
     }
-    return this.jobProgressSyncService.handleDailyCheckinAction(body);
+    return this.jobProgressSyncService.acceptDailyCheckinAction(body);
   }
 }
