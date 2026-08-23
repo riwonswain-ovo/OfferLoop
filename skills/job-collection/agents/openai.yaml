@@ -1,4 +1,0 @@
-interface:
-  display_name: "Job Collection"
-  short_description: "按城市和行业硬筛招聘信息，确认岗位偏好外机会后再写入求职清单"
-  default_prompt: "Use $job-collection to sync my authorized recruiting sources, and ask before writing opportunities outside my job preferences."
