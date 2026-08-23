@@ -11,7 +11,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED_FILES = {
     "SKILL.md",
-    "agents/openai.yaml",
     ".env.example",
     "references/lark-onboarding.md",
     "references/feishu-setup.md",
