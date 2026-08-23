@@ -47,13 +47,24 @@ lark-cli base +record-list --base-token <BASE_TOKEN> --table-id <TABLE_ID> --for
 对命中的暑期实习、普通实习和社招执行硬排除。多值招聘类型先结合公告标题判断真实批次，
 再拆成“一条记录一个批次”；标题只描述实习招聘时不得机械生成校招副本。
 
-## 4. 完整增量读取
+## 4. 有界增量读取
 
 1. 计算 `overlap_start = last_sync_time 所在日期前 1 天的 00:00:00`。
-2. 完整分页读取来源表，不把首个 page 当全量。
-3. 优先使用来源业务字段「更新时间」；缺失时才使用可验证的记录修改时间。
-4. 仅保留 `source_updated_at >= overlap_start` 的候选，但必须完成所有分页后才能声明扫描完整。
-5. 记录源记录数、拆行后候选数、最大真实来源日期和分页停止位置。
+2. 使用 `+record-list --filter-json` 在服务端限定日级
+   `更新时间 >= overlap_start`。datetime 字段不支持 `>=` 运算符时，固定表达为
+   `更新时间 == ExactDate(overlap_start 日期) OR 更新时间 > ExactDate(overlap_start 日期)`；前者覆盖
+   边界整天，后者覆盖所有后续日期。并用
+   `--sort-json '[{"field":"更新时间","desc":true}]'` 倒序读取；按返回的
+   `has_more` 和 `offset` 完整读取这个**过滤后的窗口**，禁止继续读取窗口外历史页。
+3. 只有 API 明确返回不支持该筛选条件时才回退：仍按「更新时间」倒序分页；必须处理完所有
+   `更新时间 == overlap_start` 的记录；读到整页均 `< overlap_start` 后立即停止。不得因游标未推进、
+   存在待确认项或上次运行失败而重扫全表。
+4. `has_more=true` 时空页、响应明确返回但不大于当前值的 offset、跨页重复 record ID 或时间顺序
+   逆转均安全失败并保留旧游标。当前 `+record-list` 是请求侧数值 offset 方言；若响应未回传
+   offset，按协议使用 `当前 offset + 本页实际记录数` 确定性推进，不得在空页或游标停滞时猜测。
+5. 优先使用来源业务字段「更新时间」；缺失时才使用可验证的记录修改时间。
+6. 记录实际读取页数和记录数、`overlap_start`、窗口命中数、最大真实来源日期、停止原因、
+   是否启用服务端筛选和 `full_audit`。
 
 某页读取失败时重试一次；仍失败则该来源失败并保留游标。其他 source_id 继续执行。
 
@@ -86,7 +97,7 @@ lark-cli base +record-list --base-token <BASE_TOKEN> --table-id <TABLE_ID> --for
 6. `selected_industries` 目标行业任一命中；
 7. 排除行业；
 8. `excluded_recruitment_types` 硬排除；
-9. 按 `dedup_judge.md` 与目标主表全局索引去重；
+9. 按 `dedup_judge.md` 与目标主表的候选定向索引去重；
 10. 按 `prewrite-confirmation.md` 将硬筛通过项分为岗位匹配直写和写入前待确认。
 
 企业性质路由固定为：互联网 > 金融银行 > 外企 > 央国企 > 其他私企。不得把同一记录复制到
@@ -115,7 +126,9 @@ lark-cli base +record-list --base-token <BASE_TOKEN> --table-id <TABLE_ID> --for
 - 新记录状态为 `待确认`，既有状态未改变；
 - 公告和投递入口与写入值一致。
 
-随后按 `excel-insert.md` 验收受管 grid 排序、四类状态视图和 workflow。不得依赖固定视图数量。
+随后按 `excel-insert.md` 验收本批记录、受管 grid 排序、四类状态视图和 workflow。日常增量同步
+不执行主表与五张子表的全量一致性扫描；全量主子表一致性检查只在显式 `--full-audit` 或独立定期
+巡检中运行。不得依赖固定视图数量。
 
 仅当分页完整、同日全部候选处理完成、没有尚未决定的写入前确认、写入与验收通过时，将该来源
 游标推进到本批最大真实来源日期。无新增但扫描完整且全部为重复/硬筛淘汰/用户明确拒绝时也可以

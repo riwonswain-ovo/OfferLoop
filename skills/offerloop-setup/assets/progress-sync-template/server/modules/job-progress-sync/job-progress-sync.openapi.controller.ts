@@ -16,9 +16,6 @@ import type {
 } from '@shared/api.interface';
 
 import {
-  type CardActionCallback,
-  type CardActionResponse,
-  type FeishuCallbackChallenge,
   type ReminderReconcileResult,
   type TaskReconcileResult,
   JobProgressSyncService,
@@ -110,16 +107,5 @@ export class JobProgressSyncOpenApiController {
       return this.jobProgressSyncService.reconcileTaskStates();
     }
     return this.jobProgressSyncService.reconcileReminderRecord(recordId);
-  }
-
-  @Post('card-action')
-  @HttpCode(200)
-  async cardAction(
-    @Body() body: CardActionCallback & FeishuCallbackChallenge,
-  ): Promise<CardActionResponse | { challenge: string }> {
-    if (body.challenge) {
-      return this.jobProgressSyncService.verifyCallbackChallenge(body);
-    }
-    return this.jobProgressSyncService.handleDailyCheckinAction(body);
   }
 }

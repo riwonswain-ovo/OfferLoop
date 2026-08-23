@@ -29,14 +29,6 @@ PUBLIC_LOCATOR_KEYS = {
 }
 PROGRESS_SYNC_KEYS = {"app_id", "endpoint", "workflow_id", "status"}
 NOTIFICATION_KEYS = {"status", "target_type", "target_name", "target_id", "identity"}
-DAILY_CHECKIN_KEYS = {
-    "status",
-    "chat_id",
-    "send_time",
-    "timezone",
-    "owner_open_id",
-    "pause_reason",
-}
 
 
 def config_root(environ=None):
@@ -172,50 +164,6 @@ def update_notification_config(path, updates):
     return data
 
 
-def update_daily_checkin_config(path, updates):
-    """Merge non-secret daily progress check-in settings."""
-    unknown = set(updates) - DAILY_CHECKIN_KEYS
-    if unknown:
-        raise ValueError("daily_checkin contains unknown keys: " + ", ".join(sorted(unknown)))
-    filtered = {key: value for key, value in updates.items() if value is not None}
-    if filtered.get("status") not in (None, "enabled", "disabled", "paused"):
-        raise ValueError("daily_checkin status must be enabled, disabled, or paused")
-    if "chat_id" in filtered and not str(filtered["chat_id"]).startswith("oc_"):
-        raise ValueError("daily_checkin chat_id must use an oc_ Feishu chat id")
-    if "owner_open_id" in filtered and not str(filtered["owner_open_id"]).startswith("ou_"):
-        raise ValueError("daily_checkin owner_open_id must use an ou_ Feishu open id")
-    if filtered.get("send_time") not in (None, "21:30"):
-        raise ValueError("daily_checkin send_time is fixed at 21:30")
-    if filtered.get("timezone") not in (None, "Asia/Shanghai"):
-        raise ValueError("daily_checkin timezone is fixed at Asia/Shanghai")
-    if "pause_reason" in filtered:
-        pause_reason = str(filtered["pause_reason"]).strip()
-        if not pause_reason or len(pause_reason) > 300:
-            raise ValueError("daily_checkin pause_reason must be 1-300 characters")
-        filtered["pause_reason"] = pause_reason
-    data = load_config(path)
-    existing = data.get("daily_checkin", {})
-    if existing is None:
-        existing = {}
-    if not isinstance(existing, dict):
-        raise ValueError("daily_checkin must be a JSON object")
-    checkin = {
-        "status": "disabled",
-        "send_time": "21:30",
-        "timezone": "Asia/Shanghai",
-        **existing,
-        **filtered,
-    }
-    if checkin.get("status") == "enabled":
-        missing = [key for key in ("chat_id", "owner_open_id") if not checkin.get(key)]
-        if missing:
-            raise ValueError("daily_checkin cannot be enabled without: " + ", ".join(missing))
-        checkin.pop("pause_reason", None)
-    data["daily_checkin"] = checkin
-    write_private_json(path, data)
-    return data
-
-
 def validate_progress_sync_endpoint(value):
     parsed = urlparse(str(value))
     if parsed.scheme != "https" or not parsed.netloc:
@@ -318,15 +266,6 @@ def main():
         choices=("bot", "user"),
         help="explicitly approved message sender identity",
     )
-    parser.add_argument(
-        "--daily-checkin-status",
-        choices=("enabled", "disabled", "paused"),
-    )
-    parser.add_argument("--daily-checkin-chat-id", help="single-owner Feishu group oc_xxx")
-    parser.add_argument("--daily-checkin-owner-open-id", help="sole human owner ou_xxx")
-    parser.add_argument("--daily-checkin-pause-reason", help="non-secret pause reason shown in reminder status")
-    parser.add_argument("--daily-checkin-time", choices=("21:30",), default=None)
-    parser.add_argument("--daily-checkin-timezone", choices=("Asia/Shanghai",), default=None)
     parser.add_argument("--init-imap", action="store_true")
     parser.add_argument("--enable-coaching", action="store_true")
     parser.add_argument("--confirm-schema-v5", action="store_true")
@@ -372,17 +311,6 @@ def main():
     if any(value is not None for value in notification_updates.values()):
         update_notification_config(path, notification_updates)
         print(f"Updated {path}")
-    daily_checkin_updates = {
-        "status": args.daily_checkin_status,
-        "chat_id": args.daily_checkin_chat_id,
-        "owner_open_id": args.daily_checkin_owner_open_id,
-        "pause_reason": args.daily_checkin_pause_reason,
-        "send_time": args.daily_checkin_time,
-        "timezone": args.daily_checkin_timezone,
-    }
-    if any(value is not None for value in daily_checkin_updates.values()):
-        update_daily_checkin_config(path, daily_checkin_updates)
-        print(f"Updated {path}")
     if args.init_imap:
         destination, created = init_imap()
         action = "Created" if created else "Already exists"
@@ -401,7 +329,6 @@ def main():
         any(value is not None for value in updates.values())
         or any(value is not None for value in progress_sync_updates.values())
         or any(value is not None for value in notification_updates.values())
-        or any(value is not None for value in daily_checkin_updates.values())
         or args.init_imap
         or args.enable_coaching
     ):

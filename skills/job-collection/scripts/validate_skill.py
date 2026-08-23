@@ -22,6 +22,7 @@ REQUIRED_FILES = {
     "references/prewrite-confirmation.md",
     "references/notification.md",
     "scripts/tencent_mcp.py",
+    "scripts/incremental_scan.py",
 }
 
 TEXT_SUFFIXES = {".md", ".py", ".toml", ".yml", ".yaml", ".example"}
@@ -132,7 +133,12 @@ def validate_current_contract(errors: list[str]) -> None:
             "has_more=false",
         ],
         "references/excel-insert.md": ["no operation produced", "安全短前缀"],
-        "references/personal-excel-source.md": ["13 字段契约", "每次只传一个 `--record-id`"],
+        "references/personal-excel-source.md": [
+            "13 字段契约",
+            "每次只传一个 `--record-id`",
+            "--filter-json",
+            "--full-audit",
+        ],
         "references/prewrite-confirmation.md": [
             "hard_filtered",
             "auto_write",

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reject deployment of the retired OfferLoop workbench snapshot."""
+"""Reject deployment of the retired OfferLoop workbench."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from pathlib import Path
 
 RETIRED_MESSAGE = (
     "the legacy OfferLoop workbench was retired on 2026-08-17; "
-    "its template is a frozen source snapshot and cannot be deployed"
+    "its source was removed and it cannot be deployed"
 )
 
 
