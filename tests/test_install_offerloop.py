@@ -93,7 +93,7 @@ class OfferLoopInstallerTest(unittest.TestCase):
             self.assertEqual(manifest["agent"], "claude-code")
             self.assertNotIn(directory, json.dumps(manifest))
 
-    def test_install_includes_base_daily_checkin_contract(self):
+    def test_install_includes_base_completion_sync_contract(self):
         with tempfile.TemporaryDirectory() as directory:
             environment = {"HOME": directory, "PATH": ""}
             self.installer.install_agent("codex", environ=environment)
@@ -103,9 +103,10 @@ class OfferLoopInstallerTest(unittest.TestCase):
                 reminder / "references" / "task-sync-contract.md"
             ).read_text(encoding="utf-8")
 
-            self.assertIn("Base 驱动的每日卡片", skill)
+            self.assertIn("笔面试中心修改完成状态", skill)
             self.assertNotIn("飞书任务GUID", skill)
-            self.assertIn("card.action.trigger", contract)
+            self.assertNotIn("card.action.trigger", contract)
+            self.assertNotIn("card-action", skill)
             self.assertIn("offerloop-base-reconcile", contract)
             self.assertIn("/openapi/job-progress-sync/reminder-reconcile", contract)
             self.assertIn("笔面试安排", contract)
@@ -489,7 +490,7 @@ class OfferLoopInstallerTest(unittest.TestCase):
 
     def test_version_reports_installer_and_offerloop_versions(self):
         self.assertEqual(self.installer.INSTALLER_VERSION, "2.1")
-        self.assertEqual(self.installer.offerloop_version(), "0.1.0-alpha.9")
+        self.assertEqual(self.installer.offerloop_version(), "0.1.0-alpha.12")
 
     def test_workbuddy_install_is_complete_and_idempotent(self):
         with tempfile.TemporaryDirectory() as directory:

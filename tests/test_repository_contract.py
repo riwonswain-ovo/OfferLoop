@@ -738,18 +738,12 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertIn("修改的是同一个单元格", reminder)
         self.assertNotIn("子表 record_id", reminder)
 
-    def test_setup_guides_daily_checkin_safety_and_bot_permissions(self):
+    def test_setup_does_not_expose_retired_daily_checkin(self):
         onboarding = (
             SKILLS / "offerloop-setup" / "references" / "onboarding.md"
         ).read_text(encoding="utf-8")
-        for expected in (
-            "完整分页读取成员",
-            "只有一个真人",
-            "配置所有者",
-            "im:chat.members:read",
-            "`paused`",
-        ):
-            self.assertIn(expected, onboarding)
+        self.assertNotIn("每日群聊确认", onboarding)
+        self.assertNotIn("im:chat.members:read", onboarding)
 
     def test_installer_welcome_introduces_the_nine_long_lived_skills(self):
         welcome = (
@@ -1001,7 +995,7 @@ class RepositoryContractTest(unittest.TestCase):
         materializer = (
             SKILLS / "offerloop-workbench" / "scripts" / "materialize_workbench.py"
         ).read_text(encoding="utf-8")
-        self.assertIn("仅作为历史源码快照保留", retired)
+        self.assertIn("旧模板源码已从活动代码树移除", retired)
         self.assertIn("cannot be deployed", materializer)
         self.assertIn("不改变当前同步/提醒应用", retirement_record)
 
@@ -1131,6 +1125,7 @@ class RepositoryContractTest(unittest.TestCase):
         )
         self.assertIn("skills/offerloop-setup/assets/progress-sync-template", workflow)
         self.assertNotIn("skills/offerloop-workbench/assets/workbench-template", workflow)
+        self.assertFalse((SKILLS / "offerloop-workbench" / "assets").exists())
 
     def test_only_offerloop_skills_are_packaged(self):
         discovered = {

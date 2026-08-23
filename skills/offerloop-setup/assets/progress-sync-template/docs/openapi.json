@@ -169,31 +169,6 @@
           }
         }
       }
-    },
-    "/openapi/job-progress-sync/card-action": {
-      "post": {
-        "operationId": "cardAction",
-        "summary": "处理 OfferLoop 每日确认卡片回调或飞书 challenge 验证",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "description": "飞书 card.action.trigger schema 2.0 事件或 challenge 请求"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "回调已确认；完成操作在后台幂等同步 Base，尚未完成操作不产生写入"
-          },
-          "400": {
-            "description": "回调身份、群聊或按钮值无效"
-          }
-        }
-      }
     }
   }
 }
