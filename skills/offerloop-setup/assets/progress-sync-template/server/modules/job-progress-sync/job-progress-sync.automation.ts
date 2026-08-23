@@ -9,15 +9,6 @@ export class JobProgressSyncAutomation {
 
   constructor(private readonly progressSyncService: JobProgressSyncService) {}
 
-  @BindTrigger('offerloop-daily-checkin')
-  async sendDailyCheckin(): Promise<void> {
-    const result = await this.progressSyncService.sendDailyCheckin();
-    this.logger.log(
-      `OfferLoop daily check-in ${result.status}`
-      + (result.reason ? `: ${result.reason}` : ''),
-    );
-  }
-
   @BindTrigger('offerloop-base-reconcile')
   async reconcileBaseStates(): Promise<void> {
     const result = await this.progressSyncService.reconcileTaskStates();

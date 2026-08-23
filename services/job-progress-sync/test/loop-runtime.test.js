@@ -2,13 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  actionIdempotencyKey,
-  buildDailyCheckinCard,
   buildAgentDeepLinkPayload,
   createAbilityObservation,
   createTrainingTask,
-  parseCheckinCardAction,
-  validateSingleOwnerChat,
 } from "../src/loop-runtime.js";
 
 const observationInput = {
@@ -30,52 +26,4 @@ test("creates a stable candidate observation and queued Agent task", () => {
   const task = createTrainingTask([observation], new Date("2026-08-10T12:01:00Z"));
   assert.equal(task.status, "awaiting_user_agent");
   assert.equal(buildAgentDeepLinkPayload(task).skill, "competency-lab");
-});
-
-test("only a complete single-owner chat is safe", () => {
-  assert.equal(validateSingleOwnerChat({ users: [{ open_id: "ou_owner" }], bots: [{}], has_more: false }, "ou_owner").safe, true);
-  assert.equal(validateSingleOwnerChat({ users: [{ open_id: "ou_owner" }], has_more: true }, "ou_owner").safe, false);
-  assert.equal(validateSingleOwnerChat({ users: [{ open_id: "ou_owner" }, { open_id: "ou_other" }] }, "ou_owner").safe, false);
-});
-
-test("card idempotency key is stable", () => {
-  const input = { messageId: "om_1", actionId: "done", eventId: "evt_1" };
-  assert.equal(actionIdempotencyKey(input), actionIdempotencyKey(input));
-});
-
-test("daily check-in card uses Card 2.0 and free text requires preview confirmation", () => {
-  const card = buildDailyCheckinCard({
-    date: "2026-08-10",
-    today: [{ record_id: "rec_1", company: "示例公司", stage: "一面", time_label: "20:00" }],
-  });
-  assert.equal(card.schema, "2.0");
-  assert.equal(card.body.elements.at(-1).tag, "form");
-  const parsed = parseCheckinCardAction({
-    message_id: "om_1",
-    event_id: "callback_1",
-    form_value: JSON.stringify({ progress_text: "完成了一面" }),
-  });
-  assert.equal(parsed.kind, "free_text_preview");
-  assert.equal(parsed.requires_confirmation, true);
-  const action = parseCheckinCardAction({
-    message_id: "om_1",
-    event_id: "callback_2",
-    action_value: { action: "completed", record_id: "rec_1" },
-  });
-  assert.equal(action.record_id, "rec_1");
-});
-
-test("daily check-in card shows at most fifteen records and reports the remainder", () => {
-  const card = buildDailyCheckinCard({
-    date: "2026-08-10",
-    today: Array.from({ length: 16 }, (_, index) => ({
-      record_id: `rec_${index + 1}`,
-      company: `示例公司${index + 1}`,
-      stage: "一面",
-    })),
-  });
-  const serialized = JSON.stringify(card);
-  assert.match(serialized, /另有 1 条安排未在本卡片展开/);
-  assert.match(serialized, /rec_15/);
-  assert.doesNotMatch(serialized, /rec_16/);
 });
