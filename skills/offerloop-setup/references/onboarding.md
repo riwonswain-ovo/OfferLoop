@@ -28,8 +28,6 @@ python3 scripts/setup_offerloop.py --agent codex --mode full --verify
 
 - Base 的确定性同步通常使用 bot 身份。
 - 用户自己的知识库、文档和日历使用 user 身份。
-- 每日群聊确认要求完整分页读取成员、群内只有一个真人且该真人是配置所有者。
-- 缺少 `im:chat.members:read`、成员结果截断、多人群或所有者不匹配时，状态必须为 `paused` 并记录原因。
 - 密钥、Cookie、token 和邮箱授权码不得进入聊天、Git、飞书文档或 Base。
 
 ## 固定知识库

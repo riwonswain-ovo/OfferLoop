@@ -112,6 +112,13 @@ def normalize_url(url: str) -> str:
         if not key.lower().startswith("utm_") and key.lower() not in TRACKING_QUERY_KEYS
     ]
     path = parsed.path.rstrip("/") or "/"
+    raw_fragment = parsed.fragment.strip()
+    fragment = (
+        raw_fragment
+        if raw_fragment
+        and (raw_fragment.startswith(("/", "!")) or "=" in raw_fragment or "?" in raw_fragment)
+        else ""
+    )
     return urlunparse(
         (
             parsed.scheme.lower(),
@@ -119,7 +126,7 @@ def normalize_url(url: str) -> str:
             path,
             "",
             urlencode(sorted(query)),
-            "",
+            fragment,
         )
     )
 

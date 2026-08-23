@@ -30,7 +30,7 @@ python3 scripts/deployment_plan.py --capability full --write-checkpoint --json
    python3 scripts/materialize_app_template.py --template progress-sync --destination '<SYNC_APP_DIR>' --json
    ```
 
-   模板清单中的 `required_environment` 只列变量名；按新建的三个 Base 和飞书应用填写妙搭环境变量，不把值写入 Skill、本地 Git 或 checkpoint。即时同步应用只开通读取群成员、发送互动卡片、读写三个 Base 所需的最小权限，不申请飞书任务或任务清单权限。配置 `FEISHU_VERIFICATION_TOKEN`，把 `/openapi/job-progress-sync/card-action` 登记为卡片回调地址并订阅 `card.action.trigger`；回调必须校验 App ID、所有者 open_id 和固定群 chat_id。
+   模板清单中的 `required_environment` 只列变量名；按新建的三个 Base 和飞书应用填写妙搭环境变量，不把值写入 Skill、本地 Git 或 checkpoint。即时同步应用只开通读写三个 Base 所需的最小权限，不申请飞书互动卡片、任务或任务清单权限。
 
    `笔面试中心` 只使用 `笔面试安排` 一张物理表，并在该表下创建 `全部安排`、`笔试`、`群面`、`一面`、`二面`、`三面`、`HR 面`、`其他面试` 视图。另生成独立的 `REMINDER_RECONCILE_SECRET`，其密钥值只存入妙搭环境变量和 Base workflow 的加密配置，不写入请求体、文档或日志。只创建一条即时 workflow，使用 `SetRecordTrigger` 监听 `笔面试安排.完成状态`；随后用 `HTTPClientAction` POST 到 `/openapi/job-progress-sync/reminder-reconcile`，请求头 `Authorization: Bearer <仅授权该路由的 OpenAPI key>` 与 `X-OfferLoop-Workflow-Secret` 缺一不可。请求体优先传 `recordId`、`recordLink`、`来源邮件ID` 或唯一 `安排名称`；若飞书运行时没有填充动态变量，服务端对唯一主表执行幂等全量对账，避免依赖不稳定的运行时输出。创建 `offerloop-base-reconcile` 定时触发器仅用于补偿漏事件，不得以 30 分钟轮询作为正常同步时效。workflow 写入必须排除 `automationBatchUpdate`，避免服务回写触发循环。不得创建原生任务，不得调用 Calendar API 或反向改写计划时间与真实截止。
 

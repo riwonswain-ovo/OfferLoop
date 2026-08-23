@@ -8,13 +8,7 @@
 - `application-progress-loop`：邀请、完成事件与不可倒退的求职状态。
 - `capability-growth-loop`：能力观察、专项训练待办与复测。
 
-`loop-store.js` 提供原子持久化和合法边校验；`progress-model.js` 以“进展状态 / 最近完成节点”维护求职进展；`daily-checkin.js` 负责每日确认的安全预检和回调幂等。
-
-## 每日进展确认
-
-固定计划为 `21:30 Asia/Shanghai`。发送前必须完整分页读取群成员，并确认群内只有一个真人且该真人是 OfferLoop 所有者。任何条件不满足时返回暂停原因；不自动改为私聊。
-
-卡片按钮使用 `message_id + action_id + event_id` 去重。自由文本只生成变更预览，用户确认前不得写 Base。
+`loop-store.js` 提供原子持久化和合法边校验；`progress-model.js` 以“进展状态 / 最近完成节点”维护求职进展。运行时不发送每日签到卡，用户直接在笔面试中心维护完成状态。
 
 ## Agent 边界
 

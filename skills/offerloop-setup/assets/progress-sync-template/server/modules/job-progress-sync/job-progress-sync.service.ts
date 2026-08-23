@@ -19,7 +19,6 @@ import type {
 
 const OPEN_API_ROOT = 'https://open.feishu.cn/open-apis';
 const TOKEN_URL = `${OPEN_API_ROOT}/auth/v3/tenant_access_token/internal`;
-const MAX_DAILY_CARD_EVENTS = 15;
 const REQUIRED_ENV_NAMES: string[] = [
   'FEISHU_APP_ID',
   'FEISHU_APP_SECRET',
@@ -29,10 +28,6 @@ const REQUIRED_ENV_NAMES: string[] = [
   'PROGRESS_TABLE_ID',
   'REMINDER_BASE_TOKEN',
   'REMINDER_TABLE_ID',
-  'REMINDER_BASE_URL',
-  'DAILY_CHECKIN_CHAT_ID',
-  'DAILY_CHECKIN_OWNER_OPEN_ID',
-  'DAILY_CHECKIN_STATUS',
   'REMINDER_RECONCILE_SECRET',
 ];
 
@@ -83,29 +78,7 @@ interface DeploymentConfig {
   progressTableId: string;
   reminderBaseToken: string;
   reminderTableId: string;
-  reminderBaseUrl: string;
-  dailyCheckinChatId: string;
-  dailyCheckinOwnerOpenId: string;
-  dailyCheckinStatus: string;
-  verificationToken: string;
   reminderReconcileSecret: string;
-}
-
-interface FeishuChatMember {
-  member_id: string;
-  name?: string;
-}
-
-interface ChatMemberListData {
-  items?: FeishuChatMember[];
-  member_total?: number;
-  has_more?: boolean;
-  page_token?: string;
-  trigger_security_conf_limit?: boolean;
-}
-
-interface MessageSendData {
-  message_id?: string;
 }
 
 interface ReminderOutcomeResult {
@@ -113,13 +86,6 @@ interface ReminderOutcomeResult {
   nextStep: string;
   progressRecordFound: boolean;
   targetCompletionStatus: string;
-}
-
-export interface DailyCheckinResult {
-  status: 'sent' | 'skipped';
-  reason?: string;
-  messageId?: string;
-  eventCount?: number;
 }
 
 export interface TaskReconcileResult {
@@ -138,53 +104,11 @@ export interface ReminderReconcileResult {
   completionStatus: string;
 }
 
-export interface CardActionCallback {
-  schema?: string;
-  header?: {
-    event_id?: string;
-    token?: string;
-    event_type?: string;
-    app_id?: string;
-  };
-  event?: {
-    operator?: { open_id?: string };
-    action?: {
-      tag?: string;
-      value?: unknown;
-    };
-    context?: {
-      open_chat_id?: string;
-      open_message_id?: string;
-    };
-  };
-}
-
-export interface CardActionResponse {
-  toast: {
-    type: 'success' | 'info';
-    content: string;
-  };
-}
-
-export interface FeishuCallbackChallenge {
-  challenge?: string;
-  token?: string;
-  type?: string;
-}
-
 function requireDeploymentConfig(env: NodeJS.ProcessEnv): DeploymentConfig {
   for (const name of REQUIRED_ENV_NAMES) {
     if (!String(env[name] ?? '').trim()) {
       throw new Error(`missing required environment variable: ${name}`);
     }
-  }
-  const verificationToken: string = String(
-    env.FEISHU_VERIFICATION_TOKEN
-      ?? env.FEISHU_CALLBACK_VERIFICATION_TOKEN
-      ?? '',
-  ).trim();
-  if (!verificationToken) {
-    throw new Error('missing required environment variable: FEISHU_VERIFICATION_TOKEN');
   }
   return {
     appId: String(env.FEISHU_APP_ID),
@@ -195,11 +119,6 @@ function requireDeploymentConfig(env: NodeJS.ProcessEnv): DeploymentConfig {
     progressTableId: String(env.PROGRESS_TABLE_ID),
     reminderBaseToken: String(env.REMINDER_BASE_TOKEN),
     reminderTableId: String(env.REMINDER_TABLE_ID),
-    reminderBaseUrl: String(env.REMINDER_BASE_URL),
-    dailyCheckinChatId: String(env.DAILY_CHECKIN_CHAT_ID),
-    dailyCheckinOwnerOpenId: String(env.DAILY_CHECKIN_OWNER_OPEN_ID),
-    dailyCheckinStatus: String(env.DAILY_CHECKIN_STATUS),
-    verificationToken,
     reminderReconcileSecret: String(env.REMINDER_RECONCILE_SECRET),
   };
 }
@@ -419,315 +338,6 @@ function compareReminderProgress(left: FeishuRecord, right: FeishuRecord): numbe
     return PROGRESS_STATUS_RANK[NEXT_STEP_TO_PROGRESS_STATUS[nextStep]] ?? -1;
   };
   return progressRank(left) - progressRank(right) || compareReminderTime(left, right);
-}
-
-function escapeCardMarkdown(value: unknown): string {
-  return readText(value)
-    .replace(/&/gu, '&#38;')
-    .replace(/</gu, '&#60;')
-    .replace(/>/gu, '&#62;')
-    .replace(/\*/gu, '&#42;')
-    .replace(/_/gu, '&#95;')
-    .replace(/~/gu, '&#126;')
-    .replace(/\[/gu, '&#91;')
-    .replace(/\]/gu, '&#93;');
-}
-
-function formatShanghaiDateTime(value: number | null): string {
-  if (value === null) {
-    return '时间待确认';
-  }
-  return new Intl.DateTimeFormat('zh-CN', {
-    timeZone: 'Asia/Shanghai',
-    month: 'numeric',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).format(new Date(value));
-}
-
-function stableDailyMessageUuid(date: string): string {
-  const bytes: Buffer = Buffer.from(
-    createHash('sha256')
-      .update(`offerloop-daily-checkin:${date}`)
-      .digest()
-      .subarray(0, 16),
-  );
-  bytes[6] = (bytes[6] & 0x0f) | 0x40;
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
-  const hex: string = bytes.toString('hex');
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}`
-    + `-${hex.slice(16, 20)}-${hex.slice(20)}`;
-}
-
-function buildEventBlock(
-  record: FeishuRecord,
-  label: string,
-  color: 'red' | 'orange' | 'yellow' | 'green',
-  completed: boolean,
-): Record<string, unknown> {
-  const fields: Record<string, unknown> = record.fields;
-  const title: string = [fields['公司'], fields['岗位'], fields['环节']]
-    .map((value: unknown): string => escapeCardMarkdown(value))
-    .filter(Boolean)
-    .join('｜') || '待处理安排';
-  const plannedAt: number | null = readDateMillis(fields['开始时间']);
-  const deadlineAt: number | null = readDateMillis(fields['截止时间']);
-  const timeLines: string[] = [
-    plannedAt === null ? '' : `计划：${formatShanghaiDateTime(plannedAt)}`,
-    deadlineAt === null ? '' : `真实截止：${formatShanghaiDateTime(deadlineAt)}`,
-  ].filter(Boolean);
-  const actionElements: Record<string, unknown>[] = completed
-    ? [{
-      tag: 'markdown',
-      content: "<font color='green'>✓ 已完成并同步</font>",
-      text_size: 'notation',
-    }]
-    : [{
-      tag: 'column_set',
-      flex_mode: 'flow',
-      horizontal_spacing: '8px',
-      columns: [
-        {
-          tag: 'column',
-          width: 'weighted',
-          weight: 1,
-          elements: [{
-            tag: 'button',
-            text: { tag: 'plain_text', content: '已完成' },
-            type: 'primary_filled',
-            width: 'fill',
-            behaviors: [{
-              type: 'callback',
-              value: { action: 'completed', record_id: record.record_id },
-            }],
-          }],
-        },
-        {
-          tag: 'column',
-          width: 'weighted',
-          weight: 1,
-          elements: [{
-            tag: 'button',
-            text: { tag: 'plain_text', content: '尚未完成' },
-            type: 'default',
-            width: 'fill',
-            behaviors: [{
-              type: 'callback',
-              value: { action: 'incomplete', record_id: record.record_id },
-            }],
-          }],
-        },
-      ],
-    }];
-  return {
-    tag: 'column_set',
-    flex_mode: 'none',
-    margin: '0px 0px 12px 0px',
-    columns: [{
-      tag: 'column',
-      width: 'weighted',
-      weight: 1,
-      background_style: `${color}-50`,
-      padding: '12px',
-      vertical_spacing: '4px',
-      elements: [
-        {
-          tag: 'markdown',
-          content: `**<font color='${color}'>${label}</font> · ${title}**`,
-        },
-        {
-          tag: 'markdown',
-          content: `<font color='grey'>${timeLines.join('　') || '时间待确认'}</font>`,
-          text_size: 'notation',
-        },
-        ...actionElements,
-      ],
-    }],
-  };
-}
-
-function buildDailyCheckinCard(
-  date: string,
-  pendingRecords: FeishuRecord[],
-  completedRecords: FeishuRecord[],
-  reminderBaseUrl: string,
-): Record<string, unknown> {
-  const dayStart: number = Date.parse(`${date}T00:00:00+08:00`);
-  const dayEnd: number = dayStart + 24 * 60 * 60 * 1000;
-  const now: number = Date.now();
-  const groups: Array<{
-    label: string;
-    color: 'red' | 'orange' | 'yellow' | 'green';
-    records: FeishuRecord[];
-    completed: boolean;
-  }> = [
-    {
-      label: '今日计划',
-      color: 'orange',
-      completed: false,
-      records: pendingRecords.filter((record: FeishuRecord): boolean => {
-        const planned: number | null = readDateMillis(record.fields['开始时间']);
-        const deadline: number | null = readDateMillis(record.fields['截止时间']);
-        const time: number | null = planned ?? deadline;
-        return time !== null && time >= dayStart && time < dayEnd
-          && (deadline === null || deadline >= now);
-      }),
-    },
-    {
-      label: '计划未完成',
-      color: 'yellow',
-      completed: false,
-      records: pendingRecords.filter((record: FeishuRecord): boolean => {
-        const planned: number | null = readDateMillis(record.fields['开始时间']);
-        const deadline: number | null = readDateMillis(record.fields['截止时间']);
-        return planned !== null && planned < dayStart
-          && (deadline === null || deadline >= now);
-      }),
-    },
-    {
-      label: '已过真实截止',
-      color: 'red',
-      completed: false,
-      records: pendingRecords.filter((record: FeishuRecord): boolean => {
-        const deadline: number | null = readDateMillis(record.fields['截止时间']);
-        return deadline !== null && deadline < now;
-      }),
-    },
-    {
-      label: '今日已完成',
-      color: 'green',
-      completed: true,
-      records: completedRecords.filter((record: FeishuRecord): boolean => {
-        const planned: number | null = readDateMillis(record.fields['开始时间']);
-        const deadline: number | null = readDateMillis(record.fields['截止时间']);
-        const time: number | null = planned ?? deadline;
-        return time !== null && time >= dayStart && time < dayEnd;
-      }),
-    },
-  ];
-  const selected: Array<{
-    record: FeishuRecord;
-    label: string;
-    color: 'red' | 'orange' | 'yellow' | 'green';
-    completed: boolean;
-  }> = [];
-  for (const group of groups) {
-    const sorted: FeishuRecord[] = [...group.records].sort(
-      (left: FeishuRecord, right: FeishuRecord): number =>
-        (readDateMillis(left.fields['开始时间'] ?? left.fields['截止时间']) ?? 0)
-        - (readDateMillis(right.fields['开始时间'] ?? right.fields['截止时间']) ?? 0),
-    );
-    for (const record of sorted) {
-      const planned: number | null = readDateMillis(record.fields['开始时间']);
-      const label: string = group.label === '计划未完成'
-        && planned !== null
-        && planned >= dayStart - 24 * 60 * 60 * 1000
-        ? '昨天计划未完成'
-        : group.label;
-      selected.push({
-        record,
-        label,
-        color: group.color,
-        completed: group.completed,
-      });
-    }
-  }
-
-  const visibleItems = selected.slice(0, MAX_DAILY_CARD_EVENTS);
-  const hiddenCount: number = selected.length - visibleItems.length;
-  const elements: Record<string, unknown>[] = visibleItems.map(
-    (item): Record<string, unknown> =>
-      buildEventBlock(item.record, item.label, item.color, item.completed),
-  );
-  if (elements.length === 0) {
-    elements.push({
-      tag: 'column_set',
-      flex_mode: 'none',
-      margin: '0px 0px 12px 0px',
-      columns: [{
-        tag: 'column',
-        width: 'weighted',
-        weight: 1,
-        background_style: 'yellow-50',
-        padding: '12px',
-        elements: [{
-          tag: 'markdown',
-          content: '**今天没有需要确认的笔试或面试安排。**',
-        }],
-      }],
-    });
-  }
-  if (hiddenCount > 0) {
-    elements.push({
-      tag: 'markdown',
-      content: `<font color='grey'>另有 ${hiddenCount} 条安排未在本卡片展开，请打开笔面试中心查看。</font>`,
-      text_size: 'notation',
-    });
-  }
-  elements.push({
-    tag: 'column_set',
-    flex_mode: 'none',
-    columns: [{
-      tag: 'column',
-      width: 'weighted',
-      weight: 1,
-      background_style: 'grey-50',
-      padding: '12px',
-      vertical_spacing: '8px',
-      elements: [
-        {
-          tag: 'markdown',
-          content: '**今天有新的求职进展吗？**\n卡片只更新 Base 状态；不会创建飞书任务，也不会自动移动日历。',
-        },
-        {
-          tag: 'column_set',
-          flex_mode: 'bisect',
-          horizontal_spacing: '8px',
-          columns: [
-            {
-              tag: 'column',
-              width: 'weighted',
-              weight: 1,
-              elements: [{
-                tag: 'button',
-                text: { tag: 'plain_text', content: '查看笔面试中心' },
-                type: 'primary_filled',
-                width: 'fill',
-                behaviors: [{ type: 'open_url', default_url: reminderBaseUrl }],
-              }],
-            },
-          ],
-        },
-      ],
-    }],
-  });
-  return {
-    schema: '2.0',
-    config: {
-      update_multi: true,
-      width_mode: 'default',
-      summary: { content: `OfferLoop ${date} 求职进展确认` },
-    },
-    header: {
-      title: { tag: 'plain_text', content: 'OfferLoop 求职进展确认' },
-      subtitle: { tag: 'plain_text', content: `${date} · 每日 21:30` },
-      template: 'orange',
-      icon: { tag: 'standard_icon', token: 'todo_colorful' },
-      text_tag_list: [{
-        tag: 'text_tag',
-        text: { tag: 'plain_text', content: '待回复' },
-        color: 'yellow',
-      }],
-    },
-    body: {
-      direction: 'vertical',
-      padding: '12px 12px 20px 12px',
-      vertical_spacing: '0px',
-      elements,
-    },
-  };
 }
 
 function toWritableFields(fields: Record<string, unknown>): Record<string, unknown> {
@@ -999,139 +609,12 @@ export class JobProgressSyncService {
     return '';
   }
 
-  async sendDailyCheckin(): Promise<DailyCheckinResult> {
-    if (this.config.dailyCheckinStatus !== 'enabled') {
-      return { status: 'skipped', reason: 'daily_checkin_not_enabled' };
-    }
-    const members: FeishuChatMember[] = await this.listAllHumanChatMembers();
-    if (members.length !== 1) {
-      throw new ServiceUnavailableException('daily check-in requires exactly one human member');
-    }
-    if (members[0].member_id !== this.config.dailyCheckinOwnerOpenId) {
-      throw new ServiceUnavailableException('daily check-in sole human is not OfferLoop owner');
-    }
-    const records: FeishuRecord[] = await this.listReminderRecordsByStatus('待完成');
-    const completedRecords: FeishuRecord[] = await this.listReminderRecordsByStatus('已完成');
-    const date: string = formatShanghaiDate();
-    const card: Record<string, unknown> = buildDailyCheckinCard(
-      date,
-      records,
-      completedRecords,
-      this.config.reminderBaseUrl,
-    );
-    const data: MessageSendData = await this.feishuRequest<MessageSendData>({
-      method: 'POST',
-      url: `${OPEN_API_ROOT}/im/v1/messages?receive_id_type=chat_id`,
-      data: {
-        receive_id: this.config.dailyCheckinChatId,
-        msg_type: 'interactive',
-        content: JSON.stringify(card),
-        uuid: stableDailyMessageUuid(date),
-      },
-    });
-    return {
-      status: 'sent',
-      messageId: data.message_id,
-      eventCount: records.length + completedRecords.length,
-    };
-  }
-
-  verifyCallbackChallenge(payload: FeishuCallbackChallenge): { challenge: string } {
-    const challenge: string = readText(payload.challenge);
-    if (!challenge || readText(payload.token) !== this.config.verificationToken) {
-      throw new BadRequestException('invalid Feishu callback challenge');
-    }
-    return { challenge };
-  }
-
   verifyReminderReconcileSecret(candidate: string | undefined): void {
     const actual: Buffer = Buffer.from(String(candidate ?? ''));
     const expected: Buffer = Buffer.from(this.config.reminderReconcileSecret);
     if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) {
       throw new UnauthorizedException('invalid reminder reconciliation secret');
     }
-  }
-
-  async handleDailyCheckinAction(callback: CardActionCallback): Promise<CardActionResponse> {
-    if (
-      callback.schema !== '2.0'
-      || callback.header?.token !== this.config.verificationToken
-      || callback.header?.event_type !== 'card.action.trigger'
-      || callback.header?.app_id !== this.config.appId
-      || callback.event?.operator?.open_id !== this.config.dailyCheckinOwnerOpenId
-      || callback.event?.context?.open_chat_id !== this.config.dailyCheckinChatId
-      || callback.event?.action?.tag !== 'button'
-    ) {
-      throw new BadRequestException('invalid Feishu card action');
-    }
-    const value: Record<string, unknown> = (
-      callback.event.action.value && typeof callback.event.action.value === 'object'
-    ) ? callback.event.action.value as Record<string, unknown> : {};
-    const action: string = readText(value.action);
-    const recordId: string = readText(value.record_id);
-    if (!['completed', 'incomplete'].includes(action) || !/^rec[A-Za-z0-9]+$/u.test(recordId)) {
-      throw new BadRequestException('invalid daily check-in action value');
-    }
-    const reminderRecord: FeishuRecord = await this.getReminderRecord(recordId);
-    const status: string = readText(reminderRecord.fields['完成状态']);
-    if (action === 'incomplete') {
-      if (status !== '待完成') {
-        throw new BadRequestException('reminder is no longer pending');
-      }
-      return {
-        toast: {
-          type: 'info',
-          content: '已记录为尚未完成，明天仍会提醒；真实截止时间不变。',
-        },
-      };
-    }
-    if (status === '待完成') {
-      const pendingRecords: FeishuRecord[] = await this.listReminderRecordsByStatus('待完成');
-      await this.applyReminderOutcome(reminderRecord, 'completed', pendingRecords);
-    } else if (status !== '已完成') {
-      throw new BadRequestException('reminder cannot be marked completed');
-    }
-    return {
-      toast: {
-        type: 'success',
-        content: '已同步笔面试中心与求职进展。',
-      },
-    };
-  }
-
-  private async listAllHumanChatMembers(): Promise<FeishuChatMember[]> {
-    const members: FeishuChatMember[] = [];
-    let pageToken: string = '';
-    let expectedTotal: number | null = null;
-    for (let page: number = 0; page < 100; page += 1) {
-      const suffix: string = pageToken
-        ? `&page_token=${encodeURIComponent(pageToken)}`
-        : '';
-      const data: ChatMemberListData = await this.feishuRequest<ChatMemberListData>({
-        method: 'GET',
-        url: `${OPEN_API_ROOT}/im/v1/chats/`
-          + `${encodeURIComponent(this.config.dailyCheckinChatId)}/members`
-          + `?member_id_type=open_id&page_size=100&check_security_conf=true${suffix}`,
-      });
-      if (data.trigger_security_conf_limit) {
-        throw new ServiceUnavailableException('daily check-in member list is truncated');
-      }
-      members.push(...(data.items ?? []));
-      if (typeof data.member_total === 'number') {
-        expectedTotal = data.member_total;
-      }
-      if (!data.has_more) {
-        if (expectedTotal !== null && members.length !== expectedTotal) {
-          throw new ServiceUnavailableException('daily check-in member list is incomplete');
-        }
-        return members;
-      }
-      pageToken = String(data.page_token ?? '');
-      if (!pageToken) {
-        throw new ServiceUnavailableException('daily check-in member pagination is incomplete');
-      }
-    }
-    throw new ServiceUnavailableException('daily check-in member pagination exceeded safety limit');
   }
 
   private async applyReminderOutcome(

@@ -925,31 +925,6 @@ class OfferLoopSetupTest(unittest.TestCase):
             self.assertEqual(saved["notifications"]["target_name"], "秋招进度群")
             self.assertEqual(saved["notifications"]["identity"], "bot")
 
-    def test_enabling_daily_checkin_clears_stale_pause_reason(self):
-        with tempfile.TemporaryDirectory() as directory:
-            path = configure.config_file({"XDG_CONFIG_HOME": directory})
-            configure.write_private_json(
-                path,
-                {
-                    "daily_checkin": {
-                        "status": "paused",
-                        "chat_id": "oc_example",
-                        "owner_open_id": "ou_example",
-                        "send_time": "21:30",
-                        "timezone": "Asia/Shanghai",
-                        "pause_reason": "missing scope",
-                    },
-                },
-            )
-
-            result = configure.update_daily_checkin_config(
-                path,
-                {"status": "enabled"},
-            )
-
-            self.assertEqual(result["daily_checkin"]["status"], "enabled")
-            self.assertNotIn("pause_reason", result["daily_checkin"])
-
     def test_preflight_reports_workspace_locator_readiness_without_values(self):
         with tempfile.TemporaryDirectory() as directory:
             path = configure.config_file({"XDG_CONFIG_HOME": directory})
@@ -1050,7 +1025,7 @@ class OfferLoopSetupTest(unittest.TestCase):
                 [],
             )
 
-    def test_progress_sync_template_uses_base_card_callback_without_native_tasks(self):
+    def test_progress_sync_template_uses_base_reconciliation_without_daily_cards(self):
         root = (
             ROOT
             / "skills"
@@ -1061,7 +1036,9 @@ class OfferLoopSetupTest(unittest.TestCase):
         manifest = json.loads((root / "template.json").read_text(encoding="utf-8"))
         required = set(manifest["required_environment"])
         self.assertNotIn("REMINDER_TASKLIST_GUID", required)
-        self.assertIn("FEISHU_VERIFICATION_TOKEN", required)
+        self.assertNotIn("FEISHU_VERIFICATION_TOKEN", required)
+        self.assertNotIn("DAILY_CHECKIN_STATUS", required)
+        self.assertNotIn("REMINDER_BASE_URL", required)
         self.assertIn("REMINDER_RECONCILE_SECRET", required)
         self.assertNotIn("OFFERLOOP_CALLBACK_RELAY_SECRET", required)
 
@@ -1081,8 +1058,8 @@ class OfferLoopSetupTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertNotIn("ensureReminderTaskMapping", service)
         self.assertNotIn("/task/v2/tasks", service)
-        self.assertIn("type: 'callback'", service)
-        self.assertIn("handleDailyCheckinAction", service)
+        self.assertNotIn("type: 'callback'", service)
+        self.assertNotIn("DailyCheckin", service)
         self.assertIn("reconcileReminderRecord", service)
         self.assertNotIn("子表 record_id", service)
         self.assertNotIn("getReminderChildTableId", service)
@@ -1109,7 +1086,7 @@ class OfferLoopSetupTest(unittest.TestCase):
         self.assertIn("X-OfferLoop-Workflow-Secret", deploy)
         self.assertIn("SetRecordTrigger", deploy)
         self.assertIn("仅用于补偿漏事件", deploy)
-        self.assertIn("card.action.trigger", deploy)
+        self.assertNotIn("card.action.trigger", deploy)
         self.assertNotIn("apps/offerloop-card-ingress", deploy)
         self.assertNotIn("CARD_INGRESS_PUBLIC_URL", deploy)
 
@@ -1124,6 +1101,7 @@ class OfferLoopSetupTest(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("冻结并退役", retired)
+        self.assertIn("旧模板源码已从活动代码树移除", retired)
         self.assertNotIn("--deploy-workbench", installer)
         self.assertNotIn("offerloop-workbench/assets/workbench-template", workflow)
         self.assertNotIn("workbench", deployment_plan.CAPABILITIES)

@@ -738,18 +738,12 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertIn("修改的是同一个单元格", reminder)
         self.assertNotIn("子表 record_id", reminder)
 
-    def test_setup_guides_daily_checkin_safety_and_bot_permissions(self):
+    def test_setup_does_not_expose_retired_daily_checkin(self):
         onboarding = (
             SKILLS / "offerloop-setup" / "references" / "onboarding.md"
         ).read_text(encoding="utf-8")
-        for expected in (
-            "完整分页读取成员",
-            "只有一个真人",
-            "配置所有者",
-            "im:chat.members:read",
-            "`paused`",
-        ):
-            self.assertIn(expected, onboarding)
+        self.assertNotIn("每日群聊确认", onboarding)
+        self.assertNotIn("im:chat.members:read", onboarding)
 
     def test_installer_welcome_introduces_the_nine_long_lived_skills(self):
         welcome = (
@@ -952,7 +946,6 @@ class RepositoryContractTest(unittest.TestCase):
             "求职进展",
             "笔面试中心",
             "能力成长",
-            "配套飞书知识库是**可选的线上配置**",
         ):
             self.assertIn(expected, readme)
         self.assertNotIn("工作台", readme)
@@ -971,7 +964,6 @@ class RepositoryContractTest(unittest.TestCase):
             "python3 scripts/install_offerloop.py --agent codex --verify",
             readme,
         )
-        self.assertIn("--mode single --skill mock-lab", readme)
         self.assertNotIn("--deploy-workbench", readme)
         self.assertIn("幂等", readme)
         self.assertIn("不会复制三张 Base", readme)
@@ -1003,7 +995,7 @@ class RepositoryContractTest(unittest.TestCase):
         materializer = (
             SKILLS / "offerloop-workbench" / "scripts" / "materialize_workbench.py"
         ).read_text(encoding="utf-8")
-        self.assertIn("仅作为历史源码快照保留", retired)
+        self.assertIn("旧模板源码已从活动代码树移除", retired)
         self.assertIn("cannot be deployed", materializer)
         self.assertIn("不改变当前同步/提醒应用", retirement_record)
 
@@ -1015,6 +1007,7 @@ class RepositoryContractTest(unittest.TestCase):
             "## 🧭 认识 9 个 Skill",
             "## 🗂️ 配套飞书知识库（可选）",
             "## 🔄 升级与迁移",
+            "## 🔐 数据与安全边界",
         )
         positions = [readme.index(section) for section in sections]
         self.assertEqual(positions, sorted(positions))
@@ -1027,11 +1020,8 @@ class RepositoryContractTest(unittest.TestCase):
         for text in (readme, onboarding):
             self.assertIn("三张", text)
             self.assertIn("Base", text)
-        self.assertIn("配套飞书知识库", readme)
-        self.assertIn("可选", readme)
-        self.assertNotIn("工作台", readme)
-        self.assertNotIn("工作台", onboarding)
-        self.assertNotIn("Agent Worker", onboarding)
+            self.assertNotIn("工作台", text)
+            self.assertNotIn("Agent Worker", text)
         self.assertIn("--setup", onboarding)
         self.assertIn("--verify", onboarding)
         self.assertIn("`.offerloop-runtime`", onboarding)
@@ -1136,6 +1126,7 @@ class RepositoryContractTest(unittest.TestCase):
         )
         self.assertIn("skills/offerloop-setup/assets/progress-sync-template", workflow)
         self.assertNotIn("skills/offerloop-workbench/assets/workbench-template", workflow)
+        self.assertFalse((SKILLS / "offerloop-workbench" / "assets").exists())
 
     def test_only_offerloop_skills_are_packaged(self):
         discovered = {
