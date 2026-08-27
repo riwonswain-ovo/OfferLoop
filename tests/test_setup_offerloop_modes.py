@@ -1,8 +1,10 @@
 from pathlib import Path
 import importlib.util
 import json
+import os
 import tempfile
 import unittest
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,49 +26,14 @@ class OfferLoopSetupModesTest(unittest.TestCase):
             "skills/offerloop-workspace/scripts/install_mode.py",
         )
 
-    def test_single_mode_installs_only_selected_skill_and_minimal_runtime(self):
+    def test_legacy_single_mode_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             environment = {"HOME": directory, "PATH": ""}
-            result = self.setup.setup(
-                "codex",
-                "single",
-                skill="mock-lab",
-                environ=environment,
-            )
-            skills = Path(directory) / ".codex" / "skills"
-            self.assertEqual(result["status"], "ready")
-            self.assertTrue((skills / "mock-lab" / "SKILL.md").is_file())
-            self.assertFalse((skills / "career-profile").exists())
-            self.assertFalse((skills / "offerloop-workbench").exists())
-            self.assertTrue(
-                (
-                    skills
-                    / ".offerloop-runtime"
-                    / "references"
-                    / "installation-mode.md"
-                ).is_file()
-            )
-            self.assertTrue(
-                (
-                    skills
-                    / ".offerloop-runtime"
-                    / "references"
-                    / "full-setup.md"
-                ).is_file()
-            )
-            resolved = self.mode.resolve_mode(environ=environment)
-            self.assertEqual(resolved["mode"], "single")
-            self.assertEqual(resolved["profile_gate"], "skipped")
-            self.assertEqual(resolved["artifact_storage"], "chat_default")
-            verified = self.setup.verify(
-                "codex",
-                "single",
-                skill="mock-lab",
-                environ=environment,
-            )
-            self.assertTrue(verified["verified"])
+            with self.assertRaisesRegex(ValueError, "only supports the full"):
+                self.setup.setup("codex", "single", environ=environment)
+            self.assertFalse((Path(directory) / ".codex").exists())
 
-    def test_full_mode_installs_nine_skills_but_not_workbench(self):
+    def test_full_mode_installs_seven_skills_but_not_retired_entries(self):
         with tempfile.TemporaryDirectory() as directory:
             environment = {"HOME": directory, "PATH": ""}
             result = self.setup.setup("codex", "full", environ=environment)
@@ -75,6 +42,8 @@ class OfferLoopSetupModesTest(unittest.TestCase):
             self.assertIn("next_prompt", result)
             for name in self.setup._load_installer().SKILL_NAMES:
                 self.assertTrue((skills / name / "SKILL.md").is_file())
+            for name in ("career-profile", "competency-lab"):
+                self.assertFalse((skills / name).exists())
             self.assertFalse((skills / "offerloop-workbench").exists())
             config = json.loads(
                 self.setup.config_file(environment).read_text(encoding="utf-8")
@@ -82,33 +51,59 @@ class OfferLoopSetupModesTest(unittest.TestCase):
             self.assertEqual(config["installation"]["mode"], "full")
             self.assertNotIn("workbench_url", config)
 
-    def test_each_business_skill_can_be_installed_standalone(self):
+    def test_upgrade_migrates_schema_v7_and_keeps_legacy_locators_read_only(self):
+        with tempfile.TemporaryDirectory() as directory:
+            environment = {"HOME": directory, "PATH": ""}
+            config_path = self.setup.config_file(environment)
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 6,
+                        "user_profile": "legacy-profile-node",
+                        "competency_profiles": "legacy-map-node",
+                        "competency_training": "legacy-training-node",
+                        "artifact_storage": {
+                            "folders": {
+                                "user_profile": "legacy-profile-node",
+                                "competency_training": "legacy-training-node",
+                            },
+                            "readiness": {
+                                "career_profile": True,
+                                "competency_lab": True,
+                                "mock_lab": False,
+                            },
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            self.setup.setup("codex", "full", environ=environment, upgrade=True)
+            migrated = json.loads(config_path.read_text(encoding="utf-8"))
+            self.assertEqual(migrated["schema_version"], 7)
+            self.assertEqual(migrated["user_profile"], "legacy-profile-node")
+            self.assertEqual(migrated["competency_profiles"], "legacy-map-node")
+            self.assertEqual(migrated["competency_training"], "legacy-training-node")
+            self.assertEqual(
+                migrated["artifact_storage"]["readiness"], {"mock_lab": False}
+            )
+
+    def test_full_mode_installs_every_business_skill_and_runtime(self):
         installer = self.setup._load_installer()
-        for name in installer.SKILL_NAMES:
-            with self.subTest(skill=name), tempfile.TemporaryDirectory() as directory:
-                environment = {"HOME": directory, "PATH": ""}
-                result = self.setup.setup(
-                    "codex",
-                    "single",
-                    skill=name,
-                    environ=environment,
-                )
-                skills = Path(directory) / ".codex" / "skills"
-                installed = {
-                    item.name
-                    for item in skills.iterdir()
-                    if (item / "SKILL.md").is_file()
-                }
-                self.assertEqual(result["status"], "ready")
-                self.assertEqual(installed, {name})
-                self.assertTrue(
-                    self.setup.verify(
-                        "codex",
-                        "single",
-                        skill=name,
-                        environ=environment,
-                    )["verified"]
-                )
+        with tempfile.TemporaryDirectory() as directory:
+            environment = {"HOME": directory, "PATH": ""}
+            result = self.setup.setup("codex", "full", environ=environment)
+            skills = Path(directory) / ".codex" / "skills"
+            installed = {
+                item.name
+                for item in skills.iterdir()
+                if (item / "SKILL.md").is_file()
+            }
+            self.assertEqual(result["status"], "needs_setup")
+            self.assertEqual(installed, set(installer.SKILL_NAMES))
+            self.assertTrue(
+                (skills / ".offerloop-runtime" / "references" / "full-setup.md").is_file()
+            )
 
     def test_full_verify_requires_real_workspace_locators(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -127,7 +122,7 @@ class OfferLoopSetupModesTest(unittest.TestCase):
                     "wiki_space_id": "space_id",
                     "workspace_home_node_token": "home_node",
                     "workspace_core_data_node_token": "core_node",
-                    "schema_version": 6,
+                    "schema_version": 7,
                 }
             )
             self.setup._write_private_json(config_path, config)
@@ -149,8 +144,7 @@ class OfferLoopSetupModesTest(unittest.TestCase):
             environment = {"HOME": directory, "PATH": ""}
             result = self.setup.setup(
                 "codex",
-                "single",
-                skill="talk-review",
+                "full",
                 environ=environment,
                 dry_run=True,
             )
@@ -158,13 +152,168 @@ class OfferLoopSetupModesTest(unittest.TestCase):
             self.assertFalse((Path(directory) / ".codex").exists())
             self.assertFalse(self.setup.config_file(environment).exists())
 
-    def test_missing_mode_config_uses_legacy_full_behavior(self):
+    def test_missing_mode_config_requires_full_setup(self):
         with tempfile.TemporaryDirectory() as directory:
             result = self.mode.resolve_mode(
                 environ={"HOME": directory, "PATH": ""}
             )
             self.assertEqual(result["mode"], "full")
-            self.assertEqual(result["source"], "legacy_fallback")
+            self.assertEqual(result["source"], "legacy_requires_full_setup")
+            self.assertEqual(result["artifact_storage"], "feishu_default")
+            self.assertTrue(result["migration_required"])
+
+    def test_legacy_single_config_is_mapped_to_full_migration(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "config.json"
+            config.write_text(
+                json.dumps(
+                    {
+                        "installation": {
+                            "mode": "single",
+                            "selected_skills": ["talk-review"],
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            result = self.mode.resolve_mode(path=config)
+            self.assertEqual(result["mode"], "full")
+            self.assertEqual(result["source"], "legacy_requires_full_setup")
+            self.assertTrue(result["migration_required"])
+
+    def test_retirement_snapshot_preview_and_confirmed_rollback_are_idempotent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            environment = {
+                "HOME": directory,
+                "XDG_CONFIG_HOME": str(Path(directory) / "config"),
+                "XDG_STATE_HOME": str(Path(directory) / "state"),
+                "PATH": "",
+            }
+            self.setup.setup("codex", "full", environ=environment)
+            root = Path(directory) / ".codex" / "skills"
+            for name in ("career-profile", "competency-lab"):
+                retired = root / name
+                retired.mkdir()
+                (retired / "SKILL.md").write_text(
+                    f"legacy {name}\n", encoding="utf-8"
+                )
+            config = self.setup.config_file(environment)
+            config.write_text('{"schema_version": 6, "legacy": true}\n', encoding="utf-8")
+            loop = self.setup.loop_state_file(environment)
+            loop.parent.mkdir(parents=True, exist_ok=True)
+            legacy_loop = (
+                '{"ability_observations":{"obs":{"status":"open"}},'
+                '"tasks":{"train":{"kind":"training"}}}\n'
+            )
+            loop.write_text(legacy_loop, encoding="utf-8")
+            preference = {
+                "base_preference": {
+                    "base_url": "https://example.feishu.cn/base/preferences",
+                    "table_id": "tbl_preferences",
+                    "record_id": "rec_preferences",
+                    "fields": {"target_cities": ["上海"]},
+                },
+                "workspace_directories": {
+                    "root_token": "wiki_root",
+                    "nodes": [
+                        {
+                            "token": "profile_node",
+                            "title": "02｜用户画像",
+                            "parent_token": "wiki_root",
+                        },
+                        {
+                            "token": "resume_node",
+                            "title": "03｜定制简历",
+                            "parent_token": "wiki_root",
+                        },
+                    ],
+                },
+            }
+            created = self.setup.create_retirement_snapshot(
+                "codex", preference, environ=environment
+            )
+            snapshot_id = created["snapshot_id"]
+            self.assertEqual(created["status"], "snapshot_created")
+            self.assertTrue(created["workspace_directory_state_saved"])
+            if os.name != "nt":
+                snapshot = Path(created["snapshot_path"])
+                self.assertEqual(snapshot.stat().st_mode & 0o777, 0o700)
+                self.assertEqual(
+                    (snapshot / "manifest.json").stat().st_mode & 0o777, 0o600
+                )
+                self.assertEqual(
+                    (snapshot / "workspace-directories.json").stat().st_mode
+                    & 0o777,
+                    0o600,
+                )
+                self.assertEqual(
+                    (snapshot / "components" / "career-profile").stat().st_mode
+                    & 0o777,
+                    0o700,
+                )
+                self.assertEqual(
+                    (
+                        snapshot
+                        / "components"
+                        / "career-profile"
+                        / "SKILL.md"
+                    ).stat().st_mode
+                    & 0o777,
+                    0o600,
+                )
+
+            for name in ("career-profile", "competency-lab"):
+                path = root / name
+                for child in path.iterdir():
+                    child.unlink()
+                path.rmdir()
+            config.write_text('{"schema_version": 7}\n', encoding="utf-8")
+            loop.write_text('{"ability_observations":{},"tasks":{}}\n', encoding="utf-8")
+
+            preview = self.setup.rollback_retirement_snapshot(
+                "codex", snapshot_id, environ=environment, dry_run=True
+            )
+            self.assertEqual(preview["status"], "rollback_preview")
+            self.assertEqual(config.read_text(encoding="utf-8"), '{"schema_version": 7}\n')
+
+            original_copy = self.setup._copy_private
+
+            def fail_during_legacy_restore(source, destination):
+                if source.name == "career-profile" and "components" in source.parts:
+                    raise OSError("simulated restore failure")
+                return original_copy(source, destination)
+
+            with mock.patch.object(
+                self.setup,
+                "_copy_private",
+                side_effect=fail_during_legacy_restore,
+            ), self.assertRaisesRegex(OSError, "simulated restore failure"):
+                self.setup.rollback_retirement_snapshot(
+                    "codex", snapshot_id, environ=environment, confirmed=True
+                )
+            self.assertTrue((root / "mock-lab" / "SKILL.md").is_file())
+            self.assertFalse((root / "career-profile").exists())
+            self.assertEqual(config.read_text(encoding="utf-8"), '{"schema_version": 7}\n')
+
+            restored = self.setup.rollback_retirement_snapshot(
+                "codex", snapshot_id, environ=environment, confirmed=True
+            )
+            self.assertEqual(restored["status"], "rolled_back")
+            self.assertEqual(restored["base_restore_patch"], preference["base_preference"])
+            self.assertEqual(
+                restored["workspace_directory_restore_state"],
+                preference["workspace_directories"],
+            )
+            self.assertEqual(loop.read_text(encoding="utf-8"), legacy_loop)
+            for name in ("career-profile", "competency-lab"):
+                self.assertEqual(
+                    (root / name / "SKILL.md").read_text(encoding="utf-8"),
+                    f"legacy {name}\n",
+                )
+            repeated = self.setup.rollback_retirement_snapshot(
+                "codex", snapshot_id, environ=environment, confirmed=True
+            )
+            self.assertEqual(repeated["status"], "rolled_back")
 
 
 if __name__ == "__main__":

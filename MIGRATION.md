@@ -1,168 +1,136 @@
-# OfferLoop 旧用户迁移与回滚
+# OfferLoop 7-Skill 迁移与回滚
 
-本文主要面向早期只安装过 `job-collection` 和/或 `recruiting-reminder` 的用户。迁移目标是安装
-当前 9 个长期 Skill，同时保留旧配置、邮件去重状态、已有 Base、知识库文档和回滚入口。
+本次升级将 OfferLoop 从 9 个业务 Skill 收敛为 7 个。`career-profile` 与 `competency-lab` 停止
+安装、发现、调用和新数据写入；历史画像、岗位能力文档、`ability_observations` 与相关任务不删除，
+只作为遗留数据保留。
 
-迁移遵循四条边界：
+## 1. 升级前创建定向快照
 
-1. 不先删除旧 Skill；
-2. 不把密码、App Secret、Cookie、token 或邮箱授权码复制到 Chat；
-3. 本地安装与飞书接管分开执行；
-4. 未经用户确认，不创建、复制、迁移或删除线上资源。
-
-## 1. 双 Skill 用户的最短迁移路径
-
-把最新公开版本下载到新目录，保留原下载目录：
+先由 Agent 只读获取 Base「用户偏好」的唯一记录，以及知识库根目录、现有活动目录和两个退役
+目录的 token、标题、父节点。把以下 JSON 通过 stdin 传给 setup。不要把凭证写入 JSON：
 
 ```bash
-git clone https://github.com/riwonswain-ovo/OfferLoop.git OfferLoop-latest
-cd OfferLoop-latest
+python3 scripts/setup_offerloop.py --agent codex \
+  --create-retirement-snapshot --input -
 ```
 
-以 Codex 为例，先预演：
+```json
+{
+  "base_preference": {
+    "base_url": "https://example.feishu.cn/base/…",
+    "table_id": "tbl…",
+    "record_id": "rec…",
+    "fields": {"目标岗位": ["产品经理"]}
+  },
+  "workspace_directories": {
+    "root_token": "wik…",
+    "nodes": [
+      {"token": "wik-profile", "title": "02｜用户画像", "parent_token": "wik…"},
+      {"token": "wik-resume", "title": "03｜定制简历", "parent_token": "wik…"}
+    ]
+  }
+}
+```
+
+快照保存到 `${XDG_STATE_HOME:-~/.local/state}/offerloop/retirement-backups/<snapshot-id>/`，目录权限
+`0700`、文件权限 `0600`，包含已安装 Skill、共享运行时、安装清单、本地配置、Loop 状态及 Base
+偏好记录和知识库目录状态，不进入 Git。输出中的 `snapshot_id` 是后续回滚凭据。输入中的
+`nodes` 必须覆盖本次将移动或改名的全部目录，不能只提供示例里的两个节点。
+
+## 2. 升级到 7 个 Skill
+
+先预演，再升级：
 
 ```bash
 python3 scripts/setup_offerloop.py --agent codex --mode full --dry-run
-```
-
-旧 `job-collection` 或 `recruiting-reminder` 与新版本内容不同时，预演会返回 `conflict`。这是一道
-防覆盖保护，不是安装故障。确认同名目录属于旧版 OfferLoop 后，才执行：
-
-```bash
 python3 scripts/setup_offerloop.py --agent codex --mode full --upgrade
-python3 scripts/install_offerloop.py --agent codex --verify
+python3 scripts/setup_offerloop.py --agent codex --mode full --verify
 ```
 
-安装器会先把旧目录移出 Skill 发现范围，保存到 Agent 配置目录下的
-`.offerloop-backups/<时间戳>/`，再安装当前版本。安装后应看到以下 9 个长期 Skill：
+安装后长期 Skill 为：
 
-- `career-profile`
 - `job-collection`
 - `recruiting-reminder`
 - `experience-deepthink`
 - `resume-tailor`
-- `competency-lab`
 - `interview-prep`
 - `mock-lab`
 - `talk-review`
 
-Windows 将 `python3` 替换为 `py -3`。其他 Agent 将 `--agent codex` 替换为
-`claude-code`、`hermes-agent` 或 `workbuddy`。
+安装器还会把两个退役 Skill 移到 Agent Skill 根目录下的 `.offerloop-backups/<时间戳>/`。这一步
+只处理本地 Skill，不会直接修改飞书。
 
-`scripts/install_offerloop.py --verify` 只核验本地 Skill 与安装清单。完整模式尚未接入飞书时，
-`scripts/setup_offerloop.py --mode full --verify` 会显示 `needs_setup`；这不代表本地安装失败。
-
-## 2. 迁移本地配置
-
-安装器会备份整个旧 Skill 目录，但凭证和运行状态应复制到更新安全的位置，以免以后升级 Skill 时
-被替换。文件不存在时跳过；确认新位置可读前不要删除旧文件。
-
-```text
-旧 job-collection/.env
-  → ~/.config/offerloop/job-collection/.env
-
-旧 recruiting-reminder/scripts/.env
-  → ~/.config/offerloop/recruiting-reminder/.env
-
-旧 recruiting-reminder/base_config.json
-  → ~/.config/offerloop/recruiting-reminder/base_config.json
-
-旧 recruiting-reminder/processed_emails.json
-  → ~/.local/state/offerloop/recruiting-reminder/processed_emails.json
-```
-
-macOS 和 Linux 上把新配置文件权限设为 `0600`。不要迁移旧 token 缓存；需要时由当前 Skill 重新
-获取。不要在终端录屏、Issue、PR 或聊天中展示配置内容。
-
-## 3. 只保留一个 Skill
-
-只想继续使用一个旧 Skill 的用户可以选择单 Skill 模式。例如只升级 `job-collection`：
-
-```bash
-python3 scripts/setup_offerloop.py --agent codex --mode single --skill job-collection --dry-run
-python3 scripts/setup_offerloop.py --agent codex --mode single --skill job-collection --upgrade
-python3 scripts/setup_offerloop.py --agent codex --mode single --skill job-collection --verify
-```
-
-单 Skill 模式不会要求创建完整飞书空间。已有 Base 和用户配置仍会保留，只有当前任务确实需要且
-用户完成授权时才继续使用。
-
-## 4. 旧双 Base 兼容
-
-旧版 `recruiting-reminder` 可能分别使用笔试 Base 和面试 Base。只要共享配置中尚未设置
-`reminder_base_url`，新 Skill 会读取迁移后的 `base_config.json` 继续使用旧入口，不会静默新建
-统一 Base，也不会改写旧字段。
-
-旧 UID 去重状态继续兼容；新邮件优先使用 Message-ID。迁移后发现改期邮件时，如果来源链无法定位
-原事件，应交给用户确认，不能按公司和轮次猜测。
-
-## 5. 按需接入完整飞书空间
-
-安装 9 个 Skill 不会自动迁移飞书资源。用户选择接入时，Agent 应按以下顺序执行：
-
-1. 只读检查企业清单、旧笔试 Base、旧面试 Base 和现有知识库文档；
-2. 展示准备复用、补充或创建的资源计划；
-3. 等待用户确认；
-4. 对原 Base 建立并验证备份；
-5. 原地升级为三张业务 Base，不复制记录或另建同名 Base；
-6. 以企业 record ID 和来源邮件 ID 幂等迁移历史记录；
-7. 按 schema v6 验证 `进展状态`、`最近完成节点`、`公告链接`，并确认旧状态字段已移除；
-8. 小流量验证同公司多岗位、人工字段保护、改期、日历更新和重复事件；
-9. 验收通过后才切换日常写入。
-
-完成真实线上只读验收后运行：
-
-```bash
-python3 scripts/setup_offerloop.py --agent codex --mode full --record-workspace-verified
-python3 scripts/setup_offerloop.py --agent codex --mode full --verify
-```
-
-任何 Base、知识库节点或 locator 变化都会使验收记录失效，必须重新只读核验。历史已投递记录无法
-可靠恢复投递日期时保持空白；轮次不明的旧面试不猜测为一面或二面。
-
-## 6. Schema v6 状态模型
-
-- `进展状态` 是当前求职状态唯一真源。
-- 已完成迁移的求职进展不再保留旧状态字段；所有客户端、同步服务和视图只读写 schema v6 字段。
-- 简历选择不写入业务 Base；旧的空字段可以在确认无有效数据后删除。
-- 旧 `resume-deepthink` 更名为 `experience-deepthink`；安装器会备份旧目录，不删除线上文档。
-- 旧 `pm-sense` 和 `aptitude-lab` 的训练能力由 `competency-lab` 承接。
-- 不再安装的旧 Skill 不会导致其线上文档被删除；用户可自行保留或归档。
-
-旧配置需要升级到 schema v6 时，不要手工修改 `schema_version`。由 Agent 在用户确认后运行共享配置
-迁移，再完成真实 Base 结构验证：
+新工作区创建连续的活动目录 `00`–`06`，没有历史内容时不创建归档目录。升级工作区先用快照中
+同一份目录元数据生成只读迁移计划：
 
 ```bash
 python3 skills/offerloop-workspace/scripts/artifact_contract.py \
-  migrate-config \
-  --config ~/.config/offerloop/config.json \
-  --confirmed
+  plan-directory-migration --nodes workspace-directories.json --json
 ```
 
-该命令只迁移本机非敏感定位配置，不创建、移动或删除飞书节点。
+计划的顺序固定为：创建 `99｜历史归档`（已有则复用）→ 把旧 `02｜用户画像`、
+`05｜岗位能力与训练` 原节点移入归档并去掉编号 → 把其余原节点改名为连续的 `02`–`06`。规划器
+本身永不写飞书；`conflict` 或 `needs_action` 时停止。只有 `needs_migration` 且用户确认后，Agent
+才能按返回顺序逐项写入，每项都回读 token、标题和父节点。文档不复制、不删除。
 
-## 7. 回滚
+## 3. 岗位偏好迁移
 
-新版本不可用时：
+完整模式以 Base「用户偏好」为唯一真源。Agent 使用
+`skills/job-collection/scripts/preference_migration.py --input -` 比较旧画像偏好和 Base 记录：
 
-1. 暂停新的跨 Base 自动化；
-2. 找到安装命令输出的 `.offerloop-backups/<时间戳>/`；
-3. 结束当前 Agent 会话，避免新旧 Skill 同时被发现；
-4. 将当前 Skill 目录移出发现范围，再把所需旧目录恢复到原位置；
-5. 将共享配置切回旧 URL，或移除尚未验收的 `reminder_base_url`；
-6. 继续使用旧 `base_config.json`、旧双 Base 和旧邮件去重状态；
-7. 保留新资源供排查，不删除其中数据。
+- 双方一致：直接确认 Base；
+- Base 有值、画像为空：保留 Base；
+- Base 为空、画像有值：展示拟迁入值，用户确认后写入并回读；
+- 双方冲突：暂停，展示冲突字段并让用户选择，禁止静默覆盖；
+- 双方都缺失：只询问本次筛选必需条件。
 
-是否清理旧备份由用户以后单独决定，OfferLoop 不自动删除。
+旧版 `single` 安装不再作为受支持的运行模式。升级时安装全部 7 个 Skill，并完成三张 Base、私有
+知识库、schema v7 locator 与权限验收；历史单 Skill 配置只用于识别迁移来源，不继续提供独立入口。
+语言表达不再形成长期画像；自我评价从用户选定的简历、经历和本轮确认生成。
 
-## 8. 可直接发给 Agent 的迁移引导
+## 4. 配置与历史数据
 
-```text
-我以前只安装过 job-collection 和 recruiting-reminder，
-现在要迁移到 OfferLoop 的 9 个 Skill。
+本地工作区配置升级到 schema v7。`user_profile`、`competency_profiles`、
+`competency_training` 仅作为兼容键保留，不参与 readiness。三张业务 Base 的求职进展字段仍使用
+schema v6，两者不要混淆。
 
-请先只读检查旧 Skill、用户配置和已有飞书 Base，不要读取或输出任何凭证。
-告诉我哪些目录会备份、哪些配置和 Base 会复用；先运行完整模式 dry-run。
-只有我确认旧目录属于 OfferLoop 后，才能使用 --upgrade。
-本地验证通过后，再问我是否接入配套飞书知识库；未经确认不要创建或修改线上资源。
+Loop Runtime 不再创建 `AbilityObservation`、训练任务或能力成长 workflow。旧 Loop 状态中的
+`ability_observations` 与相关 `tasks` 原样保留，载入和持久化不得改变其字节语义。面试准备、简历
+与复盘文档继续正常产生；表达与承压练习统一由 `mock-lab` 承接。
+
+## 5. 回滚
+
+先只读预演并校验摘要：
+
+```bash
+python3 scripts/setup_offerloop.py --agent codex \
+  --rollback-snapshot <snapshot-id> --dry-run
 ```
+
+确认恢复范围后执行本地原子恢复：
+
+```bash
+python3 scripts/setup_offerloop.py --agent codex \
+  --rollback-snapshot <snapshot-id> --confirmed
+```
+
+confirmed 会恢复快照中的 9-Skill 组件组合、旧共享运行时、本地配置和 Loop 状态，并输出
+`base_restore_patch` 与 `workspace_directory_restore_state`。两者都不会自动写入飞书；必须由 Agent
+再次征得用户确认，分别恢复 Base 偏好和知识库目录后回读验证。若本地恢复中任一步失败，setup
+会恢复执行回滚前的 7-Skill 组合，禁止留下新旧混装状态。线上目录迁移中途失败时也必须停止，
+以快照目录状态生成反向操作，经用户确认后恢复，不得继续执行剩余改名。
+
+重复回滚是幂等的。回滚不会删除下线后产生的简历、面试准备或复盘文档，也不会删除任何历史
+画像、能力文档或观察记录。目录回滚只恢复原父节点和标题；`99｜历史归档` 若还包含其他内容则
+保留。是否清理本地快照与普通 `.offerloop-backups` 由用户以后单独决定。
+
+## 6. 旧双 Skill 用户
+
+早期只安装 `job-collection`、`recruiting-reminder` 的用户同样使用上述升级命令。旧配置、邮件去重
+状态、三张 Base 与知识库文档均原地保留；`scripts/install_offerloop.py --agent codex --verify`
+只验证本地安装，完整模式还需真实线上只读验收。Windows 将 `python3` 替换为 `py -3`，其他 Agent
+将 `codex` 替换为 `claude-code`、`hermes-agent` 或 `workbuddy`。
+
+求职进展继续遵循 Schema v6 状态模型：`进展状态` 是当前状态唯一真源，`最近完成节点` 只记录
+已经可靠完成的最晚节点。线上 Base 迁移始终先备份、经确认写入并回读，不可靠的旧记录进入
+“状态待确认”。

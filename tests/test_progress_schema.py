@@ -33,6 +33,21 @@ def valid_fields():
 
 
 class ProgressSchemaTest(unittest.TestCase):
+    def test_completed_view_contract_includes_every_active_status(self):
+        contract = (
+            ROOT
+            / "skills"
+            / "offerloop-setup"
+            / "references"
+            / "progress-schema-v6.md"
+        ).read_text(encoding="utf-8")
+        expected = (
+            "`待反馈`、`待测评`、`待笔试`、`待面试`、`待群面`、`待一面`、`待二面`、"
+            "\n  `待三面`、`待 HR 面`、`待 OC`"
+        )
+
+        self.assertIn(expected, contract)
+
     def test_accepts_exact_v6_core_schema(self):
         result = validator.validate({"data": {"fields": valid_fields()}})
 

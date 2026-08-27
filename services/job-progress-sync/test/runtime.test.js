@@ -144,6 +144,14 @@ test("reconciles a manually completed interview-center event end to end", async 
         },
       };
     }
+    if (url.endsWith("/records/rec_jd_exam") && options.method === "GET") {
+      return {
+        ok: true,
+        async json() {
+          return { code: 0, data: { record: { record_id: "rec_jd_exam", fields: { "环节": "笔试", "完成状态": "已完成", "事件状态": "有效", "求职记录ID": '["rec_jd_progress"]' } } } };
+        },
+      };
+    }
     if (url.includes("app_reminder") && url.includes("/records/search")) {
       return {
         ok: true,

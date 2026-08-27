@@ -8,8 +8,6 @@ import json
 import os
 from pathlib import Path
 import shutil
-import subprocess
-import sys
 import tempfile
 from urllib.parse import urlparse
 
@@ -29,6 +27,7 @@ PUBLIC_LOCATOR_KEYS = {
 }
 PROGRESS_SYNC_KEYS = {"app_id", "endpoint", "workflow_id", "status"}
 NOTIFICATION_KEYS = {"status", "target_type", "target_name", "target_id", "identity"}
+DAILY_CHECKIN_KEYS = {"status", "chat_id", "owner_open_id", "calendar_id", "timezone", "time"}
 
 
 def config_root(environ=None):
@@ -164,6 +163,42 @@ def update_notification_config(path, updates):
     return data
 
 
+def update_daily_checkin_config(path, updates):
+    """Merge the separately authorized 22:10 owner-only group-card config."""
+    unknown = set(updates) - DAILY_CHECKIN_KEYS
+    if unknown:
+        names = ", ".join(sorted(unknown))
+        raise ValueError(f"daily_checkin cannot store secret or unknown keys: {names}")
+    filtered = {key: value for key, value in updates.items() if value is not None}
+    if filtered.get("status") not in (None, "enabled", "disabled"):
+        raise ValueError("daily_checkin status must be enabled or disabled")
+    if filtered.get("timezone") not in (None, "Asia/Shanghai"):
+        raise ValueError("daily_checkin timezone must be Asia/Shanghai")
+    if filtered.get("time") not in (None, "22:10"):
+        raise ValueError("daily_checkin time must be 22:10")
+
+    data = load_config(path)
+    existing = data.get("daily_checkin", {})
+    if existing is None:
+        existing = {}
+    if not isinstance(existing, dict):
+        raise ValueError("daily_checkin must be a JSON object")
+    daily = dict(existing)
+    daily.update(filtered)
+    daily.setdefault("timezone", "Asia/Shanghai")
+    daily.setdefault("time", "22:10")
+    if daily.get("status") == "enabled":
+        if not str(daily.get("chat_id", "")).startswith("oc_"):
+            raise ValueError("daily_checkin chat_id must be a Feishu oc_ id")
+        if not str(daily.get("owner_open_id", "")).startswith("ou_"):
+            raise ValueError("daily_checkin owner_open_id must be a Feishu ou_ id")
+        if not str(daily.get("calendar_id", "")).strip():
+            raise ValueError("daily_checkin calendar_id is required when enabled")
+    data["daily_checkin"] = daily
+    write_private_json(path, data)
+    return data
+
+
 def validate_progress_sync_endpoint(value):
     parsed = urlparse(str(value))
     if parsed.scheme != "https" or not parsed.netloc:
@@ -185,43 +220,6 @@ def init_imap(environ=None):
     shutil.copyfile(template, destination)
     os.chmod(destination, 0o600)
     return destination, True
-
-
-def enable_coaching(path, *, confirmed=False):
-    """Upgrade public locator config through the shared artifact contract."""
-    if not confirmed:
-        raise ValueError("coaching schema migration requires explicit confirmation")
-    contract = SKILL_ROOT / "scripts" / "artifact_contract.py"
-    if not contract.is_file():
-        contract = (
-            SKILLS_ROOT
-            / "offerloop-workspace"
-            / "scripts"
-            / "artifact_contract.py"
-        )
-    if not contract.is_file():
-        raise FileNotFoundError("offerloop-workspace artifact contract is missing")
-    completed = subprocess.run(
-        [
-            sys.executable,
-            str(contract),
-            "migrate-config",
-            "--config",
-            str(path),
-            "--confirmed",
-        ],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if completed.returncode != 0:
-        try:
-            payload = json.loads(completed.stdout)
-            reason = payload.get("error", "unknown migration failure")
-        except json.JSONDecodeError:
-            reason = "artifact contract did not return valid JSON"
-        raise ValueError(f"coaching schema migration failed: {reason}")
-    return load_config(path)
 
 
 def main():
@@ -266,15 +264,11 @@ def main():
         choices=("bot", "user"),
         help="explicitly approved message sender identity",
     )
+    parser.add_argument("--daily-checkin-status", choices=("enabled", "disabled"))
+    parser.add_argument("--daily-checkin-chat-id", help="Feishu group oc_xxx")
+    parser.add_argument("--daily-checkin-owner-open-id", help="owner ou_xxx")
+    parser.add_argument("--daily-checkin-calendar-id", help="owner calendar id")
     parser.add_argument("--init-imap", action="store_true")
-    parser.add_argument("--enable-coaching", action="store_true")
-    parser.add_argument("--confirm-schema-v5", action="store_true")
-    parser.add_argument("--confirm-schema-v4", action="store_true", help=argparse.SUPPRESS)
-    parser.add_argument(
-        "--confirm-schema-v3",
-        action="store_true",
-        help=argparse.SUPPRESS,
-    )
     args = parser.parse_args()
 
     path = config_file()
@@ -311,26 +305,27 @@ def main():
     if any(value is not None for value in notification_updates.values()):
         update_notification_config(path, notification_updates)
         print(f"Updated {path}")
+    daily_checkin_updates = {
+        "status": args.daily_checkin_status,
+        "chat_id": args.daily_checkin_chat_id,
+        "owner_open_id": args.daily_checkin_owner_open_id,
+        "calendar_id": args.daily_checkin_calendar_id,
+        "timezone": "Asia/Shanghai" if args.daily_checkin_status is not None else None,
+        "time": "22:10" if args.daily_checkin_status is not None else None,
+    }
+    if any(value is not None for value in daily_checkin_updates.values()):
+        update_daily_checkin_config(path, daily_checkin_updates)
+        print(f"Updated {path}")
     if args.init_imap:
         destination, created = init_imap()
         action = "Created" if created else "Already exists"
         print(f"{action}: {destination}")
-    if args.enable_coaching:
-        enable_coaching(
-            path,
-            confirmed=(
-                args.confirm_schema_v5
-                or args.confirm_schema_v4
-                or args.confirm_schema_v3
-            ),
-        )
-        print(f"Enabled coaching in {path}")
     if not (
         any(value is not None for value in updates.values())
         or any(value is not None for value in progress_sync_updates.values())
         or any(value is not None for value in notification_updates.values())
+        or any(value is not None for value in daily_checkin_updates.values())
         or args.init_imap
-        or args.enable_coaching
     ):
         parser.print_help()
 

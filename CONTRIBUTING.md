@@ -22,7 +22,11 @@ python3 skills/job-collection/scripts/validate_skill.py
 python3 scripts/check_skill_compatibility.py
 ```
 
-涉及妙搭模板时，也请在每个模板目录依次运行 `npm ci`、`npm test -- --runInBand`、
-`npm run type:check` 和 `npm run build`。GitHub CI 会以 Node 20 对两份可部署模板重复执行这些检查。
+涉及活动妙搭模板时，也请在模板目录依次运行 `npm ci`、`npm test -- --runInBand`、
+`npm run type:check` 和 `npm run build`。GitHub CI 会以 Node 20 重复执行这些检查。
 
-业务 Skill 应可独立运行。跨 Skill 联动必须是可选能力，失败时不能破坏当前 Skill 的主流程。
+业务 Skill 必须在 OfferLoop 飞书工作区中保持职责边界清晰。跨 Skill 联动失败时不能破坏已成功的
+当前步骤，也不能绕过三张 Base、知识库和权限契约降级成另一套业务真源。
+
+内部评测框架、隐藏发布集、真实用户数据、完整 Trace 和凭证不属于公开仓内容，不得随 Pull Request
+提交。对外测试只能使用合成或匿名数据。

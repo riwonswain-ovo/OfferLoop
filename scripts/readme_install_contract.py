@@ -31,7 +31,7 @@ def load_installer():
 def main() -> None:
     installer = load_installer()
     if not SETUP.is_file():
-        raise AssertionError("repository is missing the two-mode setup entrypoint")
+        raise AssertionError("repository is missing the full-mode setup entrypoint")
     readme = README.read_text(encoding="utf-8")
     migration = MIGRATION.read_text(encoding="utf-8")
 
@@ -42,7 +42,11 @@ def main() -> None:
         text=True,
     ).splitlines()
     discovered = tuple(
-        sorted(Path(path).parent.name for path in tracked_skill_files)
+        sorted(
+            Path(path).parent.name
+            for path in tracked_skill_files
+            if (ROOT / path).is_file()
+        )
     )
 
     if set(packaged) != set(discovered):
@@ -60,9 +64,7 @@ def main() -> None:
         f"python3 {SETUP_SCRIPT} --agent codex --mode full --dry-run",
         f"python3 {SETUP_SCRIPT} --agent codex --mode full",
         f"python3 {SETUP_SCRIPT} --agent codex --mode full --verify",
-        f"python3 {SETUP_SCRIPT} --agent codex --mode single --skill mock-lab",
         "python3 scripts/install_offerloop.py --agent codex --verify",
-        "git sparse-checkout set scripts skills/mock-lab",
         "--record-workspace-verified",
     )
     for command in required_readme_commands:
@@ -77,19 +79,17 @@ def main() -> None:
         raise AssertionError(
             "MIGRATION.md must use the mode-aware setup and post-install verification"
         )
-    if "OfferLoop-development" in readme or "开发、验证与发布" in readme:
-        raise AssertionError("README must not expose internal development workflow")
-    if "配套飞书知识库是**可选的线上配置**" not in readme:
-        raise AssertionError("README must make the Feishu knowledge base optional")
+    if "OfferLoop-development" not in readme or "Pull Request" not in readme:
+        raise AssertionError("README must separate development and public release repositories")
     for marker in (
-        "以前只安装过 `job-collection` 和 `recruiting-reminder`？",
+        "旧用户迁移到 7 个 Skill",
         ".offerloop-backups/<时间戳>/",
-        "`needs_setup` 只表示可选的线上空间尚未接入",
+        "`needs_setup` 表示飞书工作区尚未完成接入",
     ):
         if marker not in readme:
             raise AssertionError(f"README is missing legacy two-Skill migration guidance: {marker}")
     for marker in (
-        "双 Skill 用户的最短迁移路径",
+        "旧双 Skill 用户",
         "scripts/install_offerloop.py --agent codex --verify",
         "Schema v6 状态模型",
     ):
@@ -98,11 +98,16 @@ def main() -> None:
     if "schema v5" in migration or "--confirm-schema-v5" in migration:
         raise AssertionError("MIGRATION.md must not direct users to the retired schema v5 flow")
     if "工作台" in readme or "offerloop-workbench" in readme:
-        raise AssertionError("README must not mention the retired workbench")
+        raise AssertionError("README must not expose internal application experiments")
+    for unsupported in ("--mode single", "--skill mock-lab", "sparse-checkout"):
+        if unsupported in readme:
+            raise AssertionError(
+                f"README must not advertise standalone installation: {unsupported}"
+            )
     print(
-        "README install contract accepted: public full download, sparse single-Skill "
-        f"download, explicit Agent target, {len(packaged)} Skills, online verification, "
-        "and optional Feishu knowledge base"
+        "README install contract accepted: public full download, required Feishu workspace, "
+        f"explicit Agent target, {len(packaged)} Skills, online verification, "
+        "and separate development/public release repositories"
     )
 
 

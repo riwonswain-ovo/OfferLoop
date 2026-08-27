@@ -13,7 +13,7 @@ PRIVATE_TOKEN = re.compile(
     r"sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|"
     r"bascn(?!Example)[A-Za-z0-9_-]{8,})"
 )
-ALLOWED_EMAIL_DOMAINS = {"example.com", "xx.com", "188.com"}
+ALLOWED_EMAIL_DOMAINS = {"example.com", "example.test", "ignored.example", "xx.com", "188.com"}
 
 
 def repository_text_files():

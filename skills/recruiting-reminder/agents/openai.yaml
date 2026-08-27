@@ -1,4 +1,4 @@
 interface:
   display_name: "Recruiting Reminder"
-  short_description: "识别邮箱中的笔试面试通知，并同步到飞书表格和个人日历"
-  default_prompt: "Use $recruiting-reminder to scan recent recruiting emails and propose calendar entries for my approval."
+  short_description: "自动处理招聘测评、笔试和面试，并联动 Base、日历与每日确认卡"
+  default_prompt: "Use $recruiting-reminder to process recent recruiting emails, ask only when association or timing is ambiguous, and keep my OfferLoop Base and calendar in sync."

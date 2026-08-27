@@ -24,12 +24,17 @@ If a credential is exposed, revoke or rotate it immediately and remove it from G
 
 ## Release acceptance
 
-The bundled-installer gate copies all eleven Skills into isolated Codex, Claude Code, Hermes, and WorkBuddy
-homes on Linux, macOS, and Windows. It verifies all manifests, both app templates, a collection-only
-preflight, exact missing-dependency recovery, post-install verification, and report redaction. The README
+The bundled-installer gate copies the seven user-visible Skills and the hidden runtime into isolated Codex,
+Claude Code, Hermes, and WorkBuddy homes on Linux, macOS, and Windows. It verifies all manifests, the active
+progress-sync app template, offline preflight, exact missing-dependency recovery, post-install verification,
+and report redaction. The README
 contract verifies that the documented authentication check, explicit Agent target, preview, installation,
 and verification all use this same bundled installer. GitHub account and private-repository authorization
 remain external prerequisites and must be checked by each tester before cloning.
+
+Passing this local gate does not certify Feishu identity, permissions, resource creation, app publication,
+message delivery, email access, or calendar writes. A release may claim those capabilities as verified only
+when a dated, sanitized online acceptance record covers the same release candidate.
 
 Security scanner disposition for the 2026-07-21 release review:
 

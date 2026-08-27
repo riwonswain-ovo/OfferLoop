@@ -98,7 +98,7 @@ test("reads a progress record by its exact record id", async () => {
   assert.match(requests[0].url, /\/records\/rec_progress$/);
 });
 
-test("paginates all interview events needed for reconciliation", async () => {
+test("reads the exact changed event and filters linked events server-side", async () => {
   const requests = [];
   const repository = new FeishuInterviewEventRepository({
     baseToken: "app_reminder",
@@ -106,36 +106,25 @@ test("paginates all interview events needed for reconciliation", async () => {
     accessTokenProvider: async () => "tenant-token",
     fetchImpl: async (url, options) => {
       requests.push({ url, options });
-      const secondPage = url.includes("page_token=next-page");
       return {
         ok: true,
         async json() {
-          return {
-            code: 0,
-            data: secondPage
-              ? { items: [{ record_id: "rec_two", fields: {} }], has_more: false }
-              : {
-                items: [{ record_id: "rec_one", fields: {} }],
-                has_more: true,
-                page_token: "next-page",
-              },
-          };
+          return url.endsWith("/records/rec_one")
+            ? { code: 0, data: { record: { record_id: "rec_one", fields: {} } } }
+            : { code: 0, data: { items: [{ record_id: "rec_one", fields: {} }] } };
         },
       };
     },
   });
 
-  const result = await repository.listAll();
-  assert.deepEqual(result.map((item) => item.record_id), ["rec_one", "rec_two"]);
+  assert.equal((await repository.findByRecordId("rec_one")).record_id, "rec_one");
+  const result = await repository.listByProgressRecordId("rec_progress");
+  assert.deepEqual(result.map((item) => item.record_id), ["rec_one"]);
   assert.equal(requests.length, 2);
-  assert.deepEqual(JSON.parse(requests[0].options.body).field_names, [
-    "环节",
-    "完成状态",
-    "求职记录ID",
-    "开始时间",
-    "截止时间",
-    "结束时间",
-  ]);
+  assert.equal(requests[0].options.method, "GET");
+  assert.deepEqual(JSON.parse(requests[1].options.body).filter.conditions[0], {
+    field_name: "求职记录ID", operator: "contains", value: ["rec_progress"],
+  });
 });
 
 

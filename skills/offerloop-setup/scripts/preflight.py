@@ -19,7 +19,6 @@ SKILLS_ROOT = SKILL_ROOT.parent
 STATUS_MODEL_PATH = Path(__file__).with_name("status_model.py")
 
 BUNDLED_SKILLS = (
-    "career-profile",
     "job-collection",
     "recruiting-reminder",
     "experience-deepthink",
@@ -27,22 +26,12 @@ BUNDLED_SKILLS = (
     "interview-prep",
     "mock-lab",
     "talk-review",
-    "competency-lab",
 )
 REQUIRED_BUNDLED_BY_CAPABILITY = {
-    "workspace": {"career-profile"},
-    "collection": {"career-profile", "job-collection"},
+    "workspace": set(),
+    "collection": {"job-collection"},
     "reminder": {
         "recruiting-reminder",
-    },
-    "coaching": {
-        "career-profile",
-        "experience-deepthink",
-        "resume-tailor",
-        "interview-prep",
-        "mock-lab",
-        "talk-review",
-        "competency-lab",
     },
     "integration": {"job-collection"},
 }
@@ -50,7 +39,6 @@ EXTERNAL_SKILLS_BY_CAPABILITY = {
     "collection": (),
     "reminder": ("lark-calendar",),
     "workspace": ("lark-base", "lark-doc", "lark-wiki"),
-    "coaching": (),
     "integration": ("lark-shared", "lark-apps"),
 }
 LARK_CLI_RECOVERY = (
@@ -211,22 +199,24 @@ def _required_external_skills(capability, config):
             target_id = str(notification.get("target_id", ""))
             if notification.get("target_type") == "user" and not target_id.startswith("ou_"):
                 required.add("lark-contact")
+    daily_checkin = config.get("daily_checkin")
+    if (
+        capability == "reminder"
+        and isinstance(daily_checkin, dict)
+        and daily_checkin.get("status") == "enabled"
+    ):
+        required.add("lark-im")
     return tuple(sorted(required))
 
 
 def _external_skills_check(config, capability, roots):
     required = _required_external_skills(capability, config)
     if not required:
-        summary = (
-            "纯 Chat 求职训练不需要外部 Lark Skill"
-            if capability == "coaching"
-            else "此能力核心流程直接使用 lark-cli，无额外 Lark Skill 依赖"
-        )
         return _check(
             "local.external_skills",
             capability,
             "ready",
-            summary,
+            "此能力核心流程直接使用 lark-cli，无额外 Lark Skill 依赖",
         )
 
     missing = tuple(name for name in required if not _skill_is_installed(name, roots))
@@ -596,6 +586,39 @@ def _notification_check(config, capability):
     )
 
 
+def _daily_checkin_check(config):
+    daily = config.get("daily_checkin")
+    if daily in (None, {}):
+        return _check(
+            "local.reminder_daily_checkin", "reminder", "ready",
+            "每日群卡片未启用（可选）",
+        )
+    if not isinstance(daily, dict):
+        return _check(
+            "local.reminder_daily_checkin", "reminder", "needs_action",
+            "每日群卡片配置格式无效", "重新登记 daily_checkin 配置",
+        )
+    if daily.get("status") != "enabled":
+        return _check(
+            "local.reminder_daily_checkin", "reminder", "ready",
+            "每日群卡片已停用（可选）",
+        )
+    valid = (
+        str(daily.get("chat_id", "")).startswith("oc_")
+        and str(daily.get("owner_open_id", "")).startswith("ou_")
+        and bool(str(daily.get("calendar_id", "")).strip())
+        and daily.get("timezone") == "Asia/Shanghai"
+        and daily.get("time") == "22:10"
+    )
+    return _check(
+        "local.reminder_daily_checkin",
+        "reminder",
+        "unverified" if valid else "needs_action",
+        "每日群卡片已按 22:10 登记，待在线验证" if valid else "每日群卡片定位或时间不完整",
+        "验证群、owner、日历与 IM 回调权限" if valid else "重新登记 chat、owner、calendar、Asia/Shanghai 与 22:10",
+    )
+
+
 def _capability_report(source, capability, skills_roots=None):
     selected = _selected_capabilities(capability)
     checks = []
@@ -624,47 +647,17 @@ def _capability_report(source, capability, skills_roots=None):
         name: _skill_is_installed(name, roots)
         for name in BUNDLED_SKILLS
     }
-    if any(item != "coaching" for item in selected):
-        lark_check, profile_check = _probe_lark_cli(
-            source, config.get("lark_profile")
-        )
-    else:
-        lark_check = (
-            "ready",
-            "纯 Chat 求职训练不需要 lark-cli",
-            "",
-        )
-        profile_check = (
-            "ready",
-            "纯 Chat 求职训练不需要飞书 profile",
-            "",
-        )
+    lark_check, profile_check = _probe_lark_cli(
+        source, config.get("lark_profile")
+    )
 
     for selected_capability in sorted(selected):
-        chat_first_coaching = selected_capability == "coaching"
         required_bundled = REQUIRED_BUNDLED_BY_CAPABILITY[selected_capability]
         selected_skills_ready = all(
             bundled_skills[name] for name in required_bundled
         )
-        selected_config_check = (
-            (
-                "ready",
-                "纯 Chat 求职训练不需要 OfferLoop 公共定位",
-                "",
-            )
-            if chat_first_coaching
-            else (common_status, common_summary, common_action)
-        )
-        selected_online_check = (
-            _check(
-                "online.permissions",
-                selected_capability,
-                "ready",
-                "纯 Chat 求职训练不访问飞书或其他线上资源",
-            )
-            if chat_first_coaching
-            else _online_permissions_check(selected_capability)
-        )
+        selected_config_check = (common_status, common_summary, common_action)
+        selected_online_check = _online_permissions_check(selected_capability)
         checks.extend(
             [
                 _check(
@@ -767,6 +760,7 @@ def _capability_report(source, capability, skills_roots=None):
             )
             checks.append(_check(check_id, "reminder", status, result_summary, action))
         checks.append(_notification_check(config, "reminder"))
+        checks.append(_daily_checkin_check(config))
 
         imap_path = root / "recruiting-reminder" / ".env"
         imap_values = _env_values(imap_path)
@@ -821,53 +815,6 @@ def _capability_report(source, capability, skills_roots=None):
             )
         )
 
-    if "coaching" in selected:
-        storage = config.get("artifact_storage")
-        readiness = (
-            storage.get("readiness")
-            if isinstance(storage, dict)
-            else None
-        )
-        expected = {
-            "user_profile",
-            "experience_deepthink",
-            "current_resumes",
-            "competency_training",
-            "interview_prep",
-            "mock_lab",
-            "talk_review",
-        }
-        storage_valid = (
-            config.get("schema_version") == 6
-            and isinstance(readiness, dict)
-            and expected.issubset(readiness)
-            and all(isinstance(readiness.get(name), bool) for name in expected)
-        )
-        all_ready = storage_valid and all(readiness[name] for name in expected)
-        storage_configured = isinstance(storage, dict)
-        storage_required = capability == "full"
-        if all_ready:
-            storage_status = "ready"
-            storage_summary = "七项画像与训练能力的飞书材料均已登记"
-            storage_action = ""
-        elif storage_required or storage_configured:
-            storage_status = "needs_action"
-            storage_summary = "Chat 训练可用，但飞书产物配置仍有目录待启用"
-            storage_action = "确认升级 schema v6，并按需创建和登记训练目录"
-        else:
-            storage_status = "ready"
-            storage_summary = "Chat 训练可直接开始；飞书保存尚未启用（可选）"
-            storage_action = ""
-        checks.append(
-            _check(
-                "local.coaching_storage",
-                "coaching",
-                storage_status,
-                storage_summary,
-                storage_action,
-            )
-        )
-
     if "integration" in selected:
         required = ("lark_profile", "target_base_url", "progress_base_url")
         missing = [name for name in required if config.get(name) in (None, "")]
@@ -911,7 +858,6 @@ def main():
             "collection",
             "reminder",
             "workspace",
-            "coaching",
             "full",
         ),
         help="run a capability-specific offline preflight",

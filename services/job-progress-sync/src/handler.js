@@ -96,8 +96,15 @@ export async function handleSyncRequest(request, deps) {
         body: { ok: false, error: "interview reconciliation is not configured" },
       };
     }
+    const recordId = readText(payload.record_id);
+    if (!recordId) {
+      return {
+        status: 400,
+        body: { ok: false, error: "record_id is required; full reconciliation is disabled" },
+      };
+    }
     const result = await deps.interviewReconciler({
-      recordId: readText(payload.record_id),
+      recordId,
     });
     return { status: 200, body: { ok: true, ...result } };
   }

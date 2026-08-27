@@ -20,16 +20,6 @@ const WORKFLOW_EDGES = Object.freeze({
     applied: ["completed"],
     ignored: ["completed"],
   }),
-  [WORKFLOWS.CAPABILITY_GROWTH]: Object.freeze({
-    observed: ["awaiting_validation", "dismissed"],
-    awaiting_validation: ["confirmed", "dismissed"],
-    confirmed: ["training_queued"],
-    training_queued: ["training", "paused"],
-    training: ["retest", "paused"],
-    retest: ["resolved", "training_queued"],
-    resolved: ["completed"],
-    dismissed: ["completed"],
-  }),
 });
 
 function emptyState() {
@@ -120,28 +110,6 @@ export class LoopStore {
     });
     await this.persist();
     return structuredClone(instance);
-  }
-
-  async upsertObservation(observation) {
-    const existing = this.state.ability_observations[observation.observation_id];
-    this.state.ability_observations[observation.observation_id] = existing
-      ? { ...existing, ...observation, created_at: existing.created_at }
-      : observation;
-    await this.persist();
-    return structuredClone(this.state.ability_observations[observation.observation_id]);
-  }
-
-  unresolvedObservations(roleDirection) {
-    return Object.values(this.state.ability_observations).filter(
-      (item) => item.role_direction === roleDirection
-        && !["dismissed", "resolved"].includes(item.status),
-    );
-  }
-
-  async upsertTask(task) {
-    this.state.tasks[task.task_id] = { ...this.state.tasks[task.task_id], ...task };
-    await this.persist();
-    return structuredClone(this.state.tasks[task.task_id]);
   }
 
   async claimAction(idempotencyKey, value) {

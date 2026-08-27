@@ -3,7 +3,8 @@
 
 The script is deliberately offline. The calling Agent reads the minimum Base
 records through lark-base, passes sanitized JSON here, then executes returned
-operations through lark-base after user confirmation.
+operations through lark-base according to the consumer-specific confirmation
+rule in references/event-contract.md.
 """
 
 from __future__ import annotations
@@ -16,10 +17,11 @@ import re
 import sys
 import unicodedata
 from urllib.parse import urlparse
+from zoneinfo import ZoneInfo
 
 
-CONTRACT_VERSION = 2
-INTERVIEW_STAGES = {"群面", "一面", "二面", "三面", "HR面"}
+CONTRACT_VERSION = 4
+INTERVIEW_STAGES = {"群面", "一面", "二面", "三面", "HR面", "面试"}
 UNKNOWN_STAGE = "面试（轮次待确认）"
 FIELDS_BY_KIND = {
     "prep": "面试准备文档",
@@ -28,6 +30,8 @@ FIELDS_BY_KIND = {
 RUN_ID_RE = re.compile(
     r"^(?:interview-prep|talk-review)-\d{14}-[a-z0-9]{8}$"
 )
+RECORD_ID_RE = re.compile(r"^rec[A-Za-z0-9_-]+$")
+SHANGHAI = ZoneInfo("Asia/Shanghai")
 
 
 def normalize_text(value):
@@ -38,7 +42,19 @@ def normalize_text(value):
 def _position_matches(left, right):
     a = normalize_text(left)
     b = normalize_text(right)
-    return bool(a and b and (a in b or b in a))
+    return bool(a and b and a == b)
+
+
+STAGE_ALIASES = {
+    "hr面": "HR面", "hrinterview": "HR面", "第一轮": "一面", "第一轮面试": "一面",
+    "第1轮": "一面", "第二轮": "二面", "第二轮面试": "二面", "第2轮": "二面",
+    "第三轮": "三面", "第三轮面试": "三面", "第3轮": "三面", "无领导小组": "群面",
+}
+
+
+def normalize_stage(value):
+    raw = str(value or "").strip()
+    return STAGE_ALIASES.get(normalize_text(raw), raw)
 
 
 def _parse_time(value):
@@ -48,12 +64,27 @@ def _parse_time(value):
         number = float(value)
         if number > 10_000_000_000:
             number /= 1000
-        return datetime.fromtimestamp(number).astimezone()
+        return datetime.fromtimestamp(number, tz=SHANGHAI)
     text = str(value).strip().replace("Z", "+00:00")
     try:
-        return datetime.fromisoformat(text)
+        parsed = datetime.fromisoformat(text)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=SHANGHAI)
+        return parsed.astimezone(SHANGHAI)
     except ValueError:
         return None
+
+
+def _source_mail_ids(fields):
+    values = [str(fields.get("来源邮件ID", "") or "").strip()]
+    raw = fields.get("关联邮件ID", "")
+    try:
+        related = json.loads(raw) if isinstance(raw, str) else raw
+    except json.JSONDecodeError:
+        related = []
+    if isinstance(related, list):
+        values.extend(str(value).strip() for value in related)
+    return {value for value in values if value}
 
 
 def _minimal_record(record):
@@ -65,6 +96,7 @@ def _minimal_record(record):
         "stage": str(fields.get("环节", "") or ""),
         "start_time": fields.get("开始时间", ""),
         "source_mail_id": str(fields.get("来源邮件ID", "") or ""),
+        "event_status": str(fields.get("事件状态", "有效") or "有效"),
     }
 
 
@@ -79,7 +111,10 @@ def _valid_records(records):
             raise ValueError("each record requires record_id")
         if not isinstance(record.get("fields", {}), dict):
             raise ValueError("record fields must be a JSON object")
-        result.append(record)
+        fields = record.get("fields", {})
+        if (str(fields.get("事件状态", "有效")).strip() != "已取消"
+                and normalize_stage(fields.get("环节")) not in {"测评", "笔试"}):
+            result.append(record)
     return result
 
 
@@ -108,19 +143,18 @@ def resolve_event(payload):
         source_matches = [
             record
             for record in records
-            if str(record.get("fields", {}).get("来源邮件ID", "")).strip()
-            == source_mail_id
+            if source_mail_id in _source_mail_ids(record.get("fields", {}))
         ]
-        if source_matches:
-            return {
-                "match_status": (
-                    "found" if len(source_matches) == 1 else "ambiguous"
-                ),
-                "match_reason": "source_mail_id",
-                "candidates": [
-                    _minimal_record(record) for record in source_matches
-                ],
-            }
+        return {
+            "match_status": (
+                "missing" if not source_matches
+                else "found" if len(source_matches) == 1 else "ambiguous"
+            ),
+            "match_reason": "source_mail_id",
+            "candidates": [
+                _minimal_record(record) for record in source_matches
+            ],
+        }
 
     company = normalize_text(query.get("company"))
     if not company:
@@ -145,15 +179,18 @@ def resolve_event(payload):
             )
         ]
 
-    stage = str(query.get("stage", "")).strip()
+    stage = normalize_stage(query.get("stage", ""))
     if stage:
         matches = [
             record
             for record in matches
-            if str(record.get("fields", {}).get("环节", "")).strip() == stage
+            if normalize_stage(record.get("fields", {}).get("环节", "")) == stage
         ]
 
-    query_time = _parse_time(query.get("start_time"))
+    raw_query_time = query.get("start_time")
+    query_time = _parse_time(raw_query_time)
+    if raw_query_time not in (None, "") and query_time is None:
+        raise ValueError("start_time must be a valid ISO timestamp or Unix time")
     if query_time:
         timed = []
         for record in matches:
@@ -188,6 +225,11 @@ def build_backfill_plan(payload):
         raise ValueError("prep backfill requires an interview-prep run_id")
     if kind == "review" and not run_id.startswith("talk-review-"):
         raise ValueError("review backfill requires a talk-review run_id")
+    artifact_status = str(payload.get("artifact_status", "")).strip()
+    if kind == "review" and artifact_status not in {"completed", "incomplete"}:
+        raise ValueError(
+            "review backfill requires artifact_status completed or incomplete"
+        )
     document_url = str(payload.get("document_url", "")).strip()
     parsed_url = urlparse(document_url)
     if (
@@ -203,9 +245,9 @@ def build_backfill_plan(payload):
         raise ValueError("event must be a JSON object")
     record_id = str(event.get("record_id", "")).strip()
     stage = str(event.get("stage", "")).strip()
-    if not record_id:
-        raise ValueError("record_id is required")
-    if stage == "笔试":
+    if not RECORD_ID_RE.fullmatch(record_id):
+        raise ValueError("record_id must be a Feishu Base record ID")
+    if stage in {"测评", "笔试"}:
         raise ValueError("document fields must remain empty for exam events")
     if stage not in INTERVIEW_STAGES | {UNKNOWN_STAGE}:
         raise ValueError("unsupported interview stage")
@@ -213,33 +255,66 @@ def build_backfill_plan(payload):
     if not isinstance(current, dict):
         raise ValueError("current must be a JSON object")
     field = FIELDS_BY_KIND[kind]
-    targets = [("reminder", record_id, current.get("value", ""))]
-
     operations = []
     conflicts = []
     already_synced = []
-    for target, record_id, value in targets:
-        existing = str(value or "").strip()
-        if existing == document_url:
-            already_synced.append(record_id)
-        elif existing:
+    existing = str(current.get("value", "") or "").strip()
+    if existing and existing != document_url:
+        conflicts.append(
+            {
+                "target": "reminder",
+                "record_id": record_id,
+                "field": field,
+                "reason": "document_url_conflict",
+                "existing_url": existing,
+            }
+        )
+
+    patch = {}
+    if not existing:
+        patch[field] = document_url
+    elif existing == document_url:
+        already_synced.append(record_id)
+
+    progress_reconcile_expected = False
+    if kind == "review" and artifact_status == "completed":
+        event_status = str(event.get("event_status", "") or "").strip()
+        completion_status = str(current.get("completion_status", "") or "").strip()
+        if event_status != "有效":
             conflicts.append(
                 {
-                    "target": target,
+                    "target": "reminder",
                     "record_id": record_id,
-                    "existing_url": existing,
+                    "field": "事件状态",
+                    "reason": "event_not_active",
+                    "existing_value": event_status,
                 }
             )
-        else:
-            operations.append(
+        elif completion_status == "待完成":
+            patch["完成状态"] = "已完成"
+            progress_reconcile_expected = True
+        elif completion_status != "已完成":
+            conflicts.append(
                 {
-                    "target": target,
+                    "target": "reminder",
                     "record_id": record_id,
-                    "field": field,
-                    "value": document_url,
-                    "run_id": run_id,
+                    "field": "完成状态",
+                    "reason": "completion_status_conflict",
+                    "existing_value": completion_status,
                 }
             )
+
+    if patch and not conflicts:
+        operations.append(
+            {
+                "target": "reminder",
+                "record_id": record_id,
+                "field": field,
+                "value": document_url,
+                "fields": patch,
+                "run_id": run_id,
+            }
+        )
     return {
         "plan_status": "conflict" if conflicts else "ready",
         "field": field,
@@ -247,6 +322,9 @@ def build_backfill_plan(payload):
         "blocked_operations": operations if conflicts else [],
         "already_synced_record_ids": already_synced,
         "conflicts": conflicts,
+        "progress_reconcile_expected": (
+            progress_reconcile_expected and not conflicts
+        ),
     }
 
 

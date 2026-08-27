@@ -23,6 +23,7 @@ REQUIRED_TYPES = {
 }
 PROGRESS_STATUS_OPTIONS = {
     "待反馈",
+    "待测评",
     "待笔试",
     "待面试",
     "待群面",
@@ -39,6 +40,7 @@ PROGRESS_STATUS_OPTIONS = {
 }
 COMPLETED_NODE_OPTIONS = {
     "投递完成",
+    "测评完成",
     "笔试完成",
     "面试完成",
     "群面完成",

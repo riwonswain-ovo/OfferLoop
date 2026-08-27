@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic local contract for OfferLoop coaching artifacts.
+"""Deterministic local contract for OfferLoop generated artifacts.
 
 This script never calls Feishu. Agents use lark-wiki/lark-doc/lark-base for
 online reads and writes, then use this script to validate and register the
@@ -21,22 +21,18 @@ import tempfile
 
 
 ARTIFACT_SCHEMA_VERSION = 1
-CONFIG_SCHEMA_VERSION = 6
+CONFIG_SCHEMA_VERSION = 7
 SKILLS = (
-    "career-profile",
     "experience-deepthink",
     "resume-tailor",
-    "competency-lab",
     "interview-prep",
     "mock-lab",
     "talk-review",
 )
-LEGACY_SKILLS = ("resume-deepthink", "pm-sense")
+LEGACY_SKILLS = ("career-profile", "competency-lab", "resume-deepthink", "pm-sense")
 SKILL_CONFIG_KEYS = {
-    "career-profile": "user_profile",
     "experience-deepthink": "experience_deepthink",
     "resume-tailor": "current_resumes",
-    "competency-lab": "competency_training",
     "interview-prep": "interview_prep",
     "mock-lab": "mock_lab",
     "talk-review": "talk_review",
@@ -52,24 +48,31 @@ FOLDER_KEYS = (
     "interview_asr",
     "interview_review",
 )
+LEGACY_FOLDER_KEYS = {"user_profile", "competency_profiles", "competency_training"}
+ACTIVE_FOLDER_KEYS = set(FOLDER_KEYS) - LEGACY_FOLDER_KEYS
 LOCATOR_PATHS = {
     "folders": {
-        "user_profile": ("02｜用户画像",),
-        "current_resumes": ("03｜定制简历",),
-        "experience_deepthink": ("04｜经历深挖",),
-        "competency_profiles": ("05｜岗位能力与训练", "岗位能力画像"),
-        "competency_training": ("05｜岗位能力与训练", "专项训练"),
-        "interview_prep": ("06｜面试准备",),
-        "mock_lab": ("07｜模拟面试",),
-        "interview_review": ("08｜真实面试复盘", "已完成复盘"),
-        "interview_asr": ("08｜真实面试复盘", "ASR 待复盘"),
+        "current_resumes": ("02｜定制简历",),
+        "experience_deepthink": ("03｜经历深挖",),
+        "interview_prep": ("04｜面试准备",),
+        "mock_lab": ("05｜模拟面试",),
+        "interview_review": ("06｜真实面试复盘", "已完成复盘"),
+        "interview_asr": ("06｜真实面试复盘", "ASR 待复盘"),
     },
 }
+ACTIVE_DIRECTORY_MIGRATION = (
+    ("03｜定制简历", "02｜定制简历"),
+    ("04｜经历深挖", "03｜经历深挖"),
+    ("06｜面试准备", "04｜面试准备"),
+    ("07｜模拟面试", "05｜模拟面试"),
+    ("08｜真实面试复盘", "06｜真实面试复盘"),
+)
+RETIRED_DIRECTORY_MIGRATION = (
+    ("02｜用户画像", "用户画像"),
+    ("05｜岗位能力与训练", "岗位能力与训练"),
+)
+ARCHIVE_DIRECTORY_TITLE = "99｜历史归档"
 ROUTES = {
-    "career-profile": {
-        "completed": "user_profile",
-        "incomplete": "user_profile",
-    },
     "experience-deepthink": {
         "completed": "experience_deepthink",
         "incomplete": "experience_deepthink",
@@ -77,10 +80,6 @@ ROUTES = {
     "resume-tailor": {
         "completed": "current_resumes",
         "incomplete": "current_resumes",
-    },
-    "competency-lab": {
-        "completed": "competency_training",
-        "incomplete": "competency_training",
     },
     "interview-prep": {
         "completed": "interview_prep",
@@ -96,14 +95,10 @@ ROUTES = {
     },
 }
 REQUIRED_LOCATORS = {
-    "career-profile": {"folders": ("user_profile",)},
     "experience-deepthink": {
         "folders": ("experience_deepthink",),
     },
     "resume-tailor": {"folders": ("current_resumes",)},
-    "competency-lab": {
-        "folders": ("competency_profiles", "competency_training"),
-    },
     "interview-prep": {
         "folders": ("interview_prep",),
     },
@@ -248,7 +243,7 @@ def _migrate_artifact_storage(existing):
 
 
 def migrate_config(config):
-    """Return a v6 config while preserving public values and valid locators."""
+    """Return a v7 config while preserving retired locators as read-only history."""
     if not isinstance(config, dict):
         raise ValueError("OfferLoop config must be a JSON object")
     current = config.get("schema_version", 1)
@@ -297,6 +292,8 @@ def _recalculate_readiness(storage):
 def register_folder(path, kind, node_token):
     if kind not in FOLDER_KEYS:
         raise ValueError(f"unknown folder kind: {kind}")
+    if kind in LEGACY_FOLDER_KEYS:
+        raise ValueError(f"retired folder kind is read-only: {kind}")
     if not str(node_token).strip():
         raise ValueError("node token must not be empty")
     config = load_config(path)
@@ -400,18 +397,6 @@ def build_title(
     position = _clean_title_part(position, "岗位待确认")
     stage = _clean_title_part(stage, "环节待确认")
     sequence = _clean_title_part(sequence, "01")
-    if skill == "career-profile":
-        profile_titles = {
-            "job-preference": "岗位选择偏好",
-            "personality-exploration": "个人性格探索",
-            "language-habits": "语言表达习惯",
-        }
-        if artifact_type in profile_titles:
-            return f"{profile_titles[artifact_type]}｜{subject}"
-        if artifact_type:
-            raise ValueError("unknown career-profile artifact type")
-        # Compatibility for existing callers and legacy documents only.
-        return f"用户画像｜{subject}"
     if skill == "experience-deepthink" and artifact_type == "detail-reconstruction":
         return f"细节复原稿｜{subject}｜{target_direction}"
     if skill == "experience-deepthink" and artifact_type == "restored-prd":
@@ -426,10 +411,6 @@ def build_title(
     if skill == "resume-tailor":
         title = f"简历｜{target_direction}｜{company}"
         return f"{title}｜v{resume_version}" if resume_version else title
-    if skill == "competency-lab" and artifact_type == "capability-profile":
-        return f"岗位能力地图｜{target_direction}"
-    if skill == "competency-lab":
-        return f"能力训练｜{target_direction}｜{title_date}｜{sequence}"
     if skill == "talk-review" and artifact_type == "interview-asr":
         return f"面试ASR｜{company}｜{position}｜{stage}｜{title_date}"
     if skill == "talk-review" and artifact_type == "recruiter-assessment":
@@ -450,14 +431,6 @@ def route_folder(skill, status, *, artifact_type=""):
         raise ValueError(f"unknown skill: {skill}")
     if status not in VALID_RUN_STATUSES:
         raise ValueError("run status must be completed or incomplete")
-    if skill == "career-profile" and artifact_type in {
-        "job-preference",
-        "personality-exploration",
-        "language-habits",
-    }:
-        return "user_profile"
-    if skill == "competency-lab" and artifact_type == "capability-profile":
-        return "competency_profiles"
     if skill == "talk-review" and artifact_type == "interview-asr":
         return "interview_asr"
     if skill == "talk-review" and artifact_type == "recruiter-assessment":
@@ -511,6 +484,115 @@ def find_by_title(candidates, title):
         else "ambiguous"
     )
     return {"match_status": status, "matches": matches}
+
+
+def plan_directory_migration(payload):
+    """Build an ordered, read-only Wiki relayout plan from observed node metadata."""
+
+    if not isinstance(payload, dict):
+        raise ValueError("directory migration input must be a JSON object")
+    root_token = str(payload.get("root_token", "")).strip()
+    nodes = payload.get("nodes")
+    if not root_token or not isinstance(nodes, list):
+        raise ValueError("directory migration requires root_token and nodes")
+    by_token = {}
+    sibling_titles = {}
+    for node in nodes:
+        if not isinstance(node, dict):
+            raise ValueError("each directory node must be an object")
+        token = str(node.get("token", "")).strip()
+        title = str(node.get("title", "")).strip()
+        parent_token = str(node.get("parent_token", "")).strip()
+        if not token or not title or not parent_token:
+            raise ValueError("each directory node requires token, title, and parent_token")
+        if token in by_token:
+            raise ValueError(f"duplicate directory token: {token}")
+        sibling_key = (parent_token, title)
+        if sibling_key in sibling_titles:
+            raise ValueError(f"ambiguous sibling directory title: {title}")
+        sibling_titles[sibling_key] = token
+        by_token[token] = {"token": token, "title": title, "parent_token": parent_token}
+
+    root_children = {
+        node["title"]: node for node in by_token.values() if node["parent_token"] == root_token
+    }
+    archive = root_children.get(ARCHIVE_DIRECTORY_TITLE)
+    archive_parent = archive["token"] if archive else "$created:history_archive"
+    archive_children = {
+        node["title"]: node
+        for node in by_token.values()
+        if archive and node["parent_token"] == archive["token"]
+    }
+    conflicts = []
+    operations = []
+    retired_to_move = []
+    for old_title, archived_title in RETIRED_DIRECTORY_MIGRATION:
+        old = root_children.get(old_title)
+        archived = archive_children.get(archived_title)
+        if old and archived:
+            conflicts.append(
+                f"both active and archived copies exist for retired directory: {archived_title}"
+            )
+        elif old:
+            retired_to_move.append((old, archived_title))
+    if retired_to_move and not archive:
+        operations.append(
+            {
+                "action": "create_directory",
+                "parent_token": root_token,
+                "title": ARCHIVE_DIRECTORY_TITLE,
+                "result_ref": archive_parent,
+            }
+        )
+    for node, archived_title in retired_to_move:
+        operations.append(
+            {
+                "action": "move_and_rename",
+                "node_token": node["token"],
+                "from_parent_token": root_token,
+                "to_parent_token": archive_parent,
+                "from_title": node["title"],
+                "to_title": archived_title,
+            }
+        )
+
+    missing = []
+    for old_title, new_title in ACTIVE_DIRECTORY_MIGRATION:
+        old = root_children.get(old_title)
+        new = root_children.get(new_title)
+        if old and new:
+            conflicts.append(f"both old and new active directories exist: {old_title} / {new_title}")
+        elif old:
+            operations.append(
+                {
+                    "action": "rename_directory",
+                    "node_token": old["token"],
+                    "parent_token": root_token,
+                    "from_title": old_title,
+                    "to_title": new_title,
+                }
+            )
+        elif not new:
+            missing.append(new_title)
+    if conflicts:
+        status = "conflict"
+        operations = []
+    elif missing:
+        status = "needs_action"
+        operations = []
+    elif operations:
+        status = "needs_migration"
+    else:
+        status = "ready"
+    return {
+        "status": status,
+        "write_allowed": False,
+        "operations": operations,
+        "conflicts": conflicts,
+        "missing_active_directories": missing,
+        "requires_user_confirmation": bool(operations),
+        "requires_readback_after_each_operation": bool(operations),
+    }
 
 
 def validate_markdown(markdown, *, run_id=None, content_only=False):
@@ -574,6 +656,10 @@ def _parser():
 
     layout = subparsers.add_parser("describe-layout")
     layout.add_argument("--json", action="store_true")
+
+    directory_migration = subparsers.add_parser("plan-directory-migration")
+    directory_migration.add_argument("--nodes", required=True, help="JSON file or - for stdin")
+    directory_migration.add_argument("--json", action="store_true")
 
     resolve_folder = subparsers.add_parser("resolve-folder")
     resolve_folder.add_argument("--kind", required=True, choices=FOLDER_KEYS)
@@ -666,6 +752,8 @@ def main():
             }
         elif args.command == "describe-layout":
             data = describe_layout()
+        elif args.command == "plan-directory-migration":
+            data = plan_directory_migration(_read_json_source(args.nodes))
         elif args.command == "resolve-folder":
             data = resolve_locator(load_config(path), "folders", args.kind)
         elif args.command == "register-folder":

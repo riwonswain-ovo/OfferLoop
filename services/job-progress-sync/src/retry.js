@@ -13,6 +13,10 @@ export async function retryOperation(
       return await operation();
     } catch (error) {
       lastError = error;
+      const transient = error?.transient === true
+        || [408, 409, 425, 429, 500, 502, 503, 504].includes(Number(error?.status))
+        || /temporary|transient|network|timeout|ECONNRESET|EAI_AGAIN/i.test(String(error?.message ?? error));
+      if (!transient) throw error;
       if (attempt < attempts && delayMs > 0) {
         await wait(delayMs);
       }

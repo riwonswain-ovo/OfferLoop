@@ -4,7 +4,6 @@ import {
 } from "./feishu-client.js";
 import { handleSyncRequest } from "./handler.js";
 import { reconcileInterviewEvents } from "./interview-reconcile.js";
-import { retryOperation } from "./retry.js";
 
 
 const TOKEN_URL =
@@ -34,7 +33,7 @@ function createAccessTokenProvider({ env, fetchImpl, retryOptions }) {
     if (cachedToken && Date.now() < expiresAt) {
       return cachedToken;
     }
-    const payload = await retryOperation(async () => {
+    const payload = await (async () => {
       const response = await fetchImpl(TOKEN_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json; charset=utf-8" },
@@ -45,12 +44,15 @@ function createAccessTokenProvider({ env, fetchImpl, retryOptions }) {
       });
       const result = await response.json();
       if (!response.ok || result.code !== 0 || !result.tenant_access_token) {
-        throw new Error(
+        const error = new Error(
           `Feishu token request failed: ${result.code ?? response.status} ${result.msg ?? ""}`.trim(),
         );
+        error.status = response.status;
+        error.transient = [408, 409, 425, 429, 500, 502, 503, 504].includes(response.status);
+        throw error;
       }
       return result;
-    }, retryOptions);
+    })();
     cachedToken = payload.tenant_access_token;
     const safeLifetimeSeconds = Math.max(Number(payload.expire ?? 7200) - 300, 60);
     expiresAt = Date.now() + safeLifetimeSeconds * 1000;

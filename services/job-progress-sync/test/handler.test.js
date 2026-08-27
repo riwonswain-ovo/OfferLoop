@@ -56,7 +56,7 @@ test("reports missing interview reconciliation configuration", async () => {
   assert.equal(response.status, 503);
 });
 
-test("runs a full reminder reconciliation when no record id is supplied", async () => {
+test("rejects reminder reconciliation without an exact record id", async () => {
   const calls = [];
   const response = await handleSyncRequest(
     {
@@ -72,10 +72,10 @@ test("runs a full reminder reconciliation when no record id is supplied", async 
       },
     },
   );
-  assert.deepEqual(calls, [{ recordId: "" }]);
+  assert.deepEqual(calls, []);
   assert.deepEqual(response, {
-    status: 200,
-    body: { ok: true, action: "unchanged", updated_count: 0 },
+    status: 400,
+    body: { ok: false, error: "record_id is required; full reconciliation is disabled" },
   });
 });
 

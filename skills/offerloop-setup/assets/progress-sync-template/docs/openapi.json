@@ -129,25 +129,13 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "description": "优先传记录定位字段；若飞书运行时未填充动态变量，服务端对唯一的笔面试安排主表执行幂等全量对账。",
+                "required": ["recordId"],
+                "description": "必须传入触发记录的精确 recordId；无法定位时返回错误，不按标题、邮件或全表扫描猜测。",
                 "properties": {
                   "recordId": {
                     "type": "string",
                     "description": "发生完成状态变更的笔面试安排记录 ID",
                     "example": "recReminderExample"
-                  },
-                  "recordLink": {
-                    "type": "string",
-                    "description": "发生完成状态变更的笔面试安排记录链接",
-                    "example": "https://example.feishu.cn/base/baseToken?table=tblExample&record=recReminderExample"
-                  },
-                  "sourceEmailId": {
-                    "type": "string",
-                    "description": "飞书工作流未提供内置记录标识时，用来源邮件 ID 精确定位记录"
-                  },
-                  "recordTitle": {
-                    "type": "string",
-                    "description": "来源邮件 ID 缺失时，用唯一安排名称定位记录"
                   }
                 }
               }
@@ -159,7 +147,7 @@
             "description": "笔面试安排记录与关联求职进展已完成即时对账"
           },
           "400": {
-            "description": "笔面试安排记录 ID、记录链接或完成状态无效"
+            "description": "笔面试安排 recordId 或完成状态无效"
           },
           "401": {
             "description": "缺少或提供了错误的 workflow 对账密钥"

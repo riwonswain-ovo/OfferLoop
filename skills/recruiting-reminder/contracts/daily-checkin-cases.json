@@ -1,0 +1,12 @@
+{
+  "contract_version": 2,
+  "now": "2026-08-24T22:10:00+08:00",
+  "records": [
+    {"record_id":"today","fields":{"完成状态":"待完成","事件状态":"有效","环节":"测评","进行方式":"异步","开始时间":"2026-08-24T20:00:00+08:00","结束时间":"2026-08-24T23:00:00+08:00"}},
+    {"record_id":"plan","fields":{"完成状态":"待完成","事件状态":"有效","环节":"测评","进行方式":"异步","结束时间":"2026-08-24T20:00:00+08:00","截止时间":"2026-08-25T20:00:00+08:00"}},
+    {"record_id":"deadline","fields":{"完成状态":"待完成","事件状态":"有效","环节":"笔试","进行方式":"异步","截止时间":"2026-08-24T20:00:00+08:00"}},
+    {"record_id":"unplanned","fields":{"完成状态":"待完成","事件状态":"有效","环节":"测评","进行方式":"异步","截止时间":"2026-08-25T20:00:00+08:00"}}
+  ],
+  "expected_groups": {"today":["today"],"plan_overdue":["plan"],"deadline_overdue":["deadline"],"unplanned":["unplanned"]},
+  "expected_actions": {"today":["completed","not_completed"],"plan":["completed","not_completed"],"deadline":["completed","missed"],"unplanned":["adjust"]}
+}

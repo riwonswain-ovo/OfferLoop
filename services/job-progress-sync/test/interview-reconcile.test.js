@@ -3,126 +3,49 @@ import test from "node:test";
 
 import { reconcileInterviewEvents } from "../src/interview-reconcile.js";
 
+function eventRepository(event, linked = [event]) {
+  return {
+    async findByRecordId(recordId) { return recordId === event.record_id ? event : null; },
+    async listByProgressRecordId() { return linked; },
+  };
+}
 
-test("reconciles the completed JD written test into its linked progress record", async () => {
+test("reconciles only the exact changed event and its linked application", async () => {
   const updates = [];
-  const result = await reconcileInterviewEvents({
-    recordId: "rec_jd_exam",
-    eventRepository: {
-      async listAll() {
-        return [{
-          record_id: "rec_jd_exam",
-          created_time: "100",
-          fields: {
-            "公司": "京东",
-            "环节": "笔试",
-            "完成状态": "已完成",
-            "求职记录ID": '["rec_jd_progress"]',
-          },
-        }];
-      },
-    },
-    progressRepository: {
-      async findByRecordId(recordId) {
-        assert.equal(recordId, "rec_jd_progress");
-        return {
-          record_id: recordId,
-          fields: {
-            "进展状态": "待笔试",
-            "最近完成节点": "投递完成",
-          },
-        };
-      },
-      async update(recordId, fields) {
-        updates.push({ recordId, fields });
-      },
-    },
-  });
-
+  const event = { record_id: "rec_exam", fields: { "环节": "笔试", "完成状态": "已完成", "事件状态": "有效", "求职记录ID": '["rec_progress"]' } };
+  const result = await reconcileInterviewEvents({ recordId: "rec_exam", eventRepository: eventRepository(event), progressRepository: {
+    async findByRecordId() { return { record_id: "rec_progress", fields: { "进展状态": "待笔试", "最近完成节点": "投递完成" } }; },
+    async update(recordId, fields) { updates.push({ recordId, fields }); },
+  } });
   assert.equal(result.action, "updated");
-  assert.deepEqual(updates, [{
-    recordId: "rec_jd_progress",
-    fields: {
-      "进展状态": "待反馈",
-      "最近完成节点": "笔试完成",
-    },
-  }]);
+  assert.deepEqual(updates, [{ recordId: "rec_progress", fields: { "进展状态": "待反馈", "最近完成节点": "笔试完成" } }]);
 });
 
-test("one event can independently reconcile multiple linked applications", async () => {
+test("one event independently reconciles every explicitly linked application", async () => {
   const updates = [];
-  const records = new Map([
-    ["recA", { record_id: "recA", fields: { "进展状态": "待笔试", "最近完成节点": "投递完成" } }],
-    ["recB", { record_id: "recB", fields: { "进展状态": "Offer", "最近完成节点": "面试完成" } }],
-  ]);
-  const result = await reconcileInterviewEvents({
-    eventRepository: {
-      async listAll() {
-        return [{
-          record_id: "rec_exam",
-          fields: {
-            "环节": "笔试",
-            "完成状态": "已完成",
-            "求职记录ID": '["recA","recB"]',
-          },
-        }];
-      },
-    },
-    progressRepository: {
-      async findByRecordId(recordId) { return records.get(recordId); },
-      async update(recordId, fields) { updates.push({ recordId, fields }); },
-    },
-  });
-
+  const event = { record_id: "rec_exam", fields: { "环节": "笔试", "完成状态": "已完成", "求职记录ID": '["recA","recB"]' } };
+  const records = new Map([["recA", { record_id: "recA", fields: { "进展状态": "待笔试", "最近完成节点": "投递完成" } }], ["recB", { record_id: "recB", fields: { "进展状态": "Offer", "最近完成节点": "面试完成" } }]]);
+  const result = await reconcileInterviewEvents({ recordId: "rec_exam", eventRepository: eventRepository(event), progressRepository: { async findByRecordId(id) { return records.get(id); }, async update(id) { updates.push(id); } } });
   assert.equal(result.matched_count, 2);
-  assert.equal(result.updated_count, 1);
-  assert.equal(updates[0].recordId, "recA");
+  assert.deepEqual(updates, ["recA"]);
 });
 
-test("reports an unlinked changed event without guessing by company", async () => {
-  const result = await reconcileInterviewEvents({
-    recordId: "rec_unlinked",
-    eventRepository: {
-      async listAll() {
-        return [{ record_id: "rec_unlinked", fields: { "公司": "京东", "求职记录ID": "" } }];
-      },
-    },
-    progressRepository: {},
-  });
-  assert.equal(result.action, "unlinked");
-  assert.equal(result.updated_count, 0);
+test("unlinked and missing exact events never guess by company", async () => {
+  const event = { record_id: "rec_unlinked", fields: { "公司": "京东", "求职记录ID": "" } };
+  const unlinked = await reconcileInterviewEvents({ recordId: "rec_unlinked", eventRepository: eventRepository(event), progressRepository: {} });
+  const missing = await reconcileInterviewEvents({ recordId: "rec_missing", eventRepository: eventRepository(event), progressRepository: {} });
+  assert.equal(unlinked.action, "unlinked");
+  assert.equal(missing.action, "missing");
 });
 
-test("a failed linked record does not block another application", async () => {
+test("reports partial failure instead of treating the callback as fully handled", async () => {
   const updates = [];
-  const result = await reconcileInterviewEvents({
-    eventRepository: {
-      async listAll() {
-        return [{
-          record_id: "rec_exam",
-          fields: {
-            "环节": "笔试",
-            "完成状态": "已完成",
-            "求职记录ID": '["recFail","recOkay"]',
-          },
-        }];
-      },
-    },
-    progressRepository: {
-      async findByRecordId(recordId) {
-        if (recordId === "recFail") throw new Error("temporary failure");
-        return {
-          record_id: recordId,
-          fields: {
-            "进展状态": "待笔试",
-            "最近完成节点": "投递完成",
-          },
-        };
-      },
-      async update(recordId) { updates.push(recordId); },
-    },
-  });
+  const event = { record_id: "rec_exam", fields: { "环节": "笔试", "完成状态": "已完成", "求职记录ID": '["recFail","recOkay"]' } };
+  const result = await reconcileInterviewEvents({ recordId: "rec_exam", eventRepository: eventRepository(event), progressRepository: {
+    async findByRecordId(id) { if (id === "recFail") throw new Error("temporary failure"); return { record_id: id, fields: { "进展状态": "待笔试", "最近完成节点": "投递完成" } }; },
+    async update(id) { updates.push(id); },
+  } });
   assert.deepEqual(updates, ["recOkay"]);
+  assert.equal(result.action, "partial_failure");
   assert.deepEqual(result.failed_record_ids, ["recFail"]);
-  assert.equal(result.updated_count, 1);
 });

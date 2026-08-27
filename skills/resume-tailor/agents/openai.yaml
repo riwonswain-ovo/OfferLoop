@@ -1,4 +1,8 @@
 interface:
-  display_name: "简历定制"
-  short_description: "用真实经历生成一页简历，支持 AI 产品专项事实门禁"
-  default_prompt: "使用 $resume-tailor 根据我的目标岗位和亲自选择的真实经历制作一页 PDF 简历；若为 AI 产品岗位，请检查技术名词、指标和项目成熟度。"
+  display_name: "ASu 同款简历制作"
+  short_description: "已有简历只重排；无简历再从零生成 ASu HTML 与 PDF"
+  brand_color: "#2458B8"
+  default_prompt: "使用 $resume-tailor 先询问我是否已有简历：有则保留内容只优化排版，没有则按确认材料从零生成可编辑 ASu HTML 和最多两页 PDF。"
+
+policy:
+  allow_implicit_invocation: true
