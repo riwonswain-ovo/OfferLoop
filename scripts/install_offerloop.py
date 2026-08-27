@@ -22,23 +22,24 @@ SUPPORT_NAME = ".offerloop-runtime"
 ADMIN_SCRIPTS_SOURCE = SKILLS_SOURCE / "offerloop-setup" / "scripts"
 ADMIN_REFERENCES_SOURCE = SKILLS_SOURCE / "offerloop-setup" / "references"
 VERSION_FILE = ROOT / "VERSION"
-INSTALLER_VERSION = "2.1"
+INSTALLER_VERSION = "3.0"
 SKILL_NAMES = (
-    "career-profile",
     "job-collection",
     "recruiting-reminder",
     "experience-deepthink",
     "resume-tailor",
-    "competency-lab",
     "interview-prep",
     "mock-lab",
     "talk-review",
 )
 LEGACY_SKILL_RENAMES = {
     "experience-deepthink": "resume-deepthink",
-    "competency-lab": "pm-sense",
 }
 RETIRED_USER_SKILLS = (
+    "career-profile",
+    "competency-lab",
+    "pm-sense",
+    "aptitude-lab",
     "offerloop-setup",
     "offerloop-workspace",
     "offerloop-workbench",
@@ -56,30 +57,25 @@ RESULT_STATUSES = (
 IGNORED_PARTS = {
     "__pycache__",
     "tests",
+    "evals",
     ".pytest_cache",
     ".mypy_cache",
     "node_modules",
     "dist",
     "build",
 }
-IGNORED_NAMES = {".DS_Store"}
+IGNORED_NAMES = {".DS_Store", "test-prompts.json"}
 MANIFEST_NAME = ".offerloop-install.json"
 WELCOME = {
     "headline": "欢迎使用 OfferLoop",
     "summary": (
-        "OfferLoop 包含 9 个可以独立或组合使用的长期 Skill。"
-        "首次使用先通过聊天建立最小用户画像，之后只需描述当前想解决的问题。"
+        "OfferLoop 包含 7 个与飞书工作区协同运行的长期 Skill。当前只完成了本地文件安装；"
+        "完成三张 Base 和私有知识库初始化及验收后，OfferLoop 才可正式使用。"
     ),
     "groups": [
         {
-            "name": "求职与画像",
+            "name": "求职管理",
             "skills": [
-                {
-                    "name": "career-profile",
-                    "title": "求职者自我画像",
-                    "purpose": "通过自然对话认识自己、建立岗位迁移边界并学习个人语言",
-                    "example": "最近找工作有点焦虑，我想先和你聊聊自己。",
-                },
                 {
                     "name": "job-collection",
                     "title": "招聘信息同步",
@@ -110,12 +106,6 @@ WELCOME = {
                     "example": "根据这个岗位和我选的三段经历，制作一页 PDF 简历。",
                 },
                 {
-                    "name": "competency-lab",
-                    "title": "岗位能力训练",
-                    "purpose": "根据岗位能力画像和面试短板生成专项训练",
-                    "example": "根据模拟面试暴露的短板给我三道训练题。",
-                },
-                {
                     "name": "interview-prep",
                     "title": "面试准备",
                     "purpose": "结合 JD、投递简历和素材生成针对性准备文档",
@@ -138,16 +128,16 @@ WELCOME = {
     ],
     "workflows": [
         "招聘信息同步 → 真实投递 → 邮件识别 → 笔试面试安排",
-        "用户画像 → 经历深挖 → Resume Tailor → 面试准备 → 模拟面试 → 能力训练 → 复测",
+        "经历深挖 → Resume Tailor → 面试准备 → 模拟面试 → 真实面试复盘",
     ],
     "next_prompt": (
-        "我刚安装 OfferLoop。请先检查 02｜用户画像中的画像文档。"
-        "如果文档缺失、为空或只有模板占位内容，请用 career-profile 一次只问我一个问题，"
-        "并在每次确认后自动保存；写入至少一条有效信息后，再用“找岗位、管笔面试、"
-        "做求职训练”三个入口帮我选择。"
+        "请完成 OfferLoop 飞书工作区初始化：先读取已安装的 "
+        ".offerloop-runtime/references/full-setup.md，做只读预检并展示将采用或创建的"
+        "三张飞书 Base、私有知识库和目录计划；得到我确认后再写入，最后运行只读验收。"
     ),
     "privacy_notice": (
-        "安装只添加 Skill；尚未读取飞书、邮箱或简历，也没有创建或修改线上数据。"
+        "安装只添加本地 Skill；尚未读取飞书、邮箱或简历，也没有创建或修改线上数据，"
+        "因此 OfferLoop 尚不可正式使用。"
     ),
 }
 
@@ -596,10 +586,10 @@ def install_agent(
     install_mode="full",
 ) -> dict:
     selected_names = _selected_skill_names(skill_names)
-    if install_mode not in {"full", "single"}:
-        raise ValueError("install_mode must be full or single")
-    if install_mode == "single" and len(selected_names) != 1:
-        raise ValueError("single mode must select exactly one Skill")
+    if install_mode != "full":
+        raise ValueError("OfferLoop only supports the full Feishu workspace mode")
+    if selected_names != SKILL_NAMES:
+        raise ValueError("full mode must install all OfferLoop Skills")
     source = dict(os.environ if environ is None else environ)
     home = Path(source.get("HOME", Path.home())).expanduser()
     root = agent_root(agent, source)
@@ -904,7 +894,6 @@ def install_agent(
                     "interview-prep",
                     "mock-lab",
                     "talk-review",
-                    "competency-lab",
                 }
                 and status == "installed"
                 for name, status in operations
@@ -937,11 +926,11 @@ def verify_agent(
             candidate = None
         if isinstance(candidate, dict):
             manifest = candidate
-    if skill_names is None and manifest:
-        skill_names = tuple(manifest.get("skills", {})) or None
+    if skill_names is None:
+        skill_names = SKILL_NAMES
     selected_names = _selected_skill_names(skill_names)
     if install_mode is None:
-        install_mode = manifest.get("install_mode", "full") if manifest else "full"
+        install_mode = "full"
     report = install_agent(
         agent,
         environ=source,
@@ -1031,7 +1020,7 @@ def _print_welcome() -> None:
         print(f"- {workflow}")
     print()
     print(WELCOME["privacy_notice"])
-    print("请结束当前 Agent 会话并新开会话，然后直接发送：")
+    print("请结束当前 Agent 会话并新开会话，然后先发送以下飞书初始化请求：")
     print(f"“{WELCOME['next_prompt']}”")
 
 

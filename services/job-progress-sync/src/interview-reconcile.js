@@ -16,28 +16,21 @@ function projection(fields) {
 export async function reconcileInterviewEvents({
   eventRepository,
   progressRepository,
-  recordId = "",
+  recordId,
 }) {
-  const events = await eventRepository.listAll();
+  if (!String(recordId ?? "").trim()) {
+    throw new Error("recordId is required; full reconciliation is disabled");
+  }
+  const changedEvent = await eventRepository.findByRecordId(recordId);
+  if (!changedEvent) {
+    return { action: "missing", record_id: recordId, matched_count: 0, updated_count: 0, missing_count: 1 };
+  }
   const selectedProgressIds = new Set();
-  const eventsByProgressId = new Map();
-
-  for (const event of events) {
-    const progressIds = parseProgressRecordIds(event.fields?.["求职记录ID"]);
-    if (
-      !recordId
-      || event.record_id === recordId
-    ) {
-      for (const progressId of progressIds) selectedProgressIds.add(progressId);
-    }
-    for (const progressId of progressIds) {
-      const linked = eventsByProgressId.get(progressId) ?? [];
-      linked.push(event);
-      eventsByProgressId.set(progressId, linked);
-    }
+  for (const progressId of parseProgressRecordIds(changedEvent.fields?.["求职记录ID"])) {
+    selectedProgressIds.add(progressId);
   }
 
-  if (recordId && selectedProgressIds.size === 0) {
+  if (selectedProgressIds.size === 0) {
     return {
       action: "unlinked",
       record_id: recordId,
@@ -47,14 +40,13 @@ export async function reconcileInterviewEvents({
     };
   }
 
-  const targetIds = recordId
-    ? [...selectedProgressIds]
-    : [...eventsByProgressId.keys()];
+  const targetIds = [...selectedProgressIds];
   const updatedRecordIds = [];
   const missingRecordIds = [];
   const failedRecordIds = [];
   for (const progressId of targetIds) {
     try {
+      const linkedEvents = await eventRepository.listByProgressRecordId(progressId);
       const record = await progressRepository.findByRecordId(progressId);
       if (!record) {
         missingRecordIds.push(progressId);
@@ -62,7 +54,7 @@ export async function reconcileInterviewEvents({
       }
       const next = projectProgressFromEvents(
         record.fields,
-        eventsByProgressId.get(progressId) ?? [],
+        linkedEvents,
       );
       const currentProjection = projection(record.fields);
       const nextProjection = projection(next);
@@ -79,7 +71,7 @@ export async function reconcileInterviewEvents({
     action: failedRecordIds.length > 0
       ? updatedRecordIds.length > 0 ? "partial_failure" : "failed"
       : updatedRecordIds.length > 0 ? "updated" : "unchanged",
-    record_id: recordId || null,
+    record_id: recordId,
     matched_count: targetIds.length,
     updated_count: updatedRecordIds.length,
     missing_count: missingRecordIds.length,

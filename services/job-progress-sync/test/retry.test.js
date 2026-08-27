@@ -22,7 +22,7 @@ test("retries a transient operation at most three times", async () => {
 });
 
 
-test("surfaces the final error after the retry budget is exhausted", async () => {
+test("does not retry a permanent error", async () => {
   let attempts = 0;
 
   await assert.rejects(
@@ -35,5 +35,5 @@ test("surfaces the final error after the retry budget is exhausted", async () =>
     ),
     /still failing/,
   );
-  assert.equal(attempts, 3);
+  assert.equal(attempts, 1);
 });

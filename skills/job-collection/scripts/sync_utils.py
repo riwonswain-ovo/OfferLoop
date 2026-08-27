@@ -5,7 +5,8 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from datetime import datetime, time, timedelta
+from dataclasses import dataclass
+from datetime import date, datetime, time, timedelta
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 
@@ -26,36 +27,187 @@ ENTERPRISE_FIELDS = (
     "子表 record_id",
 )
 APPLICATION_STATUSES = ("待确认", "感兴趣", "已投递", "已拒绝")
-CANDIDATE_ROUTES = ("hard_filtered", "auto_write", "prewrite_confirmation")
+CANDIDATE_ROUTES = (
+    "hard_filtered",
+    "auto_write",
+    "awaiting_write_confirmation",
+)
 PROFILE_FIELD_NAMES = (
     "graduation_year",
     "target_cities",
     "city_filter_mode",
-    "selected_industries",
     "target_job_preferences",
+    "excluded_job_preferences",
     "excluded_companies",
-    "excluded_industries",
     "excluded_recruitment_types",
 )
 
 
+@dataclass(frozen=True)
+class CandidateRouteInputs:
+    """Named evidence required before a candidate can be routed."""
+
+    city_matches: bool | None
+    graduation_year_matches: bool | None
+    recruitment_type_matches: bool | None
+    company_is_allowed: bool | None
+    profile_graduation_year: str | int
+    today: date
+    job_preference_matches: bool | None
+    job_scope_complete: bool | None = None
+    all_positions_explicitly_excluded: bool = False
+    same_position_preference_conflict: bool = False
+    source_positions_complete: bool | None = None
+
+    def __post_init__(self) -> None:
+        for name in (
+            "city_matches",
+            "graduation_year_matches",
+            "recruitment_type_matches",
+            "company_is_allowed",
+            "job_preference_matches",
+        ):
+            value = getattr(self, name)
+            if value is not None and not isinstance(value, bool):
+                raise ValueError(f"{name} must be true, false, or null")
+        for name in ("job_scope_complete", "source_positions_complete"):
+            value = getattr(self, name)
+            if value is not None and not isinstance(value, bool):
+                raise ValueError(f"{name} must be boolean or null")
+        if (
+            self.job_scope_complete is not None
+            and self.source_positions_complete is not None
+            and self.job_scope_complete != self.source_positions_complete
+        ):
+            raise ValueError("job scope completeness aliases conflict")
+        resolved_scope = (
+            self.job_scope_complete
+            if self.job_scope_complete is not None
+            else self.source_positions_complete
+            if self.source_positions_complete is not None
+            else False
+        )
+        object.__setattr__(self, "job_scope_complete", resolved_scope)
+        if not isinstance(self.all_positions_explicitly_excluded, bool):
+            raise ValueError("all_positions_explicitly_excluded must be boolean")
+        if not isinstance(self.same_position_preference_conflict, bool):
+            raise ValueError("same_position_preference_conflict must be boolean")
+        if self.same_position_preference_conflict and self.job_preference_matches is not True:
+            raise ValueError(
+                "same_position_preference_conflict requires an included position match"
+            )
+        if (
+            self.job_preference_matches is True
+            and self.all_positions_explicitly_excluded
+        ):
+            raise ValueError(
+                "an included position cannot coexist with all positions excluded"
+            )
+        if not isinstance(self.today, date):
+            raise ValueError("today must be a date")
+
+
+def batch_in_time_window(
+    recruitment_batch: str,
+    today: date,
+    graduation_year: str | int,
+) -> bool:
+    """Return whether a named recruitment season is open for the user.
+
+    The window is derived from the current date and graduation year; it is not
+    a user preference. This compatibility wrapper keeps unknown labels eligible;
+    candidate routing uses ``batch_time_window_match`` so they require confirmation.
+    """
+    result = batch_time_window_match(recruitment_batch, today, graduation_year)
+    return result is not False
+
+
+def batch_time_window_match(
+    recruitment_batch: str,
+    today: date,
+    graduation_year: str | int,
+) -> bool | None:
+    """Return a tri-state season match; unknown labels require confirmation."""
+    match = re.fullmatch(r"\s*(\d{4})\s*(?:届)?\s*", str(graduation_year))
+    if not match:
+        raise ValueError("graduation_year must contain one four-digit year")
+
+    grad_year = int(match.group(1))
+    batch = unicodedata.normalize("NFKC", recruitment_batch or "").strip()
+    if not batch:
+        return None
+
+    if "补招" in batch or "补录" in batch:
+        if "春" in batch:
+            return date(grad_year, 3, 1) <= today <= date(grad_year, 7, 31)
+        if "秋" in batch:
+            return date(grad_year - 1, 11, 1) <= today <= date(grad_year, 3, 31)
+        return True
+    if "春招" in batch or "春季校园招聘" in batch:
+        return date(grad_year, 1, 1) <= today <= date(grad_year, 6, 30)
+    if "秋招提前批" in batch or "提前批" in batch:
+        return date(grad_year - 1, 7, 1) <= today <= date(grad_year - 1, 10, 31)
+    if "秋招专场" in batch or "秋招" in batch or "秋季" in batch:
+        return date(grad_year - 1, 7, 1) <= today <= date(grad_year, 1, 31)
+    if "暑期实习" in batch or "暑假实习" in batch:
+        return date(grad_year - 1, 3, 1) <= today <= date(grad_year - 1, 9, 30)
+    return None
+
+
 def route_candidate(
     *,
-    city_matches: bool | None,
-    industry_matches: bool | None,
-    job_preference_matches: bool | None,
+    candidate: dict[str, object],
+    inputs: CandidateRouteInputs,
+    has_announcement_link: bool = True,
+    has_application_link: bool = True,
 ) -> str:
-    """Route a candidate after normalization without weakening hard filters.
+    """Route a normalized candidate without weakening confirmed conditions.
 
-    ``None`` means the adapter could not verify a condition. Unverifiable city
-    or industry data fails the hard gate; an unverifiable job match is sent to
-    the user because job preference is intentionally soft.
+    ``None`` means the adapter could not verify a condition. Industry is not
+    a filter. Explicitly excluded roles are filtered only when the source proves
+    that it shows the complete position range.
     """
-    if city_matches is not True or industry_matches is not True:
+    hard_conditions = (
+        inputs.city_matches,
+        inputs.graduation_year_matches,
+        batch_time_window_match(
+            str(candidate.get("recruitment_batch") or ""),
+            inputs.today,
+            inputs.profile_graduation_year,
+        ),
+        inputs.recruitment_type_matches,
+        inputs.company_is_allowed,
+    )
+    if any(value is False for value in hard_conditions):
         return "hard_filtered"
-    if job_preference_matches is True:
+    if any(value is None for value in hard_conditions):
+        return "awaiting_write_confirmation"
+    if not has_announcement_link and not has_application_link:
+        return "awaiting_write_confirmation"
+    if inputs.same_position_preference_conflict:
+        return "awaiting_write_confirmation"
+    if (
+        inputs.job_scope_complete
+        and inputs.all_positions_explicitly_excluded
+    ):
+        return "hard_filtered"
+    if inputs.job_preference_matches is True:
         return "auto_write"
-    return "prewrite_confirmation"
+    return "awaiting_write_confirmation"
+
+
+def matches_confirmed_direction(
+    candidate_role: str,
+    confirmed_directions: tuple[str, ...],
+) -> bool:
+    """Match only user-confirmed role names, synonyms, and transfer directions."""
+    candidate = normalize_text(candidate_role)
+    if not candidate:
+        return False
+    return any(
+        normalized and normalized in candidate
+        for normalized in (normalize_text(value) for value in confirmed_directions)
+    )
 
 
 def resolve_profile_field(fields: dict[str, object], canonical_name: str) -> object:

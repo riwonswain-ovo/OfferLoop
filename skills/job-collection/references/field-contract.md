@@ -68,7 +68,7 @@
 | `enterprise_type` | 企业性质与子表路由 |
 | `source_id`、`source_name` | 信息源登记与运行摘要，不落企业表 |
 | `graduation_year`、`education_requirement`、`major_requirement` | 筛选/判断，不落企业表 |
-| `city_match`、`industry_match`、`job_preference_match` | 硬筛/岗位偏好判断，不落企业表 |
+| `city_match`、`job_preference_match` | 城市硬筛与岗位偏好判断，不落企业表 |
 | `role_fit_route`、`role_transfer_reason`、`specialized_only` | 直接匹配、可迁移或仅高专业门槛判断，不落企业表 |
 | `candidate_route`、`confirmation_reason` | 写入门禁与用户确认，不落企业表 |
 | `referral_url`、`referral_code`、`notes`、`requires_exam` | 来源临时上下文，不落企业表 |
@@ -89,20 +89,40 @@
 | `source_url` | 去除临时认证参数后的稳定 URL |
 | `app_token` / `table_id` | 仅飞书来源填写 |
 | `is_active` | 是否参与下一次同步 |
-| `credential_status` | `not_required` / `mcp_token` / `browser_session` / `pending` / `expired` |
+| `credential_status` | `not_required` / `mcp_token` / `pending` / `expired` |
 | `last_sync_time` | 本来源独立的成功扫描高水位 |
 | `last_sync_result` | 窗口、硬筛、岗位软偏好确认、重复、新增、补全、失败和游标摘要 |
+| `同步状态` | `运行中` / `等待确认` / `失败` / `已完成` |
+| `恢复检查点` | 本轮分页中断位置；无待确认候选时同时保存本轮 `NotificationState`；成功提交正式游标后清空 |
+| `待确认状态` | `无待确认` / `等待确认` |
+| `待确认批次数据` | 带 schema 版本的 JSON 文本；保存批次 ID、稳定编号、来源 ID 与记录 ID、完整标准化候选快照、来源高水位与恢复检查点、待确认原因、处理状态、完成通知状态、已提交来源，以及通知 run ID、阶段、内容哈希和成功分片 |
 
 某个来源失败时只保留该来源旧游标，不影响其他来源继续处理。
+
+建立「待确认批次」视图，固定筛选 `待确认状态=等待确认`。上述四个内部字段可在普通来源视图中隐藏。待确认批次按写入回读、完成通知、逐来源游标提交的顺序推进；每次通知分片发送成功后把相同 `NotificationState` 写回该批次的全部来源行。全部来源提交成功后清空候选明细和恢复检查点，`last_sync_result` 保留批次时间与最终计数。
 
 ## 4. 分类枚举
 
 ### 4.1 行业标签
 
-内部 ID 为：`internet`、`finance`、`fmcg`、`manufacturing`、
-`newenergy_auto`、`healthcare`、`education`、`realestate`、
-`culture_media`、`energy_chem`、`crossborder`、`marketing_consulting`、
-`central_soe`，以及兜底 `other`。显示名以 `references/industries/` 中的定义为准。
+行业标签只用于企业记录展示和查询，不参与岗位筛选。内部 ID 与显示名固定为：
+
+| 内部 ID | 显示名 |
+|---|---|
+| `internet` | 互联网与科技 |
+| `finance` | 金融 |
+| `fmcg` | 快消与零售 |
+| `manufacturing` | 制造业 |
+| `newenergy_auto` | 新能源与汽车 |
+| `healthcare` | 医疗与健康 |
+| `education` | 教育 |
+| `realestate` | 房地产与建筑 |
+| `culture_media` | 文化传媒与娱乐 |
+| `energy_chem` | 能源与化工 |
+| `crossborder` | 出海与跨境 |
+| `marketing_consulting` | 广告营销与咨询 |
+| `central_soe` | 央国企 |
+| `other` | 其他 |
 
 ### 4.2 企业性质与子表
 
@@ -140,7 +160,7 @@
 对账规则：
 
 - `进展状态` 是用户维护的当前状态唯一真源，类型为 SingleSelect，选项固定为：`待反馈`、
-  `待笔试`、`待面试`、`待群面`、`待一面`、`待二面`、`待三面`、`待 HR 面`、`待 OC`、
+  `待测评`、`待笔试`、`待面试`、`待群面`、`待一面`、`待二面`、`待三面`、`待 HR 面`、`待 OC`、
   `Offer`、`未通过`、`主动放弃`、`岗位关闭`、`状态待确认`；
 - `最近完成节点` 记录已经可靠完成的最晚节点；求职进展状态模型只使用 `进展状态` 与
   `最近完成节点`，不得创建、读取或写入已退役的旧状态字段；
@@ -155,6 +175,6 @@
   不得写入已删除的 `原招聘信息` 字段；
 - 只有 `投递记录 ID` 重复才停止冲突记录的自动合并；`企业清单 record_id` 重复是合法一对多；
 - 飞书 Base workflow 调用 OfferLoop 同步服务是手动状态变更的即时主链路；当前 Agent 本次运行
-  产生的状态变更立即直写，`job-collection` 每次运行再执行相同规则的幂等补偿。
+  产生的状态变更立即直写。初始化、接管、用户明确审计或即时链路发生异常时执行幂等补偿。
 - 企业状态离开 `已投递` 时，只删除仍为自动默认 ID、岗位/JD 为空、`进展状态` 仍为 `待反馈`
   且 `最近完成节点` 仍为 `投递完成` 的默认行；其他记录保留并标记 `review_required`。

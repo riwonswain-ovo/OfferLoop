@@ -58,9 +58,12 @@ export class FeishuProgressRepository {
       });
       const payload = await response.json();
       if (!response.ok || payload.code !== 0) {
-        throw new Error(
+        const error = new Error(
           `Feishu API request failed: ${payload.code ?? response.status} ${payload.msg ?? ""}`.trim(),
         );
+        error.status = response.status;
+        error.transient = [408, 409, 425, 429, 500, 502, 503, 504].includes(response.status);
+        throw error;
       }
       return payload.data;
     }, this.retryOptions);
@@ -171,40 +174,33 @@ export class FeishuInterviewEventRepository {
       });
       const payload = await response.json();
       if (!response.ok || payload.code !== 0) {
-        throw new Error(
+        const error = new Error(
           `Feishu API request failed: ${payload.code ?? response.status} ${payload.msg ?? ""}`.trim(),
         );
+        error.status = response.status;
+        error.transient = [408, 409, 425, 429, 500, 502, 503, 504].includes(response.status);
+        throw error;
       }
       return payload.data;
     }, this.retryOptions);
   }
 
-  async listAll() {
-    const items = [];
-    let pageToken = "";
-    do {
-      const query = new URLSearchParams({ page_size: "500" });
-      if (pageToken) query.set("page_token", pageToken);
-      const url =
-        `${OPEN_API_ROOT}/bitable/v1/apps/${this.baseToken}`
-        + `/tables/${this.tableId}/records/search?${query}`;
-      const data = await this.request(url, {
-        method: "POST",
-        body: JSON.stringify({
-          field_names: [
-            "环节",
-            "完成状态",
-            "求职记录ID",
-            "开始时间",
-            "截止时间",
-            "结束时间",
-          ],
-        }),
-      });
-      items.push(...(data.items ?? []));
-      pageToken = data.has_more ? String(data.page_token ?? "") : "";
-    } while (pageToken);
-    return items;
+  async findByRecordId(recordId) {
+    const url = `${OPEN_API_ROOT}/bitable/v1/apps/${this.baseToken}`
+      + `/tables/${this.tableId}/records/${encodeURIComponent(recordId)}`;
+    const data = await this.request(url, { method: "GET" });
+    return data.record ?? null;
+  }
+
+  async listByProgressRecordId(progressRecordId) {
+    const query = new URLSearchParams({ page_size: "100" });
+    const url = `${OPEN_API_ROOT}/bitable/v1/apps/${this.baseToken}`
+      + `/tables/${this.tableId}/records/search?${query}`;
+    const data = await this.request(url, { method: "POST", body: JSON.stringify({
+      filter: { conjunction: "and", conditions: [{ field_name: "求职记录ID", operator: "contains", value: [String(progressRecordId)] }] },
+      field_names: ["环节", "完成状态", "事件状态", "求职记录ID", "开始时间", "截止时间", "结束时间"],
+    }) });
+    return data.items ?? [];
   }
 
   async update(recordId, fields) {

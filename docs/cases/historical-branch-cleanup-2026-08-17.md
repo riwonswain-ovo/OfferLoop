@@ -58,7 +58,7 @@ bundle 大小约 6 MiB，包含清理前全部 31 个本地分支引用及完整
 | `codex/reminder-progress-reconcile-v2` | `653886b` | 功能已进入当前提醒实现；分支仅残留已移除的 schema v5 字段差异 |
 | `codex/sync-job-collection-mcp-public` | `078c0ab` | 补丁已等价进入 `public/main` |
 | `codex/talk-review-dual-review` | `84e7abc` | 旧 coaching/pm-sense 结构，已被当前五项求职辅导 Skill 覆盖 |
-| `codex/yuan'xing` | `7eec455` | 旧私测安装流程，已被当前 full/single 安装合同覆盖 |
+| `codex/yuan'xing` | `7eec455` | 旧私测安装流程，曾被 full/single 安装合同覆盖；当前合同已收敛为飞书完整安装 |
 
 ### 暂时保留
 

@@ -1,16 +1,18 @@
 export const COMPLETED_NODES = Object.freeze([
   "投递完成",
+  "测评完成",
   "笔试完成",
   "群面完成",
   "一面完成",
   "二面完成",
   "三面完成",
-  "HR面完成",
   "面试完成",
+  "HR面完成",
 ]);
 
 export const NEXT_STAGES = Object.freeze([
   "待反馈",
+  "测评",
   "笔试",
   "面试",
   "群面",
@@ -25,6 +27,7 @@ export const NEXT_STAGES = Object.freeze([
 
 export const PROGRESS_STATUSES = Object.freeze([
   "待反馈",
+  "待测评",
   "待笔试",
   "待面试",
   "待群面",
@@ -42,6 +45,7 @@ export const PROGRESS_STATUSES = Object.freeze([
 
 const COMPLETED_RANK = new Map(COMPLETED_NODES.map((value, index) => [value, index]));
 const STAGE_TO_COMPLETED = new Map([
+  ["测评", "测评完成"],
   ["笔试", "笔试完成"],
   ["群面", "群面完成"],
   ["一面", "一面完成"],
@@ -53,6 +57,7 @@ const STAGE_TO_COMPLETED = new Map([
 
 const NEXT_TO_PROGRESS_STATUS = new Map([
   ["待反馈", "待反馈"],
+  ["测评", "待测评"],
   ["笔试", "待笔试"],
   ["面试", "待面试"],
   ["群面", "待群面"],
@@ -68,14 +73,15 @@ const TERMINAL_PROGRESS_STATUSES = new Set([
 ]);
 const PROGRESS_STATUS_RANK = new Map([
   ["待反馈", 0],
-  ["待笔试", 1],
-  ["待面试", 1],
-  ["待群面", 2],
-  ["待一面", 3],
-  ["待二面", 4],
-  ["待三面", 5],
-  ["待 HR 面", 6],
-  ["待 OC", 7],
+  ["待测评", 1],
+  ["待笔试", 2],
+  ["待群面", 3],
+  ["待一面", 4],
+  ["待二面", 5],
+  ["待三面", 6],
+  ["待面试", 7],
+  ["待 HR 面", 8],
+  ["待 OC", 9],
 ]);
 const NUMBERED_INTERVIEW_STAGES = new Map([
   ["一面", 1],
@@ -140,6 +146,7 @@ export function resolveInterviewStages(events = []) {
   let numberedRound = 0;
   return events
     .map((event, index) => ({ event, order: eventOrder(event, index) }))
+    .filter((entry) => readText(eventFields(entry.event)["事件状态"] || "有效") !== "已取消")
     .sort(compareOrderedEvents)
     .map((entry) => {
       const fields = eventFields(entry.event);
@@ -161,7 +168,8 @@ export function projectProgressFromEvents(fields = {}, events = []) {
 
   const resolved = resolveInterviewStages(events).filter(({ stage, fields: item }) => (
     Boolean(completedNodeForStage(stage))
-    && ["待完成", "已完成", "已错过"].includes(readText(item["完成状态"]))
+    && readText(item["事件状态"] || "有效") !== "已取消"
+    && ["待完成", "已完成"].includes(readText(item["完成状态"]))
   ));
   if (resolved.length === 0) return normalized;
 
@@ -177,14 +185,16 @@ export function projectProgressFromEvents(fields = {}, events = []) {
     }
   }
 
-  const latest = resolved.at(-1);
-  const completionStatus = readText(latest.fields["完成状态"]);
-  let progressStatus = "待反馈";
-  if (completionStatus === "待完成") {
-    progressStatus = progressStatusForStage(latest.stage);
-  } else if (completionStatus === "已错过") {
-    progressStatus = "状态待确认";
-  }
+  const pending = resolved
+    .filter((item) => readText(item.fields["完成状态"]) === "待完成")
+    .sort((left, right) => {
+      const leftRank = PROGRESS_STATUS_RANK.get(progressStatusForStage(left.stage)) ?? -1;
+      const rightRank = PROGRESS_STATUS_RANK.get(progressStatusForStage(right.stage)) ?? -1;
+      return leftRank - rightRank || compareOrderedEvents(left, right);
+    });
+  const progressStatus = pending.length > 0
+    ? progressStatusForStage(pending.at(-1).stage)
+    : "待反馈";
   return {
     ...normalized,
     "进展状态": progressStatus,
@@ -231,9 +241,16 @@ export function applyCompletion(fields, stage, nextStage = "待反馈") {
   const currentRank = COMPLETED_RANK.get(normalized["最近完成节点"]) ?? 0;
   const candidateRank = COMPLETED_RANK.get(completed);
   if (candidateRank < currentRank) return normalized;
+  const targetStatus = NEXT_TO_PROGRESS_STATUS.get(nextStage) ?? "状态待确认";
+  const currentStatusRank = PROGRESS_STATUS_RANK.get(normalized["进展状态"]) ?? -1;
+  const completedStageRank = PROGRESS_STATUS_RANK.get(progressStatusForStage(stage)) ?? -1;
+  const targetRank = PROGRESS_STATUS_RANK.get(targetStatus) ?? -1;
+  const progressStatus = currentStatusRank > Math.max(completedStageRank, targetRank)
+    ? normalized["进展状态"]
+    : targetStatus;
   return {
     ...normalized,
-    "进展状态": NEXT_TO_PROGRESS_STATUS.get(nextStage) ?? "状态待确认",
+    "进展状态": progressStatus,
     "最近完成节点": completed,
   };
 }
@@ -242,6 +259,7 @@ export function countPendingEvents(events) {
   const counts = new Map();
   for (const event of events) {
     if (String(event["完成状态"] ?? "") !== "待完成") continue;
+    if (String(event["事件状态"] ?? "有效") === "已取消") continue;
     const stage = String(event["环节"] ?? "").trim();
     if (!stage) continue;
     counts.set(stage, (counts.get(stage) ?? 0) + 1);

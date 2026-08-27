@@ -160,7 +160,6 @@ class OfferLoopSetupTest(unittest.TestCase):
             self.assertEqual(
                 set(result["skills"]),
                 {
-                    "career-profile",
                     "job-collection",
                     "recruiting-reminder",
                     "experience-deepthink",
@@ -168,85 +167,7 @@ class OfferLoopSetupTest(unittest.TestCase):
                     "interview-prep",
                     "mock-lab",
                     "talk-review",
-                    "competency-lab",
                 },
-            )
-
-    def test_enable_coaching_migrates_v2_without_losing_existing_config(self):
-        with tempfile.TemporaryDirectory() as directory:
-            path = configure.config_file({"XDG_CONFIG_HOME": directory})
-            configure.write_private_json(
-                path,
-                {
-                    "schema_version": 2,
-                    "lark_profile": "offerloop",
-                    "progress_base_url": "https://example.feishu.cn/base/progress",
-                },
-            )
-            with self.assertRaisesRegex(ValueError, "confirmation"):
-                configure.enable_coaching(path)
-            migrated = configure.enable_coaching(path, confirmed=True)
-            self.assertEqual(migrated["schema_version"], 6)
-            self.assertEqual(migrated["lark_profile"], "offerloop")
-            self.assertIn("artifact_storage", migrated)
-            self.assertEqual(
-                migrated["artifact_storage"]["status"], "needs_setup"
-            )
-
-    def test_coaching_preflight_is_chat_first_and_storage_is_optional(self):
-        with tempfile.TemporaryDirectory() as directory:
-            skill_root = self.make_skill_root(
-                directory, "lark-base", "lark-doc", "lark-wiki"
-            )
-            environment = {"XDG_CONFIG_HOME": directory}
-            path = configure.config_file(environment)
-            configure.write_private_json(
-                path,
-                {"schema_version": 2, "lark_profile": "offerloop"},
-            )
-            with mock.patch.object(
-                preflight,
-                "_probe_lark_cli",
-                return_value=(
-                    ("ready", "lark-cli 版本符合要求", ""),
-                    ("ready", "飞书 profile 已登记", ""),
-                ),
-            ):
-                report = preflight.run_checks(
-                    environment,
-                    capability="coaching",
-                    skills_roots=[skill_root],
-                )
-            checks = {item["id"]: item for item in report["checks"]}
-            self.assertEqual(
-                checks["local.coaching_storage"]["status"], "ready"
-            )
-            self.assertEqual(report["selected"], ["coaching"])
-            self.assertIn("纯 Chat", checks["local.lark_cli"]["summary"])
-            self.assertIn("纯 Chat", checks["local.profile_locator"]["summary"])
-            self.assertIn("不访问飞书", checks["online.permissions"]["summary"])
-            configure.enable_coaching(path, confirmed=True)
-            config = configure.load_config(path)
-            for key in config["artifact_storage"]["readiness"]:
-                config["artifact_storage"]["readiness"][key] = True
-            config["artifact_storage"]["status"] = "ready"
-            configure.write_private_json(path, config)
-            with mock.patch.object(
-                preflight,
-                "_probe_lark_cli",
-                return_value=(
-                    ("ready", "lark-cli 版本符合要求", ""),
-                    ("ready", "飞书 profile 已登记", ""),
-                ),
-            ):
-                report = preflight.run_checks(
-                    environment,
-                    capability="coaching",
-                    skills_roots=[skill_root],
-                )
-            checks = {item["id"]: item for item in report["checks"]}
-            self.assertEqual(
-                checks["local.coaching_storage"]["status"], "ready"
             )
 
     def test_collection_preflight_does_not_require_imap(self):
@@ -364,7 +285,6 @@ class OfferLoopSetupTest(unittest.TestCase):
             "collection": set(),
             "reminder": {"lark-calendar"},
             "workspace": {"lark-base", "lark-doc", "lark-wiki"},
-            "coaching": set(),
             "full": {
                 "lark-apps",
                 "lark-base",
@@ -925,6 +845,41 @@ class OfferLoopSetupTest(unittest.TestCase):
             self.assertEqual(saved["notifications"]["target_name"], "秋招进度群")
             self.assertEqual(saved["notifications"]["identity"], "bot")
 
+    def test_daily_checkin_config_is_separate_and_fixed_to_2210(self):
+        with tempfile.TemporaryDirectory() as directory:
+            environment = {"XDG_CONFIG_HOME": directory}
+            path = configure.config_file(environment)
+            configure.write_private_json(path, {
+                "notifications": {"status": "disabled"},
+            })
+            result = configure.update_daily_checkin_config(path, {
+                "status": "enabled",
+                "chat_id": "oc_daily",
+                "owner_open_id": "ou_owner",
+                "calendar_id": "cal_owner",
+            })
+            self.assertEqual(result["notifications"]["status"], "disabled")
+            self.assertEqual(result["daily_checkin"]["time"], "22:10")
+            self.assertEqual(result["daily_checkin"]["timezone"], "Asia/Shanghai")
+            report = preflight.run_checks(environment, capability="reminder")
+            checks = {check["id"]: check for check in report["checks"]}
+            self.assertEqual(checks["local.reminder_daily_checkin"]["status"], "unverified")
+
+    def test_daily_checkin_rejects_wrong_time_or_missing_owner(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = configure.config_file({"XDG_CONFIG_HOME": directory})
+            with self.assertRaisesRegex(ValueError, "22:10"):
+                configure.update_daily_checkin_config(path, {"time": "21:30"})
+            with self.assertRaisesRegex(ValueError, "owner_open_id"):
+                configure.update_daily_checkin_config(path, {
+                    "status": "enabled",
+                    "chat_id": "oc_daily",
+                })
+            with self.assertRaisesRegex(ValueError, "calendar_id"):
+                configure.update_daily_checkin_config(path, {
+                    "status": "enabled", "chat_id": "oc_daily", "owner_open_id": "ou_owner",
+                })
+
     def test_preflight_reports_workspace_locator_readiness_without_values(self):
         with tempfile.TemporaryDirectory() as directory:
             path = configure.config_file({"XDG_CONFIG_HOME": directory})
@@ -1025,7 +980,7 @@ class OfferLoopSetupTest(unittest.TestCase):
                 [],
             )
 
-    def test_progress_sync_template_uses_base_reconciliation_without_daily_cards(self):
+    def test_progress_sync_template_keeps_tasks_retired_and_defines_v2_daily_card_rules(self):
         root = (
             ROOT
             / "skills"
@@ -1037,9 +992,19 @@ class OfferLoopSetupTest(unittest.TestCase):
         required = set(manifest["required_environment"])
         self.assertNotIn("REMINDER_TASKLIST_GUID", required)
         self.assertNotIn("FEISHU_VERIFICATION_TOKEN", required)
-        self.assertNotIn("DAILY_CHECKIN_STATUS", required)
+        self.assertIn("DAILY_CHECKIN_STATUS", required)
         self.assertNotIn("REMINDER_BASE_URL", required)
         self.assertIn("REMINDER_RECONCILE_SECRET", required)
+        self.assertIn("RUNTIME_STATE_TABLE_ID", required)
+        self.assertNotIn("DAILY_CHECKIN_CHAT_ID", required)
+        self.assertNotIn("DAILY_CHECKIN_OWNER_OPEN_ID", required)
+        self.assertNotIn("DAILY_CHECKIN_CALENDAR_ID", required)
+        conditional = manifest["conditional_environment"]
+        self.assertEqual(conditional[0]["when"], {"DAILY_CHECKIN_STATUS": "enabled"})
+        self.assertEqual(
+            set(conditional[0]["required"]),
+            {"DAILY_CHECKIN_CHAT_ID", "DAILY_CHECKIN_OWNER_OPEN_ID", "DAILY_CHECKIN_CALENDAR_ID"},
+        )
         self.assertNotIn("OFFERLOOP_CALLBACK_RELAY_SECRET", required)
 
         service = (
@@ -1056,11 +1021,35 @@ class OfferLoopSetupTest(unittest.TestCase):
             / "job-progress-sync"
             / "job-progress-sync.module.ts"
         ).read_text(encoding="utf-8")
+        controller = (
+            root
+            / "server"
+            / "modules"
+            / "job-progress-sync"
+            / "job-progress-sync.openapi.controller.ts"
+        ).read_text(encoding="utf-8")
         self.assertNotIn("ensureReminderTaskMapping", service)
         self.assertNotIn("/task/v2/tasks", service)
         self.assertNotIn("type: 'callback'", service)
-        self.assertNotIn("DailyCheckin", service)
+        self.assertIn("sendDailyCheckin", service)
         self.assertIn("reconcileReminderRecord", service)
+        self.assertIn("DailyCheckinAutomation", module)
+        self.assertFalse(
+            (
+                root
+                / "server"
+                / "modules"
+                / "job-progress-sync"
+                / "job-progress-sync.automation.ts"
+            ).exists()
+        )
+        daily_automation = (
+            root / "server" / "modules" / "job-progress-sync" / "daily-checkin.automation.ts"
+        ).read_text(encoding="utf-8")
+        self.assertIn("offerloop-daily-checkin", daily_automation)
+        self.assertIn("offerloop-daily-checkin-action", daily_automation)
+        self.assertNotIn("reconcileTaskStates()", controller)
+        self.assertIn("full-table reconciliation is disabled", controller)
         self.assertNotIn("子表 record_id", service)
         self.assertNotIn("getReminderChildTableId", service)
         self.assertFalse(
@@ -1073,6 +1062,20 @@ class OfferLoopSetupTest(unittest.TestCase):
             ).exists()
         )
 
+        daily_checkin = (
+            root
+            / "server"
+            / "modules"
+            / "job-progress-sync"
+            / "daily-checkin.ts"
+        ).read_text(encoding="utf-8")
+        self.assertIn("DAILY_CHECKIN_TIME = '22:10'", daily_checkin)
+        self.assertIn("DAILY_CHECKIN_TIMEZONE = 'Asia/Shanghai'", daily_checkin)
+        self.assertIn("groupPendingRecords", daily_checkin)
+        self.assertIn("deriveAsyncWindow", daily_checkin)
+        self.assertIn("planned_start", daily_checkin)
+        self.assertNotIn("REMINDER_TASKLIST_GUID", daily_checkin)
+
         deploy = (
             ROOT
             / "skills"
@@ -1080,13 +1083,15 @@ class OfferLoopSetupTest(unittest.TestCase):
             / "references"
             / "one-click-deploy.md"
         ).read_text(encoding="utf-8")
-        self.assertIn("offerloop-base-reconcile", deploy)
+        self.assertIn("不得创建 `offerloop-base-reconcile`", deploy)
         self.assertIn("/openapi/job-progress-sync/reminder-reconcile", deploy)
         self.assertIn("笔面试安排", deploy)
         self.assertIn("X-OfferLoop-Workflow-Secret", deploy)
         self.assertIn("SetRecordTrigger", deploy)
-        self.assertIn("仅用于补偿漏事件", deploy)
-        self.assertNotIn("card.action.trigger", deploy)
+        self.assertIn("不执行全表对账", deploy)
+        self.assertIn("不得创建 `offerloop-base-reconcile`", deploy)
+        self.assertIn("card.action.trigger", deploy)
+        self.assertIn("offerloop-daily-checkin-action", deploy)
         self.assertNotIn("apps/offerloop-card-ingress", deploy)
         self.assertNotIn("CARD_INGRESS_PUBLIC_URL", deploy)
 

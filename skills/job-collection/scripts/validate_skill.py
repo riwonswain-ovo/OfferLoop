@@ -11,18 +11,19 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED_FILES = {
     "SKILL.md",
-    ".env.example",
-    "references/lark-onboarding.md",
-    "references/feishu-setup.md",
+    "references/init-workflow.md",
     "references/personal-excel-source.md",
     "references/tencent-smartsheet-source.md",
     "references/excel-insert.md",
     "references/field-contract.md",
     "references/dedup_judge.md",
     "references/prewrite-confirmation.md",
+    "references/failure-handling.md",
     "references/notification.md",
     "scripts/tencent_mcp.py",
     "scripts/incremental_scan.py",
+    "scripts/sync_pipeline.py",
+    "scripts/execution_contract.py",
 }
 
 TEXT_SUFFIXES = {".md", ".py", ".toml", ".yml", ".yaml", ".example"}
@@ -61,8 +62,8 @@ def validate_frontmatter(errors: list[str]) -> None:
     description = re.search(r"^description:\s*(\S.+)$", frontmatter, re.MULTILINE)
     if not description or description.group(1).strip() in {"|", ">"}:
         errors.append("SKILL.md: description must be a non-empty single-line scalar")
-    if len(skill.splitlines()) > 350:
-        errors.append("SKILL.md: core instructions exceed 350 lines; move details to references/")
+    if len(skill.splitlines()) > 200:
+        errors.append("SKILL.md: core instructions exceed 200 lines; move details to references/")
 
 
 def validate_references(errors: list[str]) -> None:
@@ -82,6 +83,11 @@ def validate_references(errors: list[str]) -> None:
             if not target.is_file():
                 errors.append(f"{path.relative_to(ROOT)}: missing reference {reference}")
 
+    skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+    for script in re.findall(r"scripts/[A-Za-z0-9_./-]+\.py", skill):
+        if not (ROOT / script).is_file():
+            errors.append(f"SKILL.md: missing script {script}")
+
 
 def validate_private_data(errors: list[str]) -> None:
     for path in text_files():
@@ -99,10 +105,39 @@ def validate_scope(errors: list[str]) -> None:
         ROOT / "references/login-platforms.md",
         ROOT / "references/platform-search.md",
         ROOT / "references/extract_jobs.md",
+        ROOT / "references/lark-onboarding.md",
+        ROOT / "references/feishu-setup.md",
+        ROOT / "references/industries",
+        ROOT / "scripts/get_token.py",
+        ROOT / ".env.example",
     ]
     for path in removed:
-        if path.exists():
+        if path.is_dir():
+            exists = any(path.rglob("*"))
+        else:
+            exists = path.exists()
+        if exists:
             errors.append(f"{path.relative_to(ROOT)}: unsupported platform-search file exists")
+    if (ROOT / "agents" / "openai.yaml").exists():
+        errors.append("agents/openai.yaml: retired UI metadata must remain absent")
+    skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+    if "定时任务" in skill or "无人值守" in skill:
+        errors.append("SKILL.md: scheduling belongs to user-managed configuration")
+    routing_markers = [
+        "仅请求去外部平台或网上搜索岗位",
+        "没有受支持的来源链接或已登记来源上下文时不触发",
+    ]
+    for marker in routing_markers:
+        if marker not in skill:
+            errors.append(f"SKILL.md: missing routing boundary {marker!r}")
+    deletion_markers = ["先只读取得旧记录", "写入并回读验证", "target.delete_scoped"]
+    for marker in deletion_markers:
+        if marker not in skill:
+            errors.append(f"SKILL.md: missing scoped replacement boundary {marker!r}")
+    retry_markers = ["max_retries=3", "初次调用之外最多再"]
+    for marker in retry_markers:
+        if marker not in skill:
+            errors.append(f"SKILL.md: missing retry boundary {marker!r}")
 
 
 def validate_current_contract(errors: list[str]) -> None:
@@ -124,15 +159,20 @@ def validate_current_contract(errors: list[str]) -> None:
                 errors.append(f"{path.relative_to(ROOT)}:{line}: {label}")
 
     required_markers = {
-        "references/lark-onboarding.md": ["+record-get", "--base-token", "网络错误分层"],
         "references/tencent-smartsheet-source.md": [
-            "官方 MCP 首选",
-            "Chrome 扩展恢复 SOP",
-            "每日更新",
-            "tabs.finalize",
+            "只通过",
+            "官方腾讯文档 MCP",
             "has_more=false",
+            "scan_incremental_records()",
+            "IncrementalCheckpoint",
         ],
-        "references/excel-insert.md": ["no operation produced", "安全短前缀"],
+        "references/init-workflow.md": [
+            "不自行创建或补建另一套资源",
+            "待确认批次数据",
+            "excluded_job_preferences",
+            "target.audit` → `mapping.propose",
+        ],
+        "references/excel-insert.md": ["普通同步只回读本轮", "转入初始化修复"],
         "references/personal-excel-source.md": [
             "13 字段契约",
             "每次只传一个 `--record-id`",
@@ -142,8 +182,33 @@ def validate_current_contract(errors: list[str]) -> None:
         "references/prewrite-confirmation.md": [
             "hard_filtered",
             "auto_write",
-            "prewrite_confirmation",
-            "awaiting_confirmation",
+            "awaiting_write_confirmation",
+            "来源记录删除",
+            "完整标准化字段",
+            "逐来源开放保存的高水位",
+            "CandidateRouteInputs",
+            "同一岗位同时命中",
+            "same_position_preference_conflict",
+            "job_scope_complete=false",
+            "auto_write_or_confirm",
+            "record.normalize",
+            "stable_keys",
+            "第一次 finalize",
+        ],
+        "references/notification.md": [
+            "群消息是持久化状态的展示投影",
+            "待确认状态",
+            "失败来源 N 个",
+            "plan_confirmation_decision",
+            "committable_sources",
+            "to_source_json",
+            "merge_source_json",
+            "NotificationState",
+            "内容哈希",
+        ],
+        "references/failure-handling.md": [
+            "初次调用失败后最多自动重试三次",
+            "最多执行四次",
         ],
     }
     for relative, markers in required_markers.items():

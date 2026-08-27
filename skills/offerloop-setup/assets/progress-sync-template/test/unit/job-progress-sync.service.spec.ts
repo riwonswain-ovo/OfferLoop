@@ -18,6 +18,11 @@ const TEST_ENV: Record<string, string> = {
   REMINDER_BASE_TOKEN: 'reminder-base',
   REMINDER_TABLE_ID: 'reminder-table',
   REMINDER_RECONCILE_SECRET: 'workflow-secret',
+  RUNTIME_STATE_TABLE_ID: 'runtime-state-table',
+  DAILY_CHECKIN_STATUS: 'enabled',
+  DAILY_CHECKIN_CHAT_ID: 'oc_daily',
+  DAILY_CHECKIN_OWNER_OPEN_ID: 'ou_owner',
+  DAILY_CHECKIN_CALENDAR_ID: 'cal_owner',
 };
 
 function installTestEnv(): void {
@@ -417,411 +422,6 @@ describe('JobProgressSyncService', (): void => {
     expect(mock.calls).toHaveLength(0);
   });
 
-  it('resolves a reminder record by its source email id', async (): Promise<void> => {
-    const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
-      const url: string = String(config.url ?? '');
-      if (url.endsWith('/auth/v3/tenant_access_token/internal')) {
-        return { code: 0, tenant_access_token: 'tenant-token', expire: 7200 };
-      }
-      if (url.includes('/reminder-table/records/search')) {
-        const data = parseRequestData(config) as {
-          filter?: { conditions?: Array<{ field_name?: string; value?: string[] }> };
-        };
-        expect(data.filter?.conditions?.[0]).toEqual({
-          field_name: '来源邮件ID',
-          operator: 'is',
-          value: ['mail-unique-id'],
-        });
-        return {
-          code: 0,
-          data: { items: [{ record_id: 'recResolved', fields: {} }], has_more: false },
-        };
-      }
-      throw new Error(`unexpected request: ${String(config.method)} ${url}`);
-    });
-
-    await expect(
-      mock.service.resolveReminderRecordId('mail-unique-id', 'fallback title'),
-    ).resolves.toBe('recResolved');
-  });
-
-
-  it('syncs pending invitations to all linked progress records without regression', async (): Promise<void> => {
-    const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
-      const url: string = String(config.url ?? '');
-      const method: string = String(config.method ?? '').toUpperCase();
-      if (url.endsWith('/auth/v3/tenant_access_token/internal')) {
-        return { code: 0, tenant_access_token: 'tenant-token', expire: 7200 };
-      }
-      if (url.includes('/reminder-table/records/search')) {
-        return {
-            code: 0,
-            data: {
-              items: [
-                {
-                  record_id: 'recExam',
-                  fields: {
-                    完成状态: '待完成',
-                    环节: '笔试',
-                    求职记录ID: '["recProgressA","recProgressB"]',
-                    截止时间: Date.parse('2026-08-18T20:00:00+08:00'),
-                  },
-                },
-                {
-                  record_id: 'recSecondInterview',
-                  fields: {
-                    完成状态: '待完成',
-                    环节: '二面',
-                    求职记录ID: '["recProgressA"]',
-                    开始时间: Date.parse('2026-08-19T10:00:00+08:00'),
-                  },
-                },
-              ],
-              has_more: false,
-            },
-          };
-      }
-      if (url.includes('/progress-table/records/recProgress')) {
-        const recordId: string = url.endsWith('recProgressA')
-          ? 'recProgressA'
-          : 'recProgressB';
-        if (method === 'GET') {
-          return {
-            code: 0,
-            data: {
-              record: {
-                record_id: recordId,
-                fields: {
-                  进展状态: '待反馈',
-                  最近完成节点: recordId === 'recProgressA' ? '一面完成' : '投递完成',
-                },
-              },
-            },
-          };
-        }
-        return { code: 0, data: { record: { record_id: recordId, fields: {} } } };
-      }
-      throw new Error(`unexpected request: ${method} ${url}`);
-    });
-
-    await expect(mock.service.reconcileTaskStates()).resolves.toEqual({
-      scanned: 2,
-      provisioned: 0,
-      completed: 0,
-      missed: 0,
-      postponed: 0,
-      skipped: 0,
-    });
-    const progressUpdates = mock.calls.filter(
-      (config: InternalAxiosRequestConfig): boolean =>
-        String(config.method).toUpperCase() === 'PUT'
-        && String(config.url ?? '').includes('/progress-table/records/'),
-    );
-    expect(progressUpdates).toHaveLength(2);
-    const updateA = progressUpdates.find(
-      (config: InternalAxiosRequestConfig): boolean =>
-        String(config.url ?? '').endsWith('/progress-table/records/recProgressA'),
-    );
-    const updateB = progressUpdates.find(
-      (config: InternalAxiosRequestConfig): boolean =>
-        String(config.url ?? '').endsWith('/progress-table/records/recProgressB'),
-    );
-    expect(parseRequestData(updateA as InternalAxiosRequestConfig)).toEqual({
-      fields: { 进展状态: '待二面' },
-    });
-    expect(parseRequestData(updateB as InternalAxiosRequestConfig)).toEqual({
-      fields: { 进展状态: '待笔试' },
-    });
-  });
-
-  it('syncs manually completed events and preserves later progress', async (): Promise<void> => {
-    const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
-      const url: string = String(config.url ?? '');
-      const method: string = String(config.method ?? '').toUpperCase();
-      if (url.endsWith('/auth/v3/tenant_access_token/internal')) {
-        return { code: 0, tenant_access_token: 'tenant-token', expire: 7200 };
-      }
-      if (url.includes('/reminder-table/records/search')) {
-        return {
-            code: 0,
-            data: {
-              items: [{
-                record_id: 'recCompletedInterview',
-                fields: {
-                  完成状态: '已完成',
-                  环节: '二面',
-                  求职记录ID: [{
-                    type: 'text',
-                    text: '["recProgressA","recProgressB"]',
-                  }],
-                },
-              }],
-              has_more: false,
-            },
-          };
-      }
-      if (url.endsWith('/progress-table/records/recProgressA') && method === 'GET') {
-        return {
-          code: 0,
-          data: {
-            record: {
-              record_id: 'recProgressA',
-              fields: { 进展状态: '待二面', 最近完成节点: '一面完成' },
-            },
-          },
-        };
-      }
-      if (url.endsWith('/progress-table/records/recProgressB') && method === 'GET') {
-        return {
-          code: 0,
-          data: {
-            record: {
-              record_id: 'recProgressB',
-              fields: { 进展状态: '待反馈', 最近完成节点: '三面完成' },
-            },
-          },
-        };
-      }
-      if (url.includes('/progress-table/records/recProgress') && method === 'PUT') {
-        return { code: 0, data: { record: { record_id: 'updated', fields: {} } } };
-      }
-      throw new Error(`unexpected request: ${method} ${url}`);
-    });
-
-    await expect(mock.service.reconcileTaskStates()).resolves.toEqual({
-      scanned: 1,
-      provisioned: 0,
-      completed: 1,
-      missed: 0,
-      postponed: 0,
-      skipped: 0,
-    });
-    const updateA = mock.calls.find(
-      (config: InternalAxiosRequestConfig): boolean =>
-        String(config.method).toUpperCase() === 'PUT'
-        && String(config.url ?? '').endsWith('/progress-table/records/recProgressA'),
-    );
-    expect(parseRequestData(updateA as InternalAxiosRequestConfig)).toEqual({
-      fields: { 进展状态: '待反馈', 最近完成节点: '二面完成' },
-    });
-    expect(mock.calls.some(
-      (config: InternalAxiosRequestConfig): boolean =>
-        String(config.method).toUpperCase() === 'PUT'
-        && String(config.url ?? '').endsWith('/progress-table/records/recProgressB'),
-    )).toBe(false);
-    expect(mock.calls.some(
-      (config: InternalAxiosRequestConfig): boolean =>
-        String(config.url ?? '').includes('/task/v2/tasks/'),
-    )).toBe(false);
-  });
-
-  it('moves a manually missed latest event to status pending confirmation', async (): Promise<void> => {
-    const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
-      const url: string = String(config.url ?? '');
-      const method: string = String(config.method ?? '').toUpperCase();
-      if (url.endsWith('/auth/v3/tenant_access_token/internal')) {
-        return { code: 0, tenant_access_token: 'tenant-token', expire: 7200 };
-      }
-      if (url.includes('/reminder-table/records/search')) {
-        return {
-            code: 0,
-            data: {
-              items: [{
-                record_id: 'recMissedInterview',
-                fields: {
-                  完成状态: '已错过',
-                  环节: '一面',
-                  求职记录ID: '["recProgress"]',
-                },
-              }],
-              has_more: false,
-            },
-          };
-      }
-      if (url.endsWith('/progress-table/records/recProgress') && method === 'GET') {
-        return {
-          code: 0,
-          data: {
-            record: {
-              record_id: 'recProgress',
-              fields: {
-                进展状态: '待一面',
-                最近完成节点: '笔试完成',
-              },
-            },
-          },
-        };
-      }
-      if (url.endsWith('/progress-table/records/recProgress') && method === 'PUT') {
-        return { code: 0, data: { record: { record_id: 'recProgress', fields: {} } } };
-      }
-      throw new Error(`unexpected request: ${method} ${url}`);
-    });
-
-    await expect(mock.service.reconcileTaskStates()).resolves.toEqual({
-      scanned: 1,
-      provisioned: 0,
-      completed: 0,
-      missed: 1,
-      postponed: 0,
-      skipped: 0,
-    });
-    const progressUpdate = mock.calls.find(
-      (config: InternalAxiosRequestConfig): boolean =>
-        String(config.method).toUpperCase() === 'PUT'
-        && String(config.url ?? '').endsWith('/progress-table/records/recProgress'),
-    );
-    expect(parseRequestData(progressUpdate as InternalAxiosRequestConfig)).toEqual({
-      fields: {
-        进展状态: '状态待确认',
-      },
-    });
-  });
-
-  it('projects a completed single-table reminder into progress during reconciliation', async (): Promise<void> => {
-    const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
-      const url: string = String(config.url ?? '');
-      const method: string = String(config.method ?? '').toUpperCase();
-      if (url.endsWith('/auth/v3/tenant_access_token/internal')) {
-        return { code: 0, tenant_access_token: 'tenant-token', expire: 7200 };
-      }
-      if (url.includes('/reminder-table/records/search')) {
-        return {
-          code: 0,
-          data: {
-            items: [{
-              record_id: 'recReminder',
-              fields: {
-                完成状态: '已完成',
-                环节: '一面',
-                求职记录ID: '["recProgress"]',
-              },
-            }],
-            has_more: false,
-          },
-        };
-      }
-      if (url.endsWith('/progress-table/records/recProgress') && method === 'GET') {
-        return {
-          code: 0,
-          data: {
-            record: {
-              record_id: 'recProgress',
-              fields: {
-                进展状态: '待一面',
-                最近完成节点: '笔试完成',
-              },
-            },
-          },
-        };
-      }
-      if (url.endsWith('/progress-table/records/recProgress') && method === 'PUT') {
-        return { code: 0, data: { record: { record_id: 'recProgress', fields: {} } } };
-      }
-      throw new Error(`unexpected request: ${method} ${url}`);
-    });
-
-    await expect(mock.service.reconcileTaskStates()).resolves.toEqual({
-      scanned: 1,
-      provisioned: 0,
-      completed: 1,
-      missed: 0,
-      postponed: 0,
-      skipped: 0,
-    });
-    expect(mock.calls.some(
-      (config: InternalAxiosRequestConfig): boolean =>
-        String(config.method).toUpperCase() === 'PUT'
-        && String(config.url ?? '').includes('/reminder-table/records/'),
-    )).toBe(false);
-    const progressUpdate = mock.calls.find(
-      (config: InternalAxiosRequestConfig): boolean =>
-        String(config.method).toUpperCase() === 'PUT'
-        && String(config.url ?? '').endsWith('/progress-table/records/recProgress'),
-    );
-    expect(parseRequestData(progressUpdate as InternalAxiosRequestConfig)).toEqual({
-      fields: {
-        进展状态: '待反馈',
-        最近完成节点: '一面完成',
-      },
-    });
-  });
-
-  it('loads a shared progress record only once during full reconciliation', async (): Promise<void> => {
-    const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
-      const url: string = String(config.url ?? '');
-      const method: string = String(config.method ?? '').toUpperCase();
-      if (url.endsWith('/auth/v3/tenant_access_token/internal')) {
-        return { code: 0, tenant_access_token: 'tenant-token', expire: 7200 };
-      }
-      if (url.includes('/reminder-table/records/search')) {
-        return {
-          code: 0,
-          data: {
-            items: [
-              {
-                record_id: 'recWrittenExam',
-                fields: {
-                  完成状态: '已完成',
-                  环节: '笔试',
-                  求职记录ID: '["recSharedProgress"]',
-                },
-              },
-              {
-                record_id: 'recFirstInterview',
-                fields: {
-                  完成状态: '已完成',
-                  环节: '一面',
-                  求职记录ID: '["recSharedProgress"]',
-                },
-              },
-            ],
-            has_more: false,
-          },
-        };
-      }
-      if (url.endsWith('/progress-table/records/recSharedProgress') && method === 'GET') {
-        return {
-          code: 0,
-          data: {
-            record: {
-              record_id: 'recSharedProgress',
-              fields: {
-                进展状态: '待笔试',
-                最近完成节点: '投递完成',
-              },
-            },
-          },
-        };
-      }
-      if (url.endsWith('/progress-table/records/recSharedProgress') && method === 'PUT') {
-        return {
-          code: 0,
-          data: { record: { record_id: 'recSharedProgress', fields: {} } },
-        };
-      }
-      throw new Error(`unexpected request: ${method} ${url}`);
-    });
-
-    await expect(mock.service.reconcileTaskStates()).resolves.toEqual({
-      scanned: 2,
-      provisioned: 0,
-      completed: 2,
-      missed: 0,
-      postponed: 0,
-      skipped: 0,
-    });
-    const batchRequests = mock.calls.filter(
-      (config: InternalAxiosRequestConfig): boolean =>
-        String(config.method ?? '').toUpperCase() === 'POST'
-        && String(config.url ?? '').endsWith('/progress-table/records/batch_get'),
-    );
-    expect(batchRequests).toHaveLength(1);
-    expect(parseRequestData(batchRequests[0])).toEqual({
-      record_ids: ['recSharedProgress'],
-    });
-  });
-
   it('reconciles a changed reminder immediately from its exact record id', async (): Promise<void> => {
     const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
       const url: string = String(config.url ?? '');
@@ -835,8 +435,10 @@ describe('JobProgressSyncService', (): void => {
           data: {
             record: {
               record_id: 'recReminder',
+              last_modified_time: '1787581200000',
               fields: {
                 完成状态: '已完成',
+                事件状态: '有效',
                 环节: '一面',
                 求职记录ID: '["recProgress"]',
               },
@@ -846,6 +448,15 @@ describe('JobProgressSyncService', (): void => {
       }
       if (url.includes('/reminder-table/records/search')) {
         return { code: 0, data: { items: [], has_more: false } };
+      }
+      if (url.includes('/runtime-state-table/records/search') && method === 'POST') {
+        return { code: 0, data: { items: [] } };
+      }
+      if (url.includes('/runtime-state-table/records?client_token=') && method === 'POST') {
+        return { code: 0, data: { record: { record_id: 'recReconcileClaim', fields: (parseRequestData(config) as { fields: Record<string, unknown> }).fields } } };
+      }
+      if (url.endsWith('/runtime-state-table/records/recReconcileClaim') && method === 'PUT') {
+        return { code: 0, data: { record: { record_id: 'recReconcileClaim', fields: {} } } };
       }
       if (url.endsWith('/progress-table/records/recProgress') && method === 'GET') {
         return {
@@ -885,53 +496,347 @@ describe('JobProgressSyncService', (): void => {
     )).toBe(true);
   });
 
-  it('reconciles pending Base rows without creating tasks or rewriting planned time', async (): Promise<void> => {
-    const plannedAt: number = Date.parse('2026-08-15T10:00:00+08:00');
-    const deadlineAt: number = Date.parse('2026-08-18T23:59:00+08:00');
+  it('does not expose retired full-table or fallback locator methods', (): void => {
+    const mock: MockService = createMockService(() => {
+      throw new Error('network must not be used');
+    });
+    expect('reconcileTaskStates' in mock.service).toBe(false);
+    expect('resolveReminderRecordId' in mock.service).toBe(false);
+  });
+
+  it('does not require or send daily-card resources when daily check-in is disabled', async (): Promise<void> => {
+    process.env.DAILY_CHECKIN_STATUS = 'disabled';
+    delete process.env.DAILY_CHECKIN_CHAT_ID;
+    delete process.env.DAILY_CHECKIN_OWNER_OPEN_ID;
+    delete process.env.DAILY_CHECKIN_CALENDAR_ID;
+    const mock: MockService = createMockService(() => {
+      throw new Error('network must not be used');
+    });
+    await expect(mock.service.sendDailyCheckin()).resolves.toEqual({ sent: false, count: 0 });
+    expect(mock.calls).toHaveLength(0);
+  });
+
+  it('splits large daily histories and gives each card a stable message idempotency key', async (): Promise<void> => {
+    const records = Array.from({ length: 26 }, (_, index) => ({
+      record_id: `recDaily${index}`,
+      fields: { 完成状态: '待完成', 事件状态: '有效', 环节: '测评', 进行方式: '异步', 截止时间: '2099-08-30T18:00:00+08:00' },
+    }));
+    let ledgerCreates: number = 0;
+    const ledger = new Map<string, { record_id: string; fields: Record<string, unknown> }>();
+    const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
+      const url: string = String(config.url ?? '');
+      if (url.endsWith('/auth/v3/tenant_access_token/internal')) return { code: 0, tenant_access_token: 'tenant-token', expire: 7200 };
+      if (url.includes('/reminder-table/records/search')) return { code: 0, data: { items: records, has_more: false } };
+      if (url.includes('/runtime-state-table/records/search')) {
+        const body = parseRequestData(config) as { filter?: { conditions?: Array<{ value?: string[] }> } };
+        const key = String(body.filter?.conditions?.[0]?.value?.[0] ?? '');
+        return { code: 0, data: { items: ledger.has(key) ? [ledger.get(key)!] : [], has_more: false } };
+      }
+      if (url.includes('/runtime-state-table/records?client_token=')) {
+        ledgerCreates += 1;
+        const fields = (parseRequestData(config) as { fields: Record<string, unknown> }).fields;
+        const record = { record_id: `recLedger${ledgerCreates}`, fields: { ...fields } };
+        ledger.set(String(fields['幂等键']), record);
+        return { code: 0, data: { record } };
+      }
+      if (url.includes('/runtime-state-table/records/recLedger')) {
+        const record = [...ledger.values()].find((item) => url.endsWith(item.record_id));
+        if (!record) throw new Error(`unknown ledger record: ${url}`);
+        Object.assign(record.fields, (parseRequestData(config) as { fields: Record<string, unknown> }).fields);
+        return { code: 0, data: { record } };
+      }
+      if (url.includes('/im/v1/messages?receive_id_type=chat_id')) return { code: 0, data: { message_id: 'om_daily' } };
+      throw new Error(`unexpected request: ${String(config.method)} ${url}`);
+    });
+    await expect(mock.service.sendDailyCheckin(new Date('2026-08-24T22:10:00+08:00'))).resolves.toEqual({ sent: true, count: 26 });
+    const sends = mock.calls.filter((call): boolean => String(call.url).includes('/im/v1/messages?'));
+    expect(sends).toHaveLength(2);
+    const uuids = sends.map((call): string => String((parseRequestData(call) as { uuid?: string }).uuid));
+    expect(new Set(uuids).size).toBe(2);
+    expect(uuids.every((uuid: string): boolean => uuid.length <= 50)).toBe(true);
+    await expect(mock.service.sendDailyCheckin(new Date('2026-08-24T23:30:00+08:00'))).resolves.toEqual({ sent: true, count: 26 });
+    expect(mock.calls.filter((call): boolean => String(call.url).includes('/im/v1/messages?'))).toHaveLength(2);
+  });
+
+  it('retries only the progress linkage when Base was already marked completed', async (): Promise<void> => {
+    let progressReads: number = 0;
+    const runtimeStates = new Map<string, { record_id: string; fields: Record<string, unknown> }>();
+    const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
+      const url: string = String(config.url ?? '');
+      const method: string = String(config.method ?? '').toUpperCase();
+      if (url.endsWith('/auth/v3/tenant_access_token/internal')) return { code: 0, tenant_access_token: 'tenant-token', expire: 7200 };
+      if (url.endsWith('/reminder-table/records/recDaily') && method === 'GET') {
+        return { code: 0, data: { record: { record_id: 'recDaily', last_modified_time: '1787581200000', fields: { 完成状态: '已完成', 事件状态: '有效', 环节: '一面', 求职记录ID: '["recProgress"]' } } } };
+      }
+      if (url.includes('/reminder-table/records/search')) return { code: 0, data: { items: [], has_more: false } };
+      if (url.endsWith('/progress-table/records/recProgress') && method === 'GET') {
+        progressReads += 1;
+        if (progressReads <= 3) return { code: 99991663, msg: 'temporary service error' };
+        return { code: 0, data: { record: { record_id: 'recProgress', fields: { 进展状态: '待一面', 最近完成节点: '笔试完成' } } } };
+      }
+      if (url.endsWith('/progress-table/records/recProgress') && method === 'PUT') return { code: 0, data: { record: { record_id: 'recProgress', fields: {} } } };
+      if (url.includes('/runtime-state-table/records/search') && method === 'POST') {
+        const body = parseRequestData(config) as { filter?: { conditions?: Array<{ value?: string[] }> } };
+        const key = String(body.filter?.conditions?.[0]?.value?.[0] ?? '');
+        return { code: 0, data: { items: runtimeStates.has(key) ? [runtimeStates.get(key)!] : [] } };
+      }
+      if (url.includes('/runtime-state-table/records?client_token=') && method === 'POST') {
+        const fields = { ...(parseRequestData(config) as { fields: Record<string, unknown> }).fields };
+        const key = String(fields['幂等键']);
+        const state = runtimeStates.get(key) ?? { record_id: `recRuntime${runtimeStates.size + 1}`, fields };
+        runtimeStates.set(key, state);
+        return { code: 0, data: { record: state } };
+      }
+      if (url.includes('/runtime-state-table/records/recRuntime') && method === 'PUT') {
+        const state = [...runtimeStates.values()].find((item) => url.endsWith(item.record_id));
+        if (!state) throw new Error(`unknown runtime record: ${url}`);
+        Object.assign(state.fields, (parseRequestData(config) as { fields: Record<string, unknown> }).fields);
+        return { code: 0, data: { record: state } };
+      }
+      throw new Error(`unexpected request: ${method} ${url}`);
+    });
+    const payload = { operator_id: 'ou_owner', action_value: { action: 'completed', record_id: 'recDaily' } };
+    await expect(mock.service.handleDailyCheckinAction(payload)).resolves.toMatchObject({ toast: { type: 'error' }, card: { type: 'raw' } });
+    await expect(mock.service.handleDailyCheckinAction(payload)).resolves.toMatchObject({ toast: { type: 'info' } });
+    expect(mock.calls.some((call): boolean => String(call.method).toUpperCase() === 'PUT' && String(call.url).endsWith('/reminder-table/records/recDaily'))).toBe(false);
+    expect(mock.calls.some((call): boolean => String(call.method).toUpperCase() === 'PUT' && String(call.url).endsWith('/progress-table/records/recProgress'))).toBe(true);
+    expect([...runtimeStates.values()].find((state) => state.fields['类型'] === 'reminder_reconcile')?.fields['状态']).toBe('成功');
+  });
+
+  it('does not let a stale daily card reverse an existing completion result', async (): Promise<void> => {
     const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
       const url: string = String(config.url ?? '');
       if (url.endsWith('/auth/v3/tenant_access_token/internal')) {
         return { code: 0, tenant_access_token: 'tenant-token', expire: 7200 };
       }
-      if (url.includes('/reminder-table/records/search')) {
-        return {
-          code: 0,
-          data: {
-            items: [{
-              record_id: 'recPending',
-              fields: {
-                完成状态: '待完成',
-                环节: '笔试',
-                开始时间: plannedAt,
-                结束时间: plannedAt + 60 * 60 * 1000,
-                截止时间: deadlineAt,
-              },
-            }],
-            has_more: false,
-          },
-        };
+      if (url.endsWith('/reminder-table/records/recDaily') && String(config.method).toUpperCase() === 'GET') {
+        return { code: 0, data: { record: { record_id: 'recDaily', fields: { 完成状态: '已完成' } } } };
       }
-      throw new Error(`unexpected request: ${url}`);
+      throw new Error(`unexpected request: ${String(config.method)} ${url}`);
     });
+    await expect(mock.service.handleDailyCheckinAction({
+      operator_id: 'ou_owner',
+      action_value: { action: 'missed', record_id: 'recDaily' },
+    })).resolves.toMatchObject({ toast: { type: 'warning' } });
+    expect(mock.calls.some((call): boolean => String(call.method).toUpperCase() === 'PUT')).toBe(false);
+  });
 
-    await expect(mock.service.reconcileTaskStates()).resolves.toEqual({
-      scanned: 1,
-      provisioned: 0,
-      completed: 0,
-      missed: 0,
-      postponed: 0,
-      skipped: 0,
+  it('rejects a forged action that the current record group does not offer', async (): Promise<void> => {
+    const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
+      const url: string = String(config.url ?? '');
+      if (url.endsWith('/auth/v3/tenant_access_token/internal')) return { code: 0, tenant_access_token: 'tenant-token', expire: 7200 };
+      if (url.endsWith('/reminder-table/records/recDaily') && String(config.method).toUpperCase() === 'GET') {
+        return { code: 0, data: { record: { record_id: 'recDaily', fields: {
+          完成状态: '待完成', 事件状态: '有效', 环节: '测评', 进行方式: '异步',
+          截止时间: '2099-08-30T18:00:00+08:00',
+        } } } };
+      }
+      throw new Error(`unexpected request: ${String(config.method)} ${url}`);
     });
-    expect(mock.calls.some(
-      (config: InternalAxiosRequestConfig): boolean =>
-        String(config.url ?? '').includes('/task/v2/')
-        || String(config.url ?? '').includes('/calendar/v4/'),
-    )).toBe(false);
-    expect(mock.calls.some(
-      (config: InternalAxiosRequestConfig): boolean =>
-        String(config.method ?? '').toUpperCase() === 'PUT'
-        && String(config.url ?? '').includes('/reminder-table/records/recPending'),
-    )).toBe(false);
+    await expect(mock.service.handleDailyCheckinAction({
+      operator_id: 'ou_owner',
+      action_value: { action: 'missed', record_id: 'recDaily', group: 'deadline_overdue' },
+    })).resolves.toMatchObject({ toast: { type: 'warning' } });
+    expect(mock.calls.some((call): boolean => String(call.method).toUpperCase() === 'PUT')).toBe(false);
+  });
+
+  it('allows only one concurrent reconciliation to own the stable runtime claim', async (): Promise<void> => {
+    let runtimeState: { record_id: string; fields: Record<string, unknown> } | undefined;
+    const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
+      const url: string = String(config.url ?? '');
+      const method: string = String(config.method ?? '').toUpperCase();
+      if (url.endsWith('/auth/v3/tenant_access_token/internal')) return { code: 0, tenant_access_token: 'tenant-token', expire: 7200 };
+      if (url.endsWith('/reminder-table/records/recReminder') && method === 'GET') return { code: 0, data: { record: { record_id: 'recReminder', last_modified_time: '1787581200000', fields: { 完成状态: '已完成', 事件状态: '有效', 环节: '一面', 求职记录ID: '["recProgress"]' } } } };
+      if (url.includes('/reminder-table/records/search')) return { code: 0, data: { items: [], has_more: false } };
+      if (url.includes('/runtime-state-table/records/search') && method === 'POST') return { code: 0, data: { items: runtimeState ? [runtimeState] : [] } };
+      if (url.includes('/runtime-state-table/records?client_token=') && method === 'POST') {
+        runtimeState ??= { record_id: 'recClaim', fields: { ...(parseRequestData(config) as { fields: Record<string, unknown> }).fields } };
+        return { code: 0, data: { record: runtimeState } };
+      }
+      if (url.endsWith('/runtime-state-table/records/recClaim') && method === 'PUT') {
+        Object.assign(runtimeState!.fields, (parseRequestData(config) as { fields: Record<string, unknown> }).fields);
+        return { code: 0, data: { record: runtimeState } };
+      }
+      if (url.endsWith('/progress-table/records/recProgress') && method === 'GET') return { code: 0, data: { record: { record_id: 'recProgress', fields: { 进展状态: '待一面', 最近完成节点: '笔试完成' } } } };
+      if (url.endsWith('/progress-table/records/recProgress') && method === 'PUT') return { code: 0, data: { record: { record_id: 'recProgress', fields: {} } } };
+      throw new Error(`unexpected request: ${method} ${url}`);
+    });
+    const results = await Promise.allSettled([
+      mock.service.reconcileReminderRecord('recReminder'),
+      mock.service.reconcileReminderRecord('recReminder'),
+    ]);
+    expect(results.filter((result): boolean => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result): boolean => result.status === 'rejected')).toHaveLength(1);
+    expect(mock.calls.filter((call): boolean => String(call.method).toUpperCase() === 'PUT' && String(call.url).endsWith('/progress-table/records/recProgress'))).toHaveLength(1);
+  });
+
+  it('fails closed when Base omits the transition version needed for idempotency', async (): Promise<void> => {
+    const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
+      const url: string = String(config.url ?? '');
+      if (url.endsWith('/auth/v3/tenant_access_token/internal')) return { code: 0, tenant_access_token: 'tenant-token', expire: 7200 };
+      if (url.endsWith('/reminder-table/records/recReminder')) return { code: 0, data: { record: { record_id: 'recReminder', fields: { 完成状态: '已完成', 事件状态: '有效' } } } };
+      throw new Error(`unexpected request: ${String(config.method)} ${url}`);
+    });
+    await expect(mock.service.reconcileReminderRecord('recReminder')).rejects.toThrow('last_modified_time');
+    expect(mock.calls.some((call): boolean => String(call.url).includes('/runtime-state-table/'))).toBe(false);
+  });
+
+  it('does not project a cancelled event into job progress', async (): Promise<void> => {
+    let runtimeState: { record_id: string; fields: Record<string, unknown> } | undefined;
+    const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
+      const url: string = String(config.url ?? '');
+      const method: string = String(config.method ?? '').toUpperCase();
+      if (url.endsWith('/auth/v3/tenant_access_token/internal')) return { code: 0, tenant_access_token: 'tenant-token', expire: 7200 };
+      if (url.endsWith('/reminder-table/records/recReminder') && method === 'GET') return { code: 0, data: { record: { record_id: 'recReminder', last_modified_time: '1787581200000', fields: { 完成状态: '已完成', 事件状态: '已取消', 环节: '一面', 求职记录ID: '["recProgress"]' } } } };
+      if (url.includes('/runtime-state-table/records/search')) return { code: 0, data: { items: runtimeState ? [runtimeState] : [] } };
+      if (url.includes('/runtime-state-table/records?client_token=')) {
+        runtimeState = { record_id: 'recClaim', fields: { ...(parseRequestData(config) as { fields: Record<string, unknown> }).fields } };
+        return { code: 0, data: { record: runtimeState } };
+      }
+      if (url.endsWith('/runtime-state-table/records/recClaim') && method === 'PUT') {
+        Object.assign(runtimeState!.fields, (parseRequestData(config) as { fields: Record<string, unknown> }).fields);
+        return { code: 0, data: { record: runtimeState } };
+      }
+      throw new Error(`unexpected request: ${method} ${url}`);
+    });
+    await expect(mock.service.reconcileReminderRecord('recReminder')).resolves.toMatchObject({ ok: true, completionStatus: '已完成' });
+    expect(mock.calls.some((call): boolean => String(call.url).includes('/progress-table/'))).toBe(false);
+  });
+
+  it('opens the scheduling form on the first unplanned adjust click', async (): Promise<void> => {
+    const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
+      const url: string = String(config.url ?? '');
+      if (url.endsWith('/auth/v3/tenant_access_token/internal')) return { code: 0, tenant_access_token: 'tenant-token', expire: 7200 };
+      if (url.endsWith('/reminder-table/records/recDaily')) return { code: 0, data: { record: { record_id: 'recDaily', fields: { 完成状态: '待完成', 事件状态: '有效', 环节: '测评', 进行方式: '异步', 截止时间: '2099-08-30T18:00:00+08:00' } } } };
+      throw new Error(`unexpected request: ${String(config.method)} ${url}`);
+    });
+    await expect(mock.service.handleDailyCheckinAction({ operator_id: 'ou_owner', action_value: { action: 'adjust', record_id: 'recDaily' } })).resolves.toMatchObject({ toast: { type: 'info' }, card: { type: 'raw' } });
+    expect(mock.calls.some((call): boolean => String(call.url).includes('/calendar/v4/'))).toBe(false);
+  });
+
+  it('returns a friendly card response for invalid selected time', async (): Promise<void> => {
+    const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
+      const url: string = String(config.url ?? '');
+      if (url.endsWith('/auth/v3/tenant_access_token/internal')) return { code: 0, tenant_access_token: 'tenant-token', expire: 7200 };
+      if (url.endsWith('/reminder-table/records/recDaily')) return { code: 0, data: { record: { record_id: 'recDaily', fields: { 完成状态: '待完成', 事件状态: '有效', 环节: '测评', 进行方式: '异步', 截止时间: '2099-08-30T18:00:00+08:00' } } } };
+      throw new Error(`unexpected request: ${String(config.method)} ${url}`);
+    });
+    await expect(mock.service.handleDailyCheckinAction({ operator_id: 'ou_owner', action_value: { action: 'adjust', record_id: 'recDaily' }, form_value: { planned_date: '', planned_start: '' } })).resolves.toMatchObject({ toast: { type: 'warning' }, card: { type: 'raw' } });
+  });
+
+  it('reuses the backfilled calendar id on a repeated adjustment', async (): Promise<void> => {
+    const fields: Record<string, unknown> = {
+      完成状态: '待完成', 事件状态: '有效', 环节: '测评', 进行方式: '异步', 截止时间: '2099-08-30T18:00:00+08:00', 已建日程ID: '',
+    };
+    const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
+      const url: string = String(config.url ?? '');
+      const method: string = String(config.method ?? '').toUpperCase();
+      if (url.endsWith('/auth/v3/tenant_access_token/internal')) return { code: 0, tenant_access_token: 'tenant-token', expire: 7200 };
+      if (url.endsWith('/reminder-table/records/recDaily') && method === 'GET') {
+        return { code: 0, data: { record: { record_id: 'recDaily', fields: { ...fields } } } };
+      }
+      if (url.endsWith('/reminder-table/records/recDaily') && method === 'PUT') {
+        Object.assign(fields, (parseRequestData(config) as { fields: Record<string, unknown> }).fields);
+        return { code: 0, data: { record: { record_id: 'recDaily', fields: { ...fields } } } };
+      }
+      if (url.includes('/calendar/v4/calendars/cal_owner/events/search_event?') && method === 'POST') return { code: 0, data: { items: [] } };
+      if (url.includes('/calendar/v4/calendars/cal_owner/events?idempotency_key=') && method === 'POST') return { code: 0, data: { event: { event_id: 'evt-created' } } };
+      if (url.endsWith('/calendar/v4/calendars/cal_owner/events/evt-created') && method === 'PATCH') return { code: 0, data: {} };
+      throw new Error(`unexpected request: ${method} ${url}`);
+    });
+    const payload = { operator_id: 'ou_owner', action_value: { action: 'adjust_confirmed', record_id: 'recDaily', planned_start: '2099-08-25T15:30:00+08:00' } };
+    await expect(mock.service.handleDailyCheckinAction(payload)).resolves.toMatchObject({ toast: { type: 'success' } });
+    await expect(mock.service.handleDailyCheckinAction(payload)).resolves.toMatchObject({ toast: { type: 'success' } });
+    expect(mock.calls.filter((call): boolean => String(call.method).toUpperCase() === 'POST' && String(call.url).includes('/events?idempotency_key='))).toHaveLength(1);
+    expect(fields['已建日程ID']).toBe('evt-created');
+  });
+
+  it('recovers a calendar event created before Base backfill failed', async (): Promise<void> => {
+    const fields: Record<string, unknown> = {
+      完成状态: '待完成', 事件状态: '有效', 环节: '测评', 进行方式: '异步', 安排名称: '示例公司－测评',
+      开始时间: '2099-08-25T07:30:00.000Z', 结束时间: '2099-08-25T09:00:00.000Z',
+      截止时间: '2099-08-30T18:00:00+08:00', 已建日程ID: 'pending:old-action-key',
+    };
+    const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
+      const url: string = String(config.url ?? '');
+      const method: string = String(config.method ?? '').toUpperCase();
+      if (url.endsWith('/auth/v3/tenant_access_token/internal')) return { code: 0, tenant_access_token: 'tenant-token', expire: 7200 };
+      if (url.endsWith('/reminder-table/records/recDaily') && method === 'GET') return { code: 0, data: { record: { record_id: 'recDaily', fields: { ...fields } } } };
+      if (url.endsWith('/reminder-table/records/recDaily') && method === 'PUT') {
+        Object.assign(fields, (parseRequestData(config) as { fields: Record<string, unknown> }).fields);
+        return { code: 0, data: { record: { record_id: 'recDaily', fields: { ...fields } } } };
+      }
+      if (url.includes('/events/search_event?') && method === 'POST') return { code: 0, data: { items: [{ meta_data: { event_id: 'evt-recovered' } }] } };
+      if (url.endsWith('/events/evt-recovered') && method === 'GET') return { code: 0, data: { event: { event_id: 'evt-recovered', description: 'OfferLoop action old-action-key' } } };
+      if (url.endsWith('/events/evt-recovered') && method === 'PATCH') return { code: 0, data: {} };
+      throw new Error(`unexpected request: ${method} ${url}`);
+    });
+    await expect(mock.service.handleDailyCheckinAction({ operator_id: 'ou_owner', action_value: { action: 'adjust_confirmed', record_id: 'recDaily', planned_start: '2099-08-25T15:30:00+08:00' } })).resolves.toMatchObject({ toast: { type: 'success' } });
+    expect(mock.calls.some((call): boolean => String(call.method).toUpperCase() === 'POST' && String(call.url).includes('/events?idempotency_key='))).toBe(false);
+    expect(fields['已建日程ID']).toBe('evt-recovered');
+  });
+
+  it('warns before adjusting into a personal-calendar conflict', async (): Promise<void> => {
+    const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
+      const url: string = String(config.url ?? '');
+      if (url.endsWith('/auth/v3/tenant_access_token/internal')) return { code: 0, tenant_access_token: 'tenant-token', expire: 7200 };
+      if (url.endsWith('/reminder-table/records/recDaily')) return { code: 0, data: { record: { record_id: 'recDaily', fields: { 完成状态: '待完成', 事件状态: '有效', 环节: '笔试', 进行方式: '异步', 截止时间: '2099-08-30T18:00:00+08:00' } } } };
+      if (url.includes('/calendar/v4/freebusy/list')) return { code: 0, data: { freebusy_list: [{ start_time: '2099-08-25T15:00:00+08:00', end_time: '2099-08-25T17:00:00+08:00' }] } };
+      throw new Error(`unexpected request: ${String(config.method)} ${url}`);
+    });
+    const result = await mock.service.handleDailyCheckinAction({ operator_id: 'ou_owner', action_value: { action: 'adjust', record_id: 'recDaily' }, form_value: { planned_date: '2099-08-25', planned_start: '15:30' } });
+    expect(result).toMatchObject({ toast: { type: 'warning' }, card: { type: 'raw' } });
+    expect(mock.calls.some((call): boolean => String(call.url).includes('/calendar/v4/calendars/cal_owner/events'))).toBe(false);
+  });
+
+  it('does not treat the existing OfferLoop calendar event as its own conflict', async (): Promise<void> => {
+    jest.useFakeTimers().setSystemTime(new Date('2099-08-25T12:00:00+08:00'));
+    const fields: Record<string, unknown> = {
+      完成状态: '待完成', 事件状态: '有效', 环节: '测评', 进行方式: '异步', 安排名称: '甲－测评',
+      平台: '牛客', 链接: { link: 'https://example.com/test', text: '开始测评' }, 注意事项: '需要摄像头',
+      开始时间: '2099-08-25T15:00:00+08:00', 结束时间: '2099-08-25T16:30:00+08:00',
+      截止时间: '2099-08-30T18:00:00+08:00', 已建日程ID: 'evt-own',
+    };
+    const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
+      const url: string = String(config.url ?? '');
+      const method: string = String(config.method ?? '').toUpperCase();
+      if (url.endsWith('/auth/v3/tenant_access_token/internal')) return { code: 0, tenant_access_token: 'tenant-token', expire: 7200 };
+      if (url.endsWith('/reminder-table/records/recDaily') && method === 'GET') return { code: 0, data: { record: { record_id: 'recDaily', fields: { ...fields } } } };
+      if (url.endsWith('/reminder-table/records/recDaily') && method === 'PUT') return { code: 0, data: { record: { record_id: 'recDaily', fields: {} } } };
+      if (url.includes('/calendar/v4/freebusy/list')) return { code: 0, data: { freebusy_list: [{}] } };
+      if (url.endsWith('/events/evt-own') && method === 'GET') return { code: 0, data: { event: { start_time: { timestamp: String(Date.parse('2099-08-25T15:00:00+08:00') / 1000) }, end_time: { timestamp: String(Date.parse('2099-08-25T16:30:00+08:00') / 1000) } } } };
+      if (url.endsWith('/events/evt-own') && method === 'PATCH') return { code: 0, data: {} };
+      throw new Error(`unexpected request: ${method} ${url}`);
+    });
+    await expect(mock.service.handleDailyCheckinAction({ operator_id: 'ou_owner', action_value: { action: 'adjust', record_id: 'recDaily' }, form_value: { planned_date: '2099-08-25', planned_start: '15:30' } })).resolves.toMatchObject({ toast: { type: 'success' } });
+    const patchCall = mock.calls.find((call): boolean => String(call.url).endsWith('/events/evt-own') && String(call.method).toUpperCase() === 'PATCH');
+    expect(String((parseRequestData(patchCall!) as { description?: string }).description)).toContain('参与链接：https://example.com/test');
+    jest.useRealTimers();
+  });
+
+  it('retries transient calendar codes three times and records an operation failure', async (): Promise<void> => {
+    const fields: Record<string, unknown> = { 完成状态: '待完成', 事件状态: '有效', 环节: '测评', 进行方式: '异步', 截止时间: '2099-08-30T18:00:00+08:00', 已建日程ID: '' };
+    const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
+      const url: string = String(config.url ?? '');
+      const method: string = String(config.method ?? '').toUpperCase();
+      if (url.endsWith('/auth/v3/tenant_access_token/internal')) return { code: 0, tenant_access_token: 'tenant-token', expire: 7200 };
+      if (url.endsWith('/reminder-table/records/recDaily') && method === 'GET') return { code: 0, data: { record: { record_id: 'recDaily', fields: { ...fields } } } };
+      if (url.endsWith('/reminder-table/records/recDaily') && method === 'PUT') {
+        Object.assign(fields, (parseRequestData(config) as { fields: Record<string, unknown> }).fields);
+        return { code: 0, data: { record: { record_id: 'recDaily', fields: { ...fields } } } };
+      }
+      if (url.includes('/calendar/v4/calendars/cal_owner/events/search_event?') && method === 'POST') return { code: 0, data: { items: [] } };
+      if (url.includes('/calendar/v4/calendars/cal_owner/events?idempotency_key=') && method === 'POST') return { code: 99991663, msg: 'temporary service error' };
+      if (url.includes('/runtime-state-table/records/search') && method === 'POST') return { code: 0, data: { items: [] } };
+      if (url.includes('/runtime-state-table/records?client_token=') && method === 'POST') return { code: 0, data: { record: { record_id: 'recFailure', fields: (parseRequestData(config) as { fields: Record<string, unknown> }).fields } } };
+      throw new Error(`unexpected request: ${method} ${url}`);
+    });
+    const result = await mock.service.handleDailyCheckinAction({ operator_id: 'ou_owner', action_value: { action: 'adjust_confirmed', record_id: 'recDaily', planned_start: '2099-08-25T15:30:00+08:00' } });
+    expect(result).toMatchObject({ toast: { type: 'error' }, card: { type: 'raw' } });
+    expect(mock.calls.filter((call): boolean => String(call.method).toUpperCase() === 'POST' && String(call.url).includes('/events?idempotency_key='))).toHaveLength(3);
+    expect(fields['日历状态']).toBe('操作失败');
+    expect(String(fields['已建日程ID'])).toMatch(/^pending:/u);
+    expect(mock.calls.some((call): boolean => String(call.url).includes('/runtime-state-table/records?client_token='))).toBe(true);
   });
 
 });

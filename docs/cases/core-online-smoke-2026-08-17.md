@@ -22,10 +22,10 @@
 
 本次创建并删除以下四条记录：
 
-- 企业主表：`recvsxKVOXIieK`
-- “其他私企”分类子表：`recvsxL0KXWQvP`
-- 求职进展：`recvsxLpxeFWTx`
-- 笔面试安排：`recvsxLJpT1tqF`
+- 企业主表：`<redacted-enterprise-record-id>`
+- “其他私企”分类子表：`<redacted-category-record-id>`
+- 求职进展：`<redacted-progress-record-id>`
+- 笔面试安排：`<redacted-interview-record-id>`
 
 删除前逐条读回公司标记、来源邮件 ID、主子表双向 record ID 和求职记录关联；确认完全匹配后，
 依次删除笔面试安排、求职进展、分类子表和企业主表。删除后分别在四张目标表搜索唯一公司标记或

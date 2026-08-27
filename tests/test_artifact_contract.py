@@ -31,18 +31,101 @@ class ArtifactContractTest(unittest.TestCase):
             contract.describe_layout(),
             {
                 "folders": {
-                    "user_profile": ["02｜用户画像"],
-                    "current_resumes": ["03｜定制简历"],
-                    "experience_deepthink": ["04｜经历深挖"],
-                    "competency_profiles": ["05｜岗位能力与训练", "岗位能力画像"],
-                    "competency_training": ["05｜岗位能力与训练", "专项训练"],
-                    "interview_prep": ["06｜面试准备"],
-                    "mock_lab": ["07｜模拟面试"],
-                    "interview_review": ["08｜真实面试复盘", "已完成复盘"],
-                    "interview_asr": ["08｜真实面试复盘", "ASR 待复盘"],
+                    "current_resumes": ["02｜定制简历"],
+                    "experience_deepthink": ["03｜经历深挖"],
+                    "interview_prep": ["04｜面试准备"],
+                    "mock_lab": ["05｜模拟面试"],
+                    "interview_review": ["06｜真实面试复盘", "已完成复盘"],
+                    "interview_asr": ["06｜真实面试复盘", "ASR 待复盘"],
                 },
             },
         )
+
+    def test_legacy_workspace_relayout_archives_retired_dirs_before_renumbering(self):
+        contract = load_module()
+        titles = (
+            "02｜用户画像",
+            "03｜定制简历",
+            "04｜经历深挖",
+            "05｜岗位能力与训练",
+            "06｜面试准备",
+            "07｜模拟面试",
+            "08｜真实面试复盘",
+        )
+        result = contract.plan_directory_migration(
+            {
+                "root_token": "root",
+                "nodes": [
+                    {
+                        "token": f"node-{index}",
+                        "title": title,
+                        "parent_token": "root",
+                    }
+                    for index, title in enumerate(titles)
+                ],
+            }
+        )
+        self.assertEqual(result["status"], "needs_migration")
+        actions = [operation["action"] for operation in result["operations"]]
+        self.assertEqual(
+            actions,
+            ["create_directory", "move_and_rename", "move_and_rename"]
+            + ["rename_directory"] * 5,
+        )
+        self.assertEqual(result["operations"][0]["title"], "99｜历史归档")
+        self.assertEqual(
+            [
+                operation["to_title"]
+                for operation in result["operations"]
+                if operation["action"] == "rename_directory"
+            ],
+            [
+                "02｜定制简历",
+                "03｜经历深挖",
+                "04｜面试准备",
+                "05｜模拟面试",
+                "06｜真实面试复盘",
+            ],
+        )
+
+    def test_relayout_is_idempotent_and_conflicts_fail_closed(self):
+        contract = load_module()
+        active = (
+            "02｜定制简历",
+            "03｜经历深挖",
+            "04｜面试准备",
+            "05｜模拟面试",
+            "06｜真实面试复盘",
+        )
+        migrated_nodes = [
+            {"token": "archive", "title": "99｜历史归档", "parent_token": "root"},
+            {"token": "profile", "title": "用户画像", "parent_token": "archive"},
+            {"token": "ability", "title": "岗位能力与训练", "parent_token": "archive"},
+        ] + [
+            {"token": f"active-{index}", "title": title, "parent_token": "root"}
+            for index, title in enumerate(active)
+        ]
+        ready = contract.plan_directory_migration(
+            {"root_token": "root", "nodes": migrated_nodes}
+        )
+        self.assertEqual(ready["status"], "ready")
+        self.assertEqual(ready["operations"], [])
+
+        conflict = contract.plan_directory_migration(
+            {
+                "root_token": "root",
+                "nodes": migrated_nodes
+                + [
+                    {
+                        "token": "old-resume",
+                        "title": "03｜定制简历",
+                        "parent_token": "root",
+                    }
+                ],
+            }
+        )
+        self.assertEqual(conflict["status"], "conflict")
+        self.assertEqual(conflict["operations"], [])
 
     def test_migration_preserves_v2_values_and_initializes_empty_storage(self):
         contract = load_module()
@@ -53,7 +136,7 @@ class ArtifactContractTest(unittest.TestCase):
                 "notifications": {"status": "disabled"},
             }
         )
-        self.assertEqual(migrated["schema_version"], 6)
+        self.assertEqual(migrated["schema_version"], 7)
         self.assertEqual(migrated["lark_profile"], "offerloop")
         self.assertEqual(migrated["notifications"], {"status": "disabled"})
         self.assertEqual(
@@ -68,7 +151,6 @@ class ArtifactContractTest(unittest.TestCase):
             "interview-prep": "面试准备｜示例公司｜产品经理｜一面｜2026-07-24",
             "mock-lab": "模拟面试｜示例公司｜产品经理｜一面｜2026-07-24｜01",
             "talk-review": "面试复盘｜示例公司｜产品经理｜一面｜2026-07-24",
-            "competency-lab": "能力训练｜产品经理｜2026-07-24｜01",
         }
         for skill, prefix in cases.items():
             with self.subTest(skill=skill):
@@ -182,36 +264,13 @@ class ArtifactContractTest(unittest.TestCase):
         self.assertNotIn(run_id, legacy_restored_prd)
         self.assertNotIn(run_id, interview_transcript)
 
-    def test_career_profile_builds_three_distinct_document_titles(self):
+    def test_retired_skills_cannot_create_new_runs(self):
         contract = load_module()
-        run_id = contract.new_run_id(
-            "career-profile",
-            now=datetime(2026, 7, 24, 12, 30, 45, tzinfo=timezone.utc),
-            suffix="a1b2c3d4",
-        )
-        expected = {
-            "job-preference": "岗位选择偏好｜小王",
-            "personality-exploration": "个人性格探索｜小王",
-            "language-habits": "语言表达习惯｜小王",
-        }
-        for artifact_type, title in expected.items():
-            self.assertEqual(
-                contract.build_title(
-                    "career-profile",
-                    run_id,
-                    artifact_type=artifact_type,
-                    subject="小王",
-                ),
-                title,
-            )
-            self.assertEqual(
-                contract.route_folder(
-                    "career-profile",
-                    "incomplete",
-                    artifact_type=artifact_type,
-                ),
-                "user_profile",
-            )
+        for skill in ("career-profile", "competency-lab"):
+            with self.subTest(skill=skill), self.assertRaisesRegex(
+                ValueError, "unknown skill"
+            ):
+                contract.new_run_id(skill)
 
     def test_talk_review_builds_distinct_titles_for_all_artifacts(self):
         contract = load_module()
@@ -301,7 +360,7 @@ class ArtifactContractTest(unittest.TestCase):
                 storage["folders"]["experience_deepthink"], "wik_folder_b"
             )
             self.assertNotIn("documents", storage)
-            self.assertEqual(result["schema_version"], 6)
+            self.assertEqual(result["schema_version"], 7)
 
     def test_v3_storage_migrates_to_current_resume_and_fixed_output_folders(self):
         contract = load_module()
@@ -325,7 +384,7 @@ class ArtifactContractTest(unittest.TestCase):
         migrated = contract.migrate_config(old)
         storage = migrated["artifact_storage"]
 
-        self.assertEqual(migrated["schema_version"], 6)
+        self.assertEqual(migrated["schema_version"], 7)
         self.assertEqual(storage["folders"]["current_resumes"], "resume-folder")
         self.assertEqual(storage["folders"]["interview_prep"], "prep-folder")
         self.assertEqual(storage["folders"]["interview_asr"], "asr-folder")

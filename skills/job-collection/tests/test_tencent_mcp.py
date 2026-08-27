@@ -1,4 +1,5 @@
 from pathlib import Path
+from datetime import datetime, timezone
 import json
 import sys
 import unittest
@@ -8,17 +9,124 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts.tencent_mcp import (
     DEFAULT_PAGE_SIZE,
+    IncrementalCheckpoint,
     LIST_RECORDS_TOOL,
     TencentMcpError,
     TencentMcpResponseTruncated,
     list_records_arguments,
     parse_smartsheet_url,
     scan_all_records,
+    scan_incremental_records,
     unwrap_tool_payload,
 )
 
 
 class TencentMcpTest(unittest.TestCase):
+    def test_incremental_scan_stops_after_complete_page_before_boundary(self):
+        pages = {
+            0: {
+                "total": 5,
+                "has_more": True,
+                "next": 2,
+                "records": [
+                    {"record_id": "r1", "updated": "2026-08-24T10:00:00+00:00"},
+                    {"record_id": "r2", "updated": "2026-08-23T09:00:00+00:00"},
+                ],
+            },
+            2: {
+                "total": 5,
+                "has_more": True,
+                "next": 4,
+                "records": [
+                    {"record_id": "r3", "updated": "2026-08-21T23:00:00+00:00"},
+                    {"record_id": "r4", "updated": "2026-08-20T08:00:00+00:00"},
+                ],
+            },
+        }
+        consumed = []
+        checkpoints = []
+        summary = scan_incremental_records(
+            lambda _name, arguments: pages[arguments["offset"]],
+            lambda records: consumed.extend(records),
+            lambda record: record["updated"],
+            checkpoints.append,
+            file_id="FileExample",
+            sheet_id="SheetExample",
+            overlap_start=datetime(2026, 8, 22, tzinfo=timezone.utc),
+            page_size=2,
+        )
+        self.assertEqual([record["record_id"] for record in consumed], ["r1", "r2"])
+        self.assertEqual(summary.stop_reason, "time_boundary")
+        self.assertEqual(summary.window_records, 2)
+        self.assertIsNone(summary.checkpoint)
+        self.assertEqual(checkpoints[-1].offset, 2)
+
+    def test_incremental_checkpoint_resumes_without_rereading_prior_page(self):
+        pages = {
+            0: {
+                "total": 3,
+                "has_more": True,
+                "next": 2,
+                "records": [
+                    {"record_id": "r1", "updated": 1787536800000},
+                    {"record_id": "r2", "updated": 1787450400000},
+                ],
+            },
+            2: {
+                "total": 3,
+                "has_more": False,
+                "next": 3,
+                "records": [
+                    {"record_id": "r3", "updated": 1787364000000},
+                ],
+            },
+        }
+        saved = []
+        consumed = []
+        with self.assertRaisesRegex(TencentMcpError, "max_pages"):
+            scan_incremental_records(
+                lambda _name, arguments: pages[arguments["offset"]],
+                lambda records: consumed.extend(records),
+                lambda record: record["updated"],
+                saved.append,
+                file_id="FileExample",
+                sheet_id="SheetExample",
+                overlap_start=datetime(2026, 8, 20, tzinfo=timezone.utc),
+                page_size=2,
+                max_pages=1,
+            )
+        checkpoint = IncrementalCheckpoint.from_json(saved[-1].to_json())
+        resumed_offsets = []
+        summary = scan_incremental_records(
+            lambda _name, arguments: (
+                resumed_offsets.append(arguments["offset"])
+                or pages[arguments["offset"]]
+            ),
+            lambda records: consumed.extend(records),
+            lambda record: record["updated"],
+            lambda _checkpoint: None,
+            file_id="FileExample",
+            sheet_id="SheetExample",
+            overlap_start=datetime(2026, 8, 20, tzinfo=timezone.utc),
+            page_size=2,
+            checkpoint=checkpoint,
+        )
+        self.assertEqual(resumed_offsets, [2])
+        self.assertTrue(summary.complete)
+        self.assertEqual(len({record["record_id"] for record in consumed}), 3)
+
+    def test_incremental_checkpoint_rejects_boolean_offsets(self):
+        payload = {
+            "offset": True,
+            "expected_total": 3,
+            "seen_record_ids": ["r1"],
+            "previous_updated_at_ms": 1,
+            "high_water_ms": 2,
+            "effective_page_size": 25,
+        }
+        with self.assertRaisesRegex(ValueError, "offset"):
+            IncrementalCheckpoint.from_json(json.dumps(payload))
+
     def test_parse_smartsheet_url_preserves_sheet_and_view_hints(self):
         location = parse_smartsheet_url(
             "https://docs.qq.com/smartsheet/FileExample"

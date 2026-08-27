@@ -84,6 +84,12 @@ class OfferLoopInstallerTest(unittest.TestCase):
             for name in self.installer.SKILL_NAMES:
                 self.assertTrue((root / name / "SKILL.md").is_file())
                 self.assertFalse((root / name / "tests").exists())
+            collection = root / "job-collection"
+            self.assertTrue(
+                (collection / "references" / "failure-handling.md").is_file()
+            )
+            self.assertTrue((collection / "scripts" / "sync_pipeline.py").is_file())
+            self.assertFalse((collection / "agents" / "openai.yaml").exists())
             runtime = root / self.installer.SUPPORT_NAME
             self.assertTrue((runtime / "references" / "profile-gate.md").is_file())
             self.assertTrue((runtime / "scripts" / "profile_gate.py").is_file())
@@ -107,11 +113,12 @@ class OfferLoopInstallerTest(unittest.TestCase):
             self.assertNotIn("飞书任务GUID", skill)
             self.assertNotIn("card.action.trigger", contract)
             self.assertNotIn("card-action", skill)
-            self.assertIn("offerloop-base-reconcile", contract)
+            self.assertIn("不得创建 `offerloop-base-reconcile`", contract)
             self.assertIn("/openapi/job-progress-sync/reminder-reconcile", contract)
             self.assertIn("笔面试安排", contract)
             self.assertIn("X-OfferLoop-Workflow-Secret", contract)
             self.assertIn("其他视图立即显示相同值", contract)
+            self.assertIn("不得运行每 30 分钟检查", contract)
             self.assertNotIn("OFFERLOOP_CALLBACK_RELAY_SECRET", contract)
 
     def test_conflict_is_safe_and_upgrade_creates_backup(self):
@@ -171,6 +178,39 @@ class OfferLoopInstallerTest(unittest.TestCase):
                 backups[0].read_text(encoding="utf-8"),
                 "legacy experience content\n",
             )
+
+    def test_nine_skill_upgrade_retires_profile_and_competency_entries(self):
+        with tempfile.TemporaryDirectory() as directory:
+            environment = {"HOME": directory, "PATH": ""}
+            root = Path(directory) / ".codex" / "skills"
+            for name in ("career-profile", "competency-lab"):
+                legacy = root / name
+                legacy.mkdir(parents=True)
+                (legacy / "SKILL.md").write_text(
+                    f"legacy {name}\n", encoding="utf-8"
+                )
+
+            blocked = self.installer.install_agent("codex", environ=environment)
+            self.assertEqual(blocked["status"], "conflict")
+            upgraded = self.installer.install_agent(
+                "codex", environ=environment, upgrade=True
+            )
+            self.assertEqual(upgraded["status"], "upgraded")
+            for name in ("career-profile", "competency-lab"):
+                self.assertFalse((root / name).exists())
+                backups = list(
+                    (root.parent / ".offerloop-backups").glob(
+                        f"*/{name}-retired/SKILL.md"
+                    )
+                )
+                self.assertEqual(len(backups), 1)
+                self.assertEqual(
+                    backups[0].read_text(encoding="utf-8"), f"legacy {name}\n"
+                )
+            installed = {
+                path.parent.name for path in root.glob("*/SKILL.md") if path.is_file()
+            }
+            self.assertEqual(installed, set(self.installer.SKILL_NAMES))
 
     def test_hermes_external_skill_collision_is_not_silently_installed(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -274,18 +314,17 @@ class OfferLoopInstallerTest(unittest.TestCase):
 
             rendered = output.getvalue()
             self.assertEqual(exit_code, 0)
-            self.assertIn("9 个长期 Skill 已处理完成", rendered)
+            self.assertIn("7 个长期 Skill 已处理完成", rendered)
             self.assertIn("欢迎使用 OfferLoop", rendered)
-            self.assertIn("求职与画像", rendered)
+            self.assertIn("求职管理", rendered)
             self.assertIn("求职训练能力", rendered)
             for name in self.installer.SKILL_NAMES:
                 self.assertIn(name, rendered)
-            self.assertIn("安装只添加 Skill", rendered)
+            self.assertIn("安装只添加本地 Skill", rendered)
             self.assertIn("结束当前 Agent 会话并新开会话", rendered)
-            self.assertIn("先检查 02｜用户画像中的画像文档", rendered)
-            self.assertIn("一次只问我一个问题", rendered)
-            self.assertIn("每次确认后自动保存", rendered)
-            self.assertIn("三个入口帮我选择", rendered)
+            self.assertIn("尚不可正式使用", rendered)
+            self.assertIn("飞书工作区初始化", rendered)
+            self.assertIn("三张飞书 Base", rendered)
 
     def test_verify_is_read_only_and_requires_a_complete_install(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -401,7 +440,7 @@ class OfferLoopInstallerTest(unittest.TestCase):
                     len(group["skills"])
                     for group in first["welcome"]["groups"]
                 ),
-                9,
+                7,
             )
             self.assertNotIn("welcome", second)
 
@@ -460,7 +499,7 @@ class OfferLoopInstallerTest(unittest.TestCase):
             (root / "SKILL.md").write_text("kept\n", encoding="utf-8")
             digest = self.installer.tree_digest(root)
 
-            for name in ("node_modules", "dist", "build"):
+            for name in ("node_modules", "dist", "build", "evals"):
                 generated = root / "assets" / name
                 generated.mkdir(parents=True)
                 (generated / "generated.txt").write_text(
@@ -472,8 +511,14 @@ class OfferLoopInstallerTest(unittest.TestCase):
             destination = Path(directory) / "destination"
             shutil.copytree(root, destination, ignore=self.installer._ignore_copy)
             self.assertTrue((destination / "SKILL.md").is_file())
-            for name in ("node_modules", "dist", "build"):
+            for name in ("node_modules", "dist", "build", "evals"):
                 self.assertFalse((destination / "assets" / name).exists())
+
+            (root / "test-prompts.json").write_text("{}\n", encoding="utf-8")
+            self.assertEqual(self.installer.tree_digest(root), digest)
+            shutil.rmtree(destination)
+            shutil.copytree(root, destination, ignore=self.installer._ignore_copy)
+            self.assertFalse((destination / "test-prompts.json").exists())
 
     def test_result_status_contract_is_complete(self):
         self.assertEqual(
@@ -489,8 +534,8 @@ class OfferLoopInstallerTest(unittest.TestCase):
         )
 
     def test_version_reports_installer_and_offerloop_versions(self):
-        self.assertEqual(self.installer.INSTALLER_VERSION, "2.1")
-        self.assertEqual(self.installer.offerloop_version(), "0.1.0-alpha.12")
+        self.assertEqual(self.installer.INSTALLER_VERSION, "3.0")
+        self.assertEqual(self.installer.offerloop_version(), "0.1.0-alpha.14")
 
     def test_workbuddy_install_is_complete_and_idempotent(self):
         with tempfile.TemporaryDirectory() as directory:

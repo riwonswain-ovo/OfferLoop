@@ -101,7 +101,7 @@ test("a later pending interview survives completion of an earlier event", () => 
   assert.equal(result["进展状态"], "待二面");
 });
 
-test("only the latest missed event requires manual status confirmation", () => {
+test("missed events never change job progress", () => {
   const laterPending = projectProgressFromEvents(
     { "进展状态": "待二面", "最近完成节点": "投递完成" },
     [
@@ -115,7 +115,35 @@ test("only the latest missed event requires manual status confirmation", () => {
     { "进展状态": "待一面", "最近完成节点": "投递完成" },
     [{ created_time: "100", fields: { "环节": "一面", "完成状态": "已错过" } }],
   );
-  assert.equal(latestMissed["进展状态"], "状态待确认");
+  assert.equal(latestMissed["进展状态"], "待一面");
+});
+
+test("assessment and written test are independent and written test wins scalar pending status", () => {
+  const result = projectProgressFromEvents(
+    { "进展状态": "待反馈", "最近完成节点": "投递完成" },
+    [
+      { created_time: "100", fields: { "环节": "笔试", "完成状态": "待完成", "事件状态": "有效" } },
+      { created_time: "200", fields: { "环节": "测评", "完成状态": "待完成", "事件状态": "有效" } },
+    ],
+  );
+  assert.equal(result["进展状态"], "待笔试");
+});
+
+test("completing assessment keeps a later written-test pending status", () => {
+  const completed = applyCompletion(
+    { "进展状态": "待笔试", "最近完成节点": "投递完成" },
+    "测评",
+  );
+  assert.equal(completed["最近完成节点"], "测评完成");
+  assert.equal(completed["进展状态"], "待笔试");
+});
+
+test("cancelled events do not project into progress", () => {
+  const result = projectProgressFromEvents(
+    { "进展状态": "待反馈", "最近完成节点": "投递完成" },
+    [{ fields: { "环节": "一面", "完成状态": "待完成", "事件状态": "已取消" } }],
+  );
+  assert.equal(result["进展状态"], "待反馈");
 });
 
 test("event projection protects explicit terminal results", () => {
@@ -132,6 +160,7 @@ test("pending event counts ignore completed written tests", () => {
     { "环节": "笔试", "完成状态": "已完成" },
     { "环节": "笔试", "完成状态": "待完成" },
     { "环节": "一面", "完成状态": "待完成" },
+    { "环节": "测评", "完成状态": "待完成", "事件状态": "已取消" },
   ]);
   assert.equal(counts.get("笔试"), 1);
   assert.equal(counts.get("一面"), 1);

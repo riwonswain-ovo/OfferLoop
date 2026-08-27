@@ -17,7 +17,6 @@ import type {
 
 import {
   type ReminderReconcileResult,
-  type TaskReconcileResult,
   JobProgressSyncService,
 } from './job-progress-sync.service';
 
@@ -84,27 +83,18 @@ export class JobProgressSyncOpenApiController {
   async reconcileReminder(
     @Body() body: {
       recordId?: string;
-      recordLink?: string;
-      sourceEmailId?: string;
-      recordTitle?: string;
     },
     @Query('recordId') queryRecordId?: string,
-    @Query('recordLink') queryRecordLink?: string,
     @Headers('x-offerloop-workflow-secret') workflowSecret?: string,
-  ): Promise<ReminderReconcileResult | TaskReconcileResult> {
+  ): Promise<ReminderReconcileResult> {
     this.jobProgressSyncService.verifyReminderReconcileSecret(workflowSecret);
-    let recordId: string = extractRecordId({
+    const recordId: string = extractRecordId({
       sourceRecordId: body?.recordId || String(queryRecordId ?? ''),
-      sourceRecordLink: body?.recordLink || String(queryRecordLink ?? ''),
     });
     if (!recordId) {
-      recordId = await this.jobProgressSyncService.resolveReminderRecordId(
-        body?.sourceEmailId ?? '',
-        body?.recordTitle ?? '',
+      throw new BadRequestException(
+        'an exact reminder record locator is required; full-table reconciliation is disabled',
       );
-    }
-    if (!recordId) {
-      return this.jobProgressSyncService.reconcileTaskStates();
     }
     return this.jobProgressSyncService.reconcileReminderRecord(recordId);
   }

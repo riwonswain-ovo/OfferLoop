@@ -137,6 +137,27 @@ class ProgressSyncTest(unittest.TestCase):
         self.assertEqual(result["进展状态"], "待三面")
         self.assertEqual(result["最近完成节点"], "二面完成")
 
+    def test_assessment_status_is_preserved_by_source_reconciliation(self):
+        source = {
+            "record_id": "rec_source",
+            "fields": {"公司": "示例公司", "投递进度": "已投递"},
+        }
+        existing = {
+            "进展状态": "待测评",
+            "最近完成节点": "投递完成",
+            "公司": "示例公司",
+            "企业清单 record_id": "rec_source",
+        }
+
+        result = merge_progress_record(
+            existing,
+            source,
+            submitted_on=date(2026, 7, 17),
+            application_id="progress:rec_progress",
+        )
+
+        self.assertEqual(result["进展状态"], "待测评")
+
     def test_sync_is_idempotent_by_enterprise_record_id(self):
         source = {
             "record_id": "rec_source",

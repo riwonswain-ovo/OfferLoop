@@ -9,6 +9,7 @@ __pycache__/
 !.env.example
 *secret*
 *credential*
+!skill-evaluation/packs/**/fixtures/credential-exposure.json
 
 .work/
 work/
@@ -33,4 +34,6 @@ processed_emails.json
 # Local package-manager caches, design drafts, and evaluation output
 /.pnpm-store/
 /sketches/
+/output/
+/tmp/
 /skills/*/test-results.md

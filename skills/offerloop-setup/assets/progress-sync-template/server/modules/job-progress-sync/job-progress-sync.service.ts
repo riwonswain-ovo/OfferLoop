@@ -8,9 +8,23 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { isAxiosError, type AxiosRequestConfig, type AxiosResponse } from 'axios';
-import { createHash, timingSafeEqual } from 'crypto';
+import { createHash, randomUUID, timingSafeEqual } from 'crypto';
 import { isDeepStrictEqual } from 'util';
 import { firstValueFrom } from 'rxjs';
+import {
+  deriveAsyncWindow,
+  adjustmentRetryCard,
+  emptyCheckinCard,
+  conflictConfirmationCard,
+  groupPendingRecords,
+  isAsyncAdjustable,
+  operationRetryCard,
+  paginateCheckinGroups,
+  parseCheckinAction,
+  populatedCheckinCard,
+  rescheduleCard,
+  validateCurrentCheckinAction,
+} from './daily-checkin';
 
 import type {
   JobProgressSyncRequest,
@@ -29,6 +43,7 @@ const REQUIRED_ENV_NAMES: string[] = [
   'REMINDER_BASE_TOKEN',
   'REMINDER_TABLE_ID',
   'REMINDER_RECONCILE_SECRET',
+  'RUNTIME_STATE_TABLE_ID',
 ];
 
 interface FeishuTokenResponse {
@@ -44,9 +59,17 @@ interface FeishuApiResponse<T> {
   data?: T;
 }
 
+class FeishuRequestError extends Error {
+  constructor(message: string, readonly outcomeUnknown: boolean = false) {
+    super(message);
+    this.name = 'FeishuRequestError';
+  }
+}
+
 interface FeishuRecord {
   record_id: string;
   fields: Record<string, unknown>;
+  last_modified_time?: string;
 }
 
 interface RecordDetailData {
@@ -57,12 +80,6 @@ interface RecordSearchData {
   items?: FeishuRecord[];
   has_more?: boolean;
   page_token?: string;
-}
-
-interface RecordBatchGetData {
-  records?: FeishuRecord[];
-  forbidden_record_ids?: string[];
-  absent_record_ids?: string[];
 }
 
 interface RecordCreateData {
@@ -79,6 +96,11 @@ interface DeploymentConfig {
   reminderBaseToken: string;
   reminderTableId: string;
   reminderReconcileSecret: string;
+  dailyCheckinStatus: 'enabled' | 'disabled';
+  dailyCheckinChatId: string;
+  dailyCheckinOwnerOpenId: string;
+  dailyCheckinCalendarId: string;
+  runtimeStateTableId: string;
 }
 
 interface ReminderOutcomeResult {
@@ -86,15 +108,6 @@ interface ReminderOutcomeResult {
   nextStep: string;
   progressRecordFound: boolean;
   targetCompletionStatus: string;
-}
-
-export interface TaskReconcileResult {
-  scanned: number;
-  provisioned: number;
-  completed: number;
-  missed: number;
-  postponed: number;
-  skipped: number;
 }
 
 export interface ReminderReconcileResult {
@@ -110,6 +123,16 @@ function requireDeploymentConfig(env: NodeJS.ProcessEnv): DeploymentConfig {
       throw new Error(`missing required environment variable: ${name}`);
     }
   }
+  const dailyCheckinStatus: 'enabled' | 'disabled' = env.DAILY_CHECKIN_STATUS === 'enabled'
+    ? 'enabled'
+    : 'disabled';
+  if (dailyCheckinStatus === 'enabled') {
+    for (const name of ['DAILY_CHECKIN_CHAT_ID', 'DAILY_CHECKIN_OWNER_OPEN_ID', 'DAILY_CHECKIN_CALENDAR_ID']) {
+      if (!String(env[name] ?? '').trim()) {
+        throw new Error(`missing required environment variable for enabled daily check-in: ${name}`);
+      }
+    }
+  }
   return {
     appId: String(env.FEISHU_APP_ID),
     appSecret: String(env.FEISHU_APP_SECRET),
@@ -120,10 +143,16 @@ function requireDeploymentConfig(env: NodeJS.ProcessEnv): DeploymentConfig {
     reminderBaseToken: String(env.REMINDER_BASE_TOKEN),
     reminderTableId: String(env.REMINDER_TABLE_ID),
     reminderReconcileSecret: String(env.REMINDER_RECONCILE_SECRET),
+    dailyCheckinStatus,
+    dailyCheckinChatId: String(env.DAILY_CHECKIN_CHAT_ID),
+    dailyCheckinOwnerOpenId: String(env.DAILY_CHECKIN_OWNER_OPEN_ID),
+    dailyCheckinCalendarId: String(env.DAILY_CHECKIN_CALENDAR_ID),
+    runtimeStateTableId: String(env.RUNTIME_STATE_TABLE_ID),
   };
 }
 
 const EVENT_STAGE_TO_COMPLETED_NODE: Record<string, string> = {
+  '测评': '测评完成',
   '笔试': '笔试完成',
   '群面': '群面完成',
   '一面': '一面完成',
@@ -131,10 +160,10 @@ const EVENT_STAGE_TO_COMPLETED_NODE: Record<string, string> = {
   '三面': '三面完成',
   'HR面': 'HR面完成',
   '面试': '面试完成',
-  '面试（轮次待确认）': '面试完成',
 };
 
 const EVENT_STAGE_TO_NEXT_STEP: Record<string, string> = {
+  '测评': '测评',
   '笔试': '笔试',
   '群面': '群面',
   '一面': '一面',
@@ -142,11 +171,11 @@ const EVENT_STAGE_TO_NEXT_STEP: Record<string, string> = {
   '三面': '三面',
   'HR面': 'HR面',
   '面试': '面试',
-  '面试（轮次待确认）': '面试',
 };
 
 const NEXT_STEP_TO_PROGRESS_STATUS: Record<string, string> = {
   '待反馈': '待反馈',
+  '测评': '待测评',
   '笔试': '待笔试',
   '面试': '待面试',
   '群面': '待群面',
@@ -163,25 +192,27 @@ const MANUAL_PROGRESS_STATUSES: Set<string> = new Set([
 
 const PROGRESS_STATUS_RANK: Record<string, number> = {
   '待反馈': 0,
-  '待笔试': 1,
-  '待面试': 1,
-  '待群面': 2,
-  '待一面': 3,
-  '待二面': 4,
-  '待三面': 5,
-  '待 HR 面': 6,
-  '待 OC': 7,
+  '待测评': 1,
+  '待笔试': 2,
+  '待群面': 3,
+  '待一面': 4,
+  '待二面': 5,
+  '待三面': 6,
+  '待面试': 7,
+  '待 HR 面': 8,
+  '待 OC': 9,
 };
 
 const COMPLETED_NODE_RANK: Record<string, number> = {
   '投递完成': 1,
-  '笔试完成': 2,
-  '群面完成': 3,
-  '一面完成': 4,
-  '二面完成': 5,
-  '三面完成': 6,
-  'HR面完成': 7,
+  '测评完成': 2,
+  '笔试完成': 3,
+  '群面完成': 4,
+  '一面完成': 5,
+  '二面完成': 6,
+  '三面完成': 7,
   '面试完成': 8,
+  'HR面完成': 9,
 };
 
 function stableClientToken(sourceRecordId: string): string {
@@ -292,10 +323,10 @@ function readUrl(value: unknown): string {
   return readText(value);
 }
 
-function formatShanghaiDate(value?: string): string {
-  const parsed: Date = value && !Number.isNaN(Date.parse(value))
-    ? new Date(value)
-    : new Date();
+function formatShanghaiDate(value?: string | Date): string {
+  const parsed: Date = value instanceof Date
+    ? value
+    : value && !Number.isNaN(Date.parse(value)) ? new Date(value) : new Date();
   return new Intl.DateTimeFormat('sv-SE', {
     timeZone: 'Asia/Shanghai',
     year: 'numeric',
@@ -367,6 +398,27 @@ function errorMessage(error: unknown): string {
     ].filter(Boolean).join(' ');
   }
   return error instanceof Error ? error.message : String(error);
+}
+
+function calendarDescription(fields: Record<string, unknown>, marker: string): string {
+  const clean = (value: unknown, limit: number): string => readText(value)
+    .replace(/[\u0000-\u001f\u007f]/gu, ' ')
+    .replace(/\s+/gu, ' ')
+    .slice(0, limit);
+  const lines: string[] = [];
+  const platform: string = clean(fields['平台'], 80);
+  const link: string = clean(readUrl(fields['链接']), 500);
+  const notes: string = clean(fields['注意事项'], 500);
+  if (platform) lines.push(`平台：${platform}`);
+  if (/^https?:\/\//u.test(link)) lines.push(`参与链接：${link}`);
+  if (notes) lines.push(`提醒：${notes}`);
+  lines.push(marker);
+  return lines.join('\n').slice(0, 2000);
+}
+
+function isTransientError(error: unknown): boolean {
+  const message: string = errorMessage(error);
+  return /(?:ECONNRESET|ETIMEDOUT|EAI_AGAIN|http=(?:408|409|425|429|500|502|503|504)\b|code=(?:90002|99991663)\b)/iu.test(message);
 }
 
 
@@ -482,71 +534,502 @@ export class JobProgressSyncService {
     };
   }
 
-  async reconcileTaskStates(): Promise<TaskReconcileResult> {
-    const result: TaskReconcileResult = {
-      scanned: 0,
-      provisioned: 0,
-      completed: 0,
-      missed: 0,
-      postponed: 0,
-      skipped: 0,
-    };
-    const fetchedRecords: FeishuRecord[] = await this.listReminderRecords();
-    result.scanned = fetchedRecords.length;
-    const records: FeishuRecord[] = fetchedRecords.filter(
-      (record: FeishuRecord): boolean => readText(record.fields['完成状态']) === '待完成',
-    );
-    const completedRecords: FeishuRecord[] = fetchedRecords.filter(
-      (record: FeishuRecord): boolean => readText(record.fields['完成状态']) === '已完成',
-    );
-    const missedRecords: FeishuRecord[] = fetchedRecords.filter(
-      (record: FeishuRecord): boolean => readText(record.fields['完成状态']) === '已错过',
-    );
-    const progressRecordCache: Map<string, FeishuRecord> =
-      await this.preloadProgressRecords(fetchedRecords);
-    await this.syncPendingInvitations(records, progressRecordCache);
-    for (const record of completedRecords) {
+  async sendDailyCheckin(now: Date = new Date()): Promise<{ sent: boolean; count: number }> {
+    if (this.config.dailyCheckinStatus !== 'enabled') return { sent: false, count: 0 };
+    const records: FeishuRecord[] = await this.listReminderRecordsByStatus('待完成');
+    const groups = groupPendingRecords(records, now);
+    const count: number = Object.values(groups).reduce((sum, items) => sum + items.length, 0);
+    const pages = count > 0 ? paginateCheckinGroups(groups) : [groups];
+    for (const [index, page] of pages.entries()) {
+      const card: Record<string, unknown> = count > 0 ? populatedCheckinCard(page) : emptyCheckinCard();
+      const uuid: string = createHash('sha256')
+        .update(`daily-card:${this.config.dailyCheckinChatId}:${formatShanghaiDate(now)}:${index}`)
+        .digest('hex').slice(0, 40);
+      const existing = await this.findRuntimeState(uuid);
+      const existingStatus: string = readText(existing?.fields['状态']);
+      if (existingStatus === '已发送') continue;
+      if (existingStatus === '发送中' || existingStatus === '发送结果未知') {
+        throw new ServiceUnavailableException(`daily card page ${index + 1} has an unknown prior delivery result; verify the group before retrying`);
+      }
+      const ledgerRecordId: string = existing?.record_id || await this.createDailyPageLedger(uuid, now, index);
+      await this.updateDailyPageLedger(ledgerRecordId, { '状态': '发送中', '错误': '' });
       try {
-        await this.applyReminderOutcome(
-          record,
-          'completed',
-          records,
-          progressRecordCache,
-        );
-        result.completed += 1;
+        const sent = await this.feishuRequest<{ message_id?: string }>({
+          method: 'POST',
+          url: `${OPEN_API_ROOT}/im/v1/messages?receive_id_type=chat_id`,
+          data: { receive_id: this.config.dailyCheckinChatId, msg_type: 'interactive', content: JSON.stringify(card), uuid },
+        });
+        await this.updateDailyPageLedger(ledgerRecordId, {
+          '状态': '已发送',
+          '消息ID': readText(sent.message_id),
+          '错误': '',
+        });
       } catch (error: unknown) {
-        result.skipped += 1;
-        this.logger.warn(
-          `skipped completed reminder reconciliation for ${record.record_id}: ${errorMessage(error)}`,
-        );
+        const unknown: boolean = error instanceof FeishuRequestError && error.outcomeUnknown;
+        await this.updateDailyPageLedger(ledgerRecordId, {
+          '状态': unknown ? '发送结果未知' : '发送失败',
+          '错误': errorMessage(error).slice(0, 500),
+        });
+        throw error;
       }
     }
-    for (const record of missedRecords) {
-      try {
-        await this.applyReminderOutcome(
-          record,
-          'not_attended',
-          records,
-          progressRecordCache,
-        );
-        result.missed += 1;
-      } catch (error: unknown) {
-        result.skipped += 1;
-        this.logger.warn(
-          `skipped missed reminder reconciliation for ${record.record_id}: ${errorMessage(error)}`,
-        );
-      }
-    }
-    return result;
+    return { sent: true, count };
   }
 
-  async reconcileReminderRecord(recordId: string): Promise<ReminderReconcileResult> {
+  async handleDailyCheckinAction(payload: Record<string, unknown>): Promise<Record<string, unknown>> {
+    if (this.config.dailyCheckinStatus !== 'enabled') {
+      throw new BadRequestException('daily check-in is disabled');
+    }
+    const parsed = parseCheckinAction(payload, this.config.dailyCheckinOwnerOpenId);
+    const record: FeishuRecord = await this.getReminderRecord(parsed.recordId);
+    const completionStatus: string = readText(record.fields['完成状态']);
+    const requestedStart: string = parsed.action === 'adjust_confirmed' || parsed.action === 'adjust_retry'
+      ? parsed.plannedStart
+      : (() => {
+        const date: string = readText(parsed.formValue.planned_date);
+        const start: string = readText(parsed.formValue.planned_start);
+        return date && start ? `${date}T${start}:00+08:00` : '';
+      })();
+    const requestedStartMillis: number = Date.parse(requestedStart);
+    const currentStartMillis: number = Date.parse(readText(record.fields['开始时间']));
+    const exactAdjustmentReplay: boolean = parsed.action.startsWith('adjust')
+      && readText(record.fields['事件状态']) === '有效'
+      && !Number.isNaN(requestedStartMillis)
+      && requestedStartMillis === currentStartMillis;
+    if (completionStatus === '待完成') {
+      try {
+        validateCurrentCheckinAction(record, parsed.action);
+      } catch (error: unknown) {
+        if (!exactAdjustmentReplay) {
+          return { toast: { type: 'warning', content: `该卡片已过期：${errorMessage(error)}` } };
+        }
+      }
+    }
+    if (parsed.action === 'not_completed') {
+      if (completionStatus !== '待完成') {
+        return { toast: { type: 'warning', content: '状态已变化，本次操作未覆盖现有结果' } };
+      }
+      if (!isAsyncAdjustable(record)) {
+        return { toast: { type: 'warning', content: '固定时间事件不能调整，请选择已完成或已错过' } };
+      }
+      return { toast: { type: 'info', content: '请选择新的开始时间' }, card: { type: 'raw', data: rescheduleCard(parsed.recordId) } };
+    }
+    if (parsed.action === 'adjust' && Object.keys(parsed.formValue).length === 0) {
+      if (completionStatus !== '待完成') {
+        return { toast: { type: 'warning', content: '状态已变化，本次操作未覆盖现有结果' } };
+      }
+      if (!isAsyncAdjustable(record)) {
+        return { toast: { type: 'warning', content: '固定时间事件不能调整，请选择已完成或已错过' } };
+      }
+      return { toast: { type: 'info', content: '请选择计划开始时间' }, card: { type: 'raw', data: rescheduleCard(parsed.recordId) } };
+    }
+    if (parsed.action === 'completed' || parsed.action === 'missed') {
+      const targetStatus: string = parsed.action === 'completed' ? '已完成' : '已错过';
+      if (completionStatus === targetStatus) {
+        if (parsed.action === 'completed') {
+          try {
+            await this.reconcileReminderRecord(parsed.recordId, true);
+            return { toast: { type: 'info', content: '此前已标记完成，关联进展已核对' } };
+          } catch (error: unknown) {
+            if (errorMessage(error).includes('already in progress') || errorMessage(error).includes('another worker')) {
+              return { toast: { type: 'info', content: '关联进展正在同步，请稍后查看' } };
+            }
+            return {
+              toast: { type: 'error', content: `求职进展联动失败：${errorMessage(error)}` },
+              card: { type: 'raw', data: operationRetryCard(parsed.recordId, 'completed', '求职进展联动') },
+            };
+          }
+        }
+        return { toast: { type: 'info', content: '此前已标记错过' } };
+      }
+      if (completionStatus !== '待完成') {
+        return { toast: { type: 'warning', content: '状态已变化，本次操作未覆盖现有结果' } };
+      }
+      try {
+        await this.updateReminderRecord(parsed.recordId, { '完成状态': targetStatus });
+        if (parsed.retryFailedStep === 'Base 状态写入') {
+          await this.tryResolveRuntimeFailure(
+            `daily-completion:${parsed.recordId}:${targetStatus}`,
+            parsed.recordId,
+            'base_completion_status',
+          );
+        }
+      } catch (error: unknown) {
+        await this.tryRecordRuntimeFailure(`daily-completion:${parsed.recordId}:${targetStatus}`, parsed.recordId, 'base_completion_status', error);
+        return {
+          toast: { type: 'error', content: `Base 状态写入失败：${errorMessage(error)}` },
+          card: { type: 'raw', data: operationRetryCard(parsed.recordId, parsed.action, 'Base 状态写入') },
+        };
+      }
+      if (parsed.action === 'completed') {
+        try {
+          await this.reconcileReminderRecord(parsed.recordId, parsed.retryFailedStep === '求职进展联动');
+        } catch (error: unknown) {
+          if (errorMessage(error).includes('already in progress') || errorMessage(error).includes('another worker')) {
+            return { toast: { type: 'info', content: '已标记完成，关联进展正在同步' } };
+          }
+          return {
+            toast: { type: 'error', content: `求职进展联动失败：${errorMessage(error)}` },
+            card: { type: 'raw', data: operationRetryCard(parsed.recordId, 'completed', '求职进展联动') },
+          };
+        }
+      }
+      return { toast: { type: 'success', content: parsed.action === 'completed' ? '已标记完成' : '已标记错过' } };
+    }
+    if (completionStatus !== '待完成') {
+      return { toast: { type: 'warning', content: '状态已变化，本次操作未覆盖现有结果' } };
+    }
+    let window: { start: string; end: string };
+    try {
+      window = deriveAsyncWindow(record, requestedStart);
+    } catch (error: unknown) {
+      const message: string = errorMessage(error);
+      const content: string = message.includes('future')
+        ? '请选择未来的开始时间'
+        : message.includes('deadline')
+          ? '所选时间无法在招聘方截止前完成，请重新选择'
+          : message.includes('duration')
+            ? '事件时长无效，请先检查 Base 中的预计时长'
+            : '请选择有效的日期和开始时间';
+      return {
+        toast: { type: 'warning', content },
+        card: { type: 'raw', data: rescheduleCard(parsed.recordId) },
+      };
+    }
+    const rawEventId: string = readText(record.fields['已建日程ID']);
+    const existingEventId: string = rawEventId.startsWith('pending:') ? '' : rawEventId;
+    if (parsed.action !== 'adjust_confirmed') {
+      try {
+        if (await this.hasCalendarConflict(window.start, window.end, existingEventId)) {
+          return {
+            toast: { type: 'warning', content: '所选时间与现有日程冲突，请确认是否继续' },
+            card: { type: 'raw', data: conflictConfirmationCard(parsed.recordId, window.start) },
+          };
+        }
+        if (parsed.action === 'adjust_retry') {
+          await this.tryResolveRuntimeFailure(
+            `daily-adjust:${parsed.recordId}:${window.start}:conflict`,
+            parsed.recordId,
+            'calendar_conflict_check',
+          );
+        }
+      } catch (error: unknown) {
+        try {
+          await this.updateReminderRecord(parsed.recordId, { '日历状态': '操作失败' });
+        } catch (statusError: unknown) {
+          this.logger.error(`calendar conflict failure status write failed for ${parsed.recordId}: ${errorMessage(statusError)}`);
+        }
+        await this.tryRecordRuntimeFailure(`daily-adjust:${parsed.recordId}:${window.start}:conflict`, parsed.recordId, 'calendar_conflict_check', error);
+        return {
+          toast: { type: 'error', content: `日历冲突检查失败：${errorMessage(error)}` },
+          card: { type: 'raw', data: adjustmentRetryCard(parsed.recordId, window.start, false) },
+        };
+      }
+    }
+    const actionKey: string = createHash('sha256')
+      .update(`daily-adjust:${parsed.recordId}:${window.start}`)
+      .digest('hex').slice(0, 24);
+    const marker: string = `OfferLoop action ${actionKey}`;
+    let eventId: string = rawEventId.startsWith('pending:') ? '' : rawEventId;
+    const markerDescription: string = calendarDescription(record.fields, marker);
+    const calendarData = {
+      summary: readText(record.fields['安排名称']),
+      description: markerDescription,
+      start_time: { timestamp: String(Date.parse(window.start) / 1000), timezone: 'Asia/Shanghai' },
+      end_time: { timestamp: String(Date.parse(window.end) / 1000), timezone: 'Asia/Shanghai' },
+    };
+    try {
+      if (!eventId && rawEventId.startsWith('pending:')) {
+        const previousStartMillis: number | null = readDateMillis(record.fields['开始时间']);
+        const previousEndMillis: number | null = readDateMillis(record.fields['结束时间']);
+        if (previousStartMillis !== null && previousEndMillis !== null) {
+          eventId = await this.findCalendarEventByMarker(
+            `OfferLoop action ${rawEventId.slice('pending:'.length)}`,
+            readText(record.fields['安排名称']),
+            new Date(previousStartMillis).toISOString(),
+            new Date(previousEndMillis).toISOString(),
+          );
+        }
+      }
+      if (!eventId) {
+        await this.updateReminderRecord(parsed.recordId, {
+          '开始时间': window.start,
+          '结束时间': window.end,
+          '日历状态': '待安排',
+          '已建日程ID': `pending:${actionKey}`,
+        });
+      }
+      let finalEventId: string = eventId;
+      if (finalEventId) {
+        await this.feishuRequest<Record<string, unknown>>({ method: 'PATCH', url: `${OPEN_API_ROOT}/calendar/v4/calendars/${encodeURIComponent(this.config.dailyCheckinCalendarId)}/events/${encodeURIComponent(finalEventId)}`, data: calendarData });
+      } else {
+        finalEventId = await this.findCalendarEventByMarker(
+          marker,
+          readText(record.fields['安排名称']),
+          window.start,
+          window.end,
+        );
+        if (!finalEventId) {
+          const created = await this.feishuRequest<{ event: { event_id: string } }>({ method: 'POST', url: `${OPEN_API_ROOT}/calendar/v4/calendars/${encodeURIComponent(this.config.dailyCheckinCalendarId)}/events?idempotency_key=${encodeURIComponent(actionKey)}`, data: calendarData });
+          finalEventId = created.event.event_id;
+        }
+      }
+      await this.updateReminderRecord(parsed.recordId, { '开始时间': window.start, '结束时间': window.end, '日历状态': '已建日程', '已建日程ID': finalEventId });
+      if (parsed.retryFailedStep === 'calendar_upsert') {
+        await this.tryResolveRuntimeFailure(
+          `daily-adjust:${parsed.recordId}:${window.start}`,
+          parsed.recordId,
+          'calendar_upsert',
+        );
+      }
+      return { toast: { type: 'success', content: '日程已调整' } };
+    } catch (error: unknown) {
+      try {
+        await this.updateReminderRecord(parsed.recordId, { '日历状态': '操作失败' });
+      } catch (statusError: unknown) {
+        this.logger.error(`calendar failure status write failed for ${parsed.recordId}: ${errorMessage(statusError)}`);
+      }
+      await this.tryRecordRuntimeFailure(`daily-adjust:${parsed.recordId}:${window.start}`, parsed.recordId, 'calendar_upsert', error);
+      return {
+        toast: { type: 'error', content: `日历调整失败：${errorMessage(error)}` },
+        card: { type: 'raw', data: adjustmentRetryCard(parsed.recordId, window.start) },
+      };
+    }
+  }
+
+  private async hasCalendarConflict(start: string, end: string, excludedEventId: string = ''): Promise<boolean> {
+    const data = await this.feishuRequest<{ freebusy_list?: Array<Record<string, unknown>> }>({
+      method: 'POST',
+      url: `${OPEN_API_ROOT}/calendar/v4/freebusy/list?user_id_type=open_id`,
+      data: { time_min: start, time_max: end, user_id: this.config.dailyCheckinOwnerOpenId },
+    });
+    const conflicts: Array<Record<string, unknown>> = data.freebusy_list ?? [];
+    if (!excludedEventId || conflicts.length === 0) return conflicts.length > 0;
+    const withIds = conflicts.filter((item: Record<string, unknown>): boolean => (
+      readText(item.event_id || item.calendar_event_id || item.uid) !== excludedEventId
+    ));
+    if (conflicts.some((item: Record<string, unknown>): boolean => (
+      Boolean(readText(item.event_id || item.calendar_event_id || item.uid))
+    ))) return withIds.length > 0;
+    // Some Feishu tenants omit event IDs from freebusy.  In that case fetch
+    // the current OfferLoop event and subtract exactly one overlapping slot.
+    try {
+      const detail = await this.feishuRequest<{ event?: { start_time?: { timestamp?: string }; end_time?: { timestamp?: string } } }>({
+        method: 'GET',
+        url: `${OPEN_API_ROOT}/calendar/v4/calendars/${encodeURIComponent(this.config.dailyCheckinCalendarId)}/events/${encodeURIComponent(excludedEventId)}`,
+      });
+      const ownStart: number = Number(detail.event?.start_time?.timestamp ?? 0) * 1000;
+      const ownEnd: number = Number(detail.event?.end_time?.timestamp ?? 0) * 1000;
+      const overlaps: boolean = ownStart < Date.parse(end) && ownEnd > Date.parse(start);
+      return conflicts.length > (overlaps ? 1 : 0);
+    } catch {
+      return true;
+    }
+  }
+
+  private async findCalendarEventByMarker(marker: string, summary: string, start: string, end: string): Promise<string> {
+    if (!summary) return '';
+    const query = new URLSearchParams({ page_size: '30' });
+    let pageToken: string = '';
+    do {
+      if (pageToken) query.set('page_token', pageToken);
+      const data = await this.feishuRequest<{ items?: Array<{ meta_data?: { event_id?: string } }>; has_more?: boolean; page_token?: string }>({
+        method: 'POST',
+        url: `${OPEN_API_ROOT}/calendar/v4/calendars/${encodeURIComponent(this.config.dailyCheckinCalendarId)}/events/search_event?${query.toString()}`,
+        data: {
+          query: summary,
+          filter: {
+            calendar_ids: [this.config.dailyCheckinCalendarId],
+            time_range: { start_time: start, end_time: end },
+          },
+        },
+      });
+      for (const item of data.items ?? []) {
+        const candidateId: string = readText(item.meta_data?.event_id);
+        if (!candidateId) continue;
+        const detail = await this.feishuRequest<{ event: { event_id?: string; description?: string } }>({
+          method: 'GET',
+          url: `${OPEN_API_ROOT}/calendar/v4/calendars/${encodeURIComponent(this.config.dailyCheckinCalendarId)}/events/${encodeURIComponent(candidateId)}`,
+        });
+        if (readText(detail.event.description).includes(marker)) return readText(detail.event.event_id) || candidateId;
+      }
+      pageToken = data.has_more ? readText(data.page_token) : '';
+    } while (pageToken);
+    return '';
+  }
+
+  private async findRuntimeState(idempotencyKey: string): Promise<FeishuRecord | undefined> {
+    const data = await this.feishuRequest<RecordSearchData>({
+      method: 'POST',
+      url: `${OPEN_API_ROOT}/bitable/v1/apps/${this.config.reminderBaseToken}/tables/${this.config.runtimeStateTableId}/records/search?page_size=2`,
+      data: { filter: { conjunction: 'and', conditions: [{ field_name: '幂等键', operator: 'is', value: [idempotencyKey] }] } },
+    });
+    const items: FeishuRecord[] = data.items ?? [];
+    if (items.length > 1) throw new ServiceUnavailableException(`duplicate daily-card ledger key: ${idempotencyKey}`);
+    return items[0];
+  }
+
+  private async createDailyPageLedger(idempotencyKey: string, now: Date, pageIndex: number): Promise<string> {
+    const clientToken: string = createHash('sha256').update(`daily-ledger:${idempotencyKey}`).digest('hex').slice(0, 32);
+    const data = await this.feishuRequest<RecordCreateData>({
+      method: 'POST',
+      url: `${OPEN_API_ROOT}/bitable/v1/apps/${this.config.reminderBaseToken}/tables/${this.config.runtimeStateTableId}/records?client_token=${clientToken}`,
+      data: { fields: { '幂等键': idempotencyKey, '类型': 'daily_card_page', '状态': '发送中', '来源ID': this.config.dailyCheckinChatId, '步骤': `page:${pageIndex + 1}`, '日期': formatShanghaiDate(now), '分页序号': pageIndex + 1, '消息ID': '', '错误': '', '更新时间': Date.now() } },
+    });
+    return data.record.record_id;
+  }
+
+  private async updateDailyPageLedger(recordId: string, fields: Record<string, unknown>): Promise<void> {
+    await this.feishuRequest<RecordDetailData>({
+      method: 'PUT',
+      url: `${OPEN_API_ROOT}/bitable/v1/apps/${this.config.reminderBaseToken}/tables/${this.config.runtimeStateTableId}/records/${encodeURIComponent(recordId)}`,
+      data: { fields },
+    });
+  }
+
+  private async writeRuntimeState(idempotencyKey: string, fields: Record<string, unknown>): Promise<void> {
+    const existing = await this.findRuntimeState(idempotencyKey);
+    const payload: Record<string, unknown> = { '幂等键': idempotencyKey, ...fields, '更新时间': Date.now() };
+    if (existing) {
+      await this.updateDailyPageLedger(existing.record_id, payload);
+      return;
+    }
+    const clientToken: string = createHash('sha256').update(`runtime-state:${idempotencyKey}`).digest('hex').slice(0, 32);
+    await this.feishuRequest<RecordCreateData>({
+      method: 'POST',
+      url: `${OPEN_API_ROOT}/bitable/v1/apps/${this.config.reminderBaseToken}/tables/${this.config.runtimeStateTableId}/records?client_token=${clientToken}`,
+      data: { fields: payload },
+    });
+  }
+
+  private async tryRecordRuntimeFailure(idempotencyKey: string, sourceId: string, step: string, error: unknown): Promise<void> {
+    try {
+      await this.writeRuntimeState(idempotencyKey, {
+        '类型': 'operation_failure', '状态': '失败', '来源ID': sourceId,
+        '步骤': step, '错误': errorMessage(error).slice(0, 500),
+      });
+    } catch (ledgerError: unknown) {
+      this.logger.error(`runtime failure ledger write failed for ${sourceId}: ${errorMessage(ledgerError)}`);
+    }
+  }
+
+  private async tryResolveRuntimeFailure(idempotencyKey: string, sourceId: string, step: string): Promise<void> {
+    try {
+      const existing = await this.findRuntimeState(idempotencyKey);
+      if (existing && readText(existing.fields['状态']) === '失败') {
+        await this.updateDailyPageLedger(existing.record_id, {
+          '状态': '成功', '来源ID': sourceId, '步骤': step, '错误': '', '更新时间': Date.now(),
+        });
+      }
+    } catch (ledgerError: unknown) {
+      this.logger.error(`runtime failure resolution failed for ${sourceId}: ${errorMessage(ledgerError)}`);
+    }
+  }
+
+  private async claimReminderReconcile(
+    idempotencyKey: string,
+    sourceId: string,
+    resolveExistingFailure: boolean,
+  ): Promise<{ recordId: string; claimId: string } | 'already_succeeded'> {
+    const claimId: string = randomUUID();
+    const existing: FeishuRecord | undefined = await this.findRuntimeState(idempotencyKey);
+    if (existing) {
+      const status: string = readText(existing.fields['状态']);
+      if (status === '成功') return 'already_succeeded';
+      const updatedAt: number = Number(existing.fields['更新时间'] ?? 0);
+      const stale: boolean = !Number.isFinite(updatedAt) || updatedAt <= Date.now() - 5 * 60 * 1000;
+      if (status === '待执行' && !stale) {
+        throw new ServiceUnavailableException('reminder reconciliation is already in progress');
+      }
+      if (status === '失败' && !resolveExistingFailure) {
+        throw new ServiceUnavailableException('reminder reconciliation previously failed; use the explicit retry action');
+      }
+      const claimBucket: number = Math.floor(Date.now() / (5 * 60 * 1000));
+      const retryClaimKey: string = `operation-claim:${createHash('sha256')
+        .update(`${idempotencyKey}:${status}:${updatedAt}:${claimBucket}`)
+        .digest('hex').slice(0, 40)}`;
+      const retryClientToken: string = createHash('sha256').update(`runtime-state:${retryClaimKey}`).digest('hex').slice(0, 32);
+      const retryClaim = await this.feishuRequest<RecordCreateData>({
+        method: 'POST',
+        url: `${OPEN_API_ROOT}/bitable/v1/apps/${this.config.reminderBaseToken}/tables/${this.config.runtimeStateTableId}/records?client_token=${retryClientToken}`,
+        data: { fields: {
+          '幂等键': retryClaimKey, '类型': 'operation_claim', '状态': '待执行',
+          '来源ID': sourceId, '步骤': 'progress_sync', '结果引用': claimId, '错误': '', '更新时间': Date.now(),
+        } },
+      });
+      const acquiredRetryClaim: FeishuRecord | undefined = readText(retryClaim.record.fields['结果引用']) === claimId
+        ? retryClaim.record
+        : await this.findRuntimeState(retryClaimKey);
+      if (!acquiredRetryClaim || readText(acquiredRetryClaim.fields['结果引用']) !== claimId) {
+        throw new ServiceUnavailableException('reminder reconciliation claim was acquired by another worker');
+      }
+      await this.updateDailyPageLedger(existing.record_id, {
+        '类型': 'reminder_reconcile', '状态': '待执行', '来源ID': sourceId,
+        '步骤': 'progress_sync', '结果引用': claimId, '错误': '', '更新时间': Date.now(),
+      });
+      return { recordId: existing.record_id, claimId };
+    }
+    const clientToken: string = createHash('sha256').update(`runtime-state:${idempotencyKey}`).digest('hex').slice(0, 32);
+    const created = await this.feishuRequest<RecordCreateData>({
+      method: 'POST',
+      url: `${OPEN_API_ROOT}/bitable/v1/apps/${this.config.reminderBaseToken}/tables/${this.config.runtimeStateTableId}/records?client_token=${clientToken}`,
+      data: { fields: {
+        '幂等键': idempotencyKey, '类型': 'reminder_reconcile', '状态': '待执行',
+        '来源ID': sourceId, '步骤': 'progress_sync', '结果引用': claimId, '错误': '', '更新时间': Date.now(),
+      } },
+    });
+    const claimed: FeishuRecord | undefined = readText(created.record.fields['结果引用']) === claimId
+      ? created.record
+      : await this.findRuntimeState(idempotencyKey);
+    if (!claimed || readText(claimed.fields['结果引用']) !== claimId) {
+      throw new ServiceUnavailableException('reminder reconciliation claim was acquired by another worker');
+    }
+    return { recordId: claimed.record_id, claimId };
+  }
+
+  async reconcileReminderRecord(recordId: string, resolveExistingFailure: boolean = false): Promise<ReminderReconcileResult> {
     if (!/^rec[A-Za-z0-9]+$/u.test(recordId)) {
       throw new BadRequestException('recordId is invalid');
     }
     const reminderRecord: FeishuRecord = await this.getReminderRecord(recordId);
     const completionStatus: string = readText(reminderRecord.fields['完成状态']);
-    let pendingRecords: FeishuRecord[] = await this.listReminderRecordsByStatus('待完成');
+    const transitionVersion: string = readText(reminderRecord.last_modified_time);
+    if (!transitionVersion) {
+      throw new ServiceUnavailableException('reminder record is missing last_modified_time; refusing an unstable reconciliation key');
+    }
+    const transitionKey: string = createHash('sha256')
+      .update(`${recordId}:${completionStatus}:${transitionVersion}`).digest('hex').slice(0, 40);
+    const idempotencyKey: string = `reminder-reconcile:${transitionKey}`;
+    const claim = await this.claimReminderReconcile(idempotencyKey, recordId, resolveExistingFailure);
+    if (claim === 'already_succeeded') {
+      return { ok: true, action: 'reconciled', recordId, completionStatus };
+    }
+    try {
+      const result = await this.reconcileReminderRecordCore(recordId, reminderRecord);
+      await this.updateDailyPageLedger(claim.recordId, {
+        '状态': '成功', '结果引用': claim.claimId, '错误': '', '更新时间': Date.now(),
+      });
+      return result;
+    } catch (error: unknown) {
+      try {
+        await this.updateDailyPageLedger(claim.recordId, {
+          '状态': '失败', '结果引用': claim.claimId,
+          '错误': errorMessage(error).slice(0, 500), '更新时间': Date.now(),
+        });
+      } catch (ledgerError: unknown) {
+        this.logger.error(`runtime failure ledger write failed for ${recordId}: ${errorMessage(ledgerError)}`);
+      }
+      throw error;
+    }
+  }
+
+  private async reconcileReminderRecordCore(recordId: string, reminderRecord: FeishuRecord): Promise<ReminderReconcileResult> {
+    const completionStatus: string = readText(reminderRecord.fields['完成状态']);
+    if (readText(reminderRecord.fields['事件状态']) !== '有效') {
+      return { ok: true, action: 'reconciled', recordId, completionStatus };
+    }
+    const progressIds: string[] = readProgressRecordIds(reminderRecord.fields['求职记录ID']);
+    let pendingRecords: FeishuRecord[] = await this.listReminderRecordsForProgressIds(progressIds);
     if (
       completionStatus === '待完成'
       && !pendingRecords.some((record: FeishuRecord): boolean => (
@@ -572,43 +1055,6 @@ export class JobProgressSyncService {
     };
   }
 
-  async resolveReminderRecordId(
-    sourceEmailId: string,
-    recordTitle: string,
-  ): Promise<string> {
-    const locators: Array<{ fieldName: string; value: string }> = [
-      { fieldName: '来源邮件ID', value: readText(sourceEmailId) },
-      { fieldName: '安排名称', value: readText(recordTitle) },
-    ].filter(({ value }: { value: string }): boolean => Boolean(value));
-
-    for (const locator of locators) {
-      const data: RecordSearchData = await this.feishuRequest<RecordSearchData>({
-        method: 'POST',
-        url: `${OPEN_API_ROOT}/bitable/v1/apps/`
-          + `${this.config.reminderBaseToken}/tables/${this.config.reminderTableId}`
-          + '/records/search?page_size=2',
-        data: {
-          filter: {
-            conjunction: 'and',
-            conditions: [{
-              field_name: locator.fieldName,
-              operator: 'is',
-              value: [locator.value],
-            }],
-          },
-        },
-      });
-      const matches: FeishuRecord[] = data.items ?? [];
-      if (matches.length === 1) {
-        return matches[0].record_id;
-      }
-      if (matches.length > 1) {
-        throw new BadRequestException(`${locator.fieldName} matches multiple reminder records`);
-      }
-    }
-    return '';
-  }
-
   verifyReminderReconcileSecret(candidate: string | undefined): void {
     const actual: Buffer = Buffer.from(String(candidate ?? ''));
     const expected: Buffer = Buffer.from(this.config.reminderReconcileSecret);
@@ -620,7 +1066,7 @@ export class JobProgressSyncService {
   private async applyReminderOutcome(
     reminderRecord: FeishuRecord,
     action: 'completed' | 'not_attended',
-    pendingReminderRecords?: FeishuRecord[],
+    pendingReminderRecords: FeishuRecord[],
     progressRecordCache?: Map<string, FeishuRecord>,
   ): Promise<ReminderOutcomeResult> {
     const currentCompletionStatus: string = readText(reminderRecord.fields['完成状态']);
@@ -652,6 +1098,15 @@ export class JobProgressSyncService {
       });
     }
 
+    if (action === 'not_attended') {
+      return {
+        alreadyUpdated,
+        nextStep: '待反馈',
+        progressRecordFound: progressRecordIds.length > 0,
+        targetCompletionStatus,
+      };
+    }
+
     if (progressRecordIds.length === 0) {
       return {
         alreadyUpdated,
@@ -660,13 +1115,11 @@ export class JobProgressSyncService {
         targetCompletionStatus,
       };
     }
-    const pendingRecords: FeishuRecord[] = pendingReminderRecords
-      ?? await this.listReminderRecordsByStatus('待完成');
+    const pendingRecords: FeishuRecord[] = pendingReminderRecords;
     let progressRecordFound: boolean = false;
     let firstNextStep: string = '待反馈';
     for (const progressRecordId of progressRecordIds) {
-      try {
-        const progressRecord: FeishuRecord = await this.getCachedProgressRecord(
+      const progressRecord: FeishuRecord = await this.getCachedProgressRecord(
           progressRecordId,
           progressRecordCache,
         );
@@ -704,12 +1157,8 @@ export class JobProgressSyncService {
         if (firstNextStep === '待反馈') {
           firstNextStep = nextStep;
         }
-        const noLaterPendingEvent: boolean = linkedPendingRecords.length === 0;
-        const targetProgressStatus: string = (
-          action === 'not_attended' && noLaterPendingEvent
-        )
-          ? '状态待确认'
-          : NEXT_STEP_TO_PROGRESS_STATUS[nextStep] ?? '状态待确认';
+        const targetProgressStatus: string =
+          NEXT_STEP_TO_PROGRESS_STATUS[nextStep] ?? '状态待确认';
         const progressFields: Record<string, unknown> = {
           '进展状态': targetProgressStatus,
         };
@@ -733,11 +1182,6 @@ export class JobProgressSyncService {
           await this.updateProgressRecord(progressRecordId, progressFields);
           Object.assign(progressRecord.fields, progressFields);
         }
-      } catch (error: unknown) {
-        this.logger.warn(
-          `skipped reminder outcome progress sync for ${progressRecordId}: ${errorMessage(error)}`,
-        );
-      }
     }
     return {
       alreadyUpdated,
@@ -760,8 +1204,7 @@ export class JobProgressSyncService {
       }
     }
     for (const [progressRecordId, linkedRecords] of pendingByProgressId) {
-      try {
-        const progressRecord: FeishuRecord = await this.getCachedProgressRecord(
+      const progressRecord: FeishuRecord = await this.getCachedProgressRecord(
           progressRecordId,
           progressRecordCache,
         );
@@ -801,11 +1244,6 @@ export class JobProgressSyncService {
           await this.updateProgressRecord(progressRecordId, progressFields);
           Object.assign(progressRecord.fields, progressFields);
         }
-      } catch (error: unknown) {
-        this.logger.warn(
-          `skipped invitation progress sync for ${progressRecordId}: ${errorMessage(error)}`,
-        );
-      }
     }
   }
 
@@ -817,68 +1255,6 @@ export class JobProgressSyncService {
         + `/records/${encodeURIComponent(recordId)}`,
     });
     return data.record;
-  }
-
-  private async listReminderRecords(): Promise<FeishuRecord[]> {
-    const records: FeishuRecord[] = [];
-    let pageToken: string = '';
-    for (let page: number = 0; page < 100; page += 1) {
-      const suffix: string = pageToken
-        ? `&page_token=${encodeURIComponent(pageToken)}`
-        : '';
-      const data: RecordSearchData = await this.feishuRequest<RecordSearchData>({
-        method: 'POST',
-        url: `${OPEN_API_ROOT}/bitable/v1/apps/`
-          + `${this.config.reminderBaseToken}/tables/${this.config.reminderTableId}`
-          + `/records/search?page_size=100${suffix}`,
-        data: {},
-      });
-      records.push(...(data.items ?? []));
-      if (!data.has_more) {
-        return records;
-      }
-      pageToken = String(data.page_token ?? '');
-      if (!pageToken) {
-        throw new ServiceUnavailableException('reminder record pagination is incomplete');
-      }
-    }
-    throw new ServiceUnavailableException('reminder record pagination exceeded safety limit');
-  }
-
-  private async preloadProgressRecords(
-    reminderRecords: FeishuRecord[],
-  ): Promise<Map<string, FeishuRecord>> {
-    const progressRecordIds: string[] = [...new Set(
-      reminderRecords.flatMap((record: FeishuRecord): string[] => (
-        readProgressRecordIds(record.fields['求职记录ID'])
-      )),
-    )];
-    const cache: Map<string, FeishuRecord> = new Map();
-    for (let index: number = 0; index < progressRecordIds.length; index += 100) {
-      const batch: string[] = progressRecordIds.slice(index, index + 100);
-      const data: RecordBatchGetData = await this.feishuRequest<RecordBatchGetData>({
-        method: 'POST',
-        url: `${OPEN_API_ROOT}/bitable/v1/apps/`
-          + `${this.config.progressBaseToken}/tables/${this.config.progressTableId}`
-          + '/records/batch_get',
-        data: { record_ids: batch },
-      });
-      for (const record of data.records ?? []) {
-        if (record) {
-          cache.set(record.record_id, record);
-        }
-      }
-      const unavailableIds: string[] = [
-        ...(data.forbidden_record_ids ?? []),
-        ...(data.absent_record_ids ?? []),
-      ];
-      if (unavailableIds.length > 0) {
-        this.logger.warn(
-          `progress batch preload skipped ${unavailableIds.length} unavailable records`,
-        );
-      }
-    }
-    return cache;
   }
 
   private async getCachedProgressRecord(
@@ -919,7 +1295,10 @@ export class JobProgressSyncService {
           },
         },
       });
-      records.push(...(data.items ?? []));
+      records.push(...(data.items ?? []).filter(
+        (record: FeishuRecord): boolean =>
+          readText(record.fields['事件状态']) === '有效',
+      ));
       if (!data.has_more) {
         return records;
       }
@@ -929,6 +1308,37 @@ export class JobProgressSyncService {
       }
     }
     throw new ServiceUnavailableException('reminder record pagination exceeded safety limit');
+  }
+
+  private async listReminderRecordsForProgressIds(recordIds: string[]): Promise<FeishuRecord[]> {
+    const records: Map<string, FeishuRecord> = new Map();
+    for (const recordId of recordIds) {
+      let pageToken: string = '';
+      do {
+        const suffix: string = pageToken ? `&page_token=${encodeURIComponent(pageToken)}` : '';
+        const data: RecordSearchData = await this.feishuRequest<RecordSearchData>({
+          method: 'POST',
+          url: `${OPEN_API_ROOT}/bitable/v1/apps/`
+            + `${this.config.reminderBaseToken}/tables/${this.config.reminderTableId}`
+            + `/records/search?page_size=100${suffix}`,
+          data: {
+            filter: {
+              conjunction: 'and',
+              conditions: [
+                { field_name: '完成状态', operator: 'is', value: ['待完成'] },
+                { field_name: '求职记录ID', operator: 'contains', value: [recordId] },
+              ],
+            },
+          },
+        });
+        for (const item of data.items ?? []) {
+          if (readText(item.fields['事件状态']) === '有效') records.set(item.record_id, item);
+        }
+        pageToken = data.has_more ? readText(data.page_token) : '';
+        if (data.has_more && !pageToken) throw new ServiceUnavailableException('linked reminder pagination is incomplete');
+      } while (pageToken);
+    }
+    return [...records.values()];
   }
 
   private async updateReminderRecord(
@@ -1054,12 +1464,15 @@ export class JobProgressSyncService {
         );
         if (response.data.code !== 0 || !response.data.data) {
           throw new Error(
-            `Feishu API request failed: ${response.data.code} ${response.data.msg ?? ''}`.trim(),
+            `Feishu API request failed: code=${response.data.code} ${response.data.msg ?? ''}`.trim(),
           );
         }
         return response.data.data;
       } catch (error: unknown) {
-        throw new Error(`Feishu API request failed: ${errorMessage(error)}`);
+        throw new FeishuRequestError(
+          `Feishu API request failed: ${errorMessage(error)}`,
+          isAxiosError(error) && !error.response,
+        );
       }
     });
   }
@@ -1083,7 +1496,7 @@ export class JobProgressSyncService {
       const token: string = String(response.data.tenant_access_token ?? '');
       if (response.data.code !== 0 || !token) {
         throw new Error(
-          `Feishu token request failed: ${response.data.code} ${response.data.msg ?? ''}`.trim(),
+          `Feishu token request failed: code=${response.data.code} ${response.data.msg ?? ''}`.trim(),
         );
       }
       const lifetimeSeconds: number = Math.max(
@@ -1105,6 +1518,7 @@ export class JobProgressSyncService {
         return await operation();
       } catch (error: unknown) {
         lastError = error;
+        if (!isTransientError(error)) throw error;
         if (attempt < 3) {
           await new Promise<void>((resolve: () => void): void => {
             setTimeout(resolve, attempt * 250);

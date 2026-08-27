@@ -30,9 +30,9 @@ python3 scripts/deployment_plan.py --capability full --write-checkpoint --json
    python3 scripts/materialize_app_template.py --template progress-sync --destination '<SYNC_APP_DIR>' --json
    ```
 
-   模板清单中的 `required_environment` 只列变量名；按新建的三个 Base 和飞书应用填写妙搭环境变量，不把值写入 Skill、本地 Git 或 checkpoint。即时同步应用只开通读写三个 Base 所需的最小权限，不申请飞书互动卡片、任务或任务清单权限。
+   模板清单中的 `required_environment` 只列变量名；按新建的三个 Base 和飞书应用填写妙搭环境变量，不把值写入 Skill、本地 Git 或 checkpoint。即时同步应用开通读写三个 Base、发送互动卡片及创建/更新个人日历所需的最小权限；不申请飞书任务或任务清单权限。
 
-   `笔面试中心` 只使用 `笔面试安排` 一张物理表，并在该表下创建 `全部安排`、`笔试`、`群面`、`一面`、`二面`、`三面`、`HR 面`、`其他面试` 视图。另生成独立的 `REMINDER_RECONCILE_SECRET`，其密钥值只存入妙搭环境变量和 Base workflow 的加密配置，不写入请求体、文档或日志。只创建一条即时 workflow，使用 `SetRecordTrigger` 监听 `笔面试安排.完成状态`；随后用 `HTTPClientAction` POST 到 `/openapi/job-progress-sync/reminder-reconcile`，请求头 `Authorization: Bearer <仅授权该路由的 OpenAPI key>` 与 `X-OfferLoop-Workflow-Secret` 缺一不可。请求体优先传 `recordId`、`recordLink`、`来源邮件ID` 或唯一 `安排名称`；若飞书运行时没有填充动态变量，服务端对唯一主表执行幂等全量对账，避免依赖不稳定的运行时输出。创建 `offerloop-base-reconcile` 定时触发器仅用于补偿漏事件，不得以 30 分钟轮询作为正常同步时效。workflow 写入必须排除 `automationBatchUpdate`，避免服务回写触发循环。不得创建原生任务，不得调用 Calendar API 或反向改写计划时间与真实截止。
+   `笔面试中心` 只使用 `笔面试安排` 一张业务表，并按 `reminder-schema.md` 创建受管视图；另建只保存幂等 claim、失败步骤和分页发送账本的内部 `OfferLoop运行状态` 表，并把 table ID 写入 `RUNTIME_STATE_TABLE_ID`。另生成独立的 `REMINDER_RECONCILE_SECRET`，其密钥值只存入妙搭环境变量和 Base workflow 的加密配置，不写入请求体、文档或日志。只创建一条即时 workflow，使用 `SetRecordTrigger` 监听 `笔面试安排.完成状态`；随后用 `HTTPClientAction` POST 到 `/openapi/job-progress-sync/reminder-reconcile`，请求头 `Authorization: Bearer <仅授权该路由的 OpenAPI key>` 与 `X-OfferLoop-Workflow-Secret` 缺一不可。请求体必须传入触发记录的精确 `recordId`；服务回读该记录的 `last_modified_time` 作为本次状态变更版本，同一版本只允许一个进展联动 owner。无法定位或缺少稳定版本时返回错误，不按标题或邮件 ID 猜测，也不执行全表对账。不得创建 `offerloop-base-reconcile`、每 30 分钟检查、定时对账或后台补偿。另按用户独立授权配置 `offerloop-daily-checkin` 在 22:10 Asia/Shanghai 发送 owner-only 群卡片，并把 Card 2.0 的 `card.action.trigger` 绑定到 `offerloop-daily-checkin-action`；仅启用时要求 chat、owner 与 calendar 环境变量。workflow 写入必须排除 `automationBatchUpdate`。失败只在当前请求内最多尝试 3 次，之后仅按用户明确指令补失败步骤。不得创建原生任务；卡片有真实 `已建日程ID` 时更新原日程，没有时先写稳定 pending 键、把同一键传为日历创建 `idempotency_key`，再按该键复用或创建日程并回填，始终保留真实截止。
 
    铺设脚本必须保留新同步应用自己的 `.git`、`.spark`、`.spark_project`、`.env*`，再依次安装依赖、运行测试与类型检查、提交、推送和发布。模板不存在、无法访问或无法验证时停止并报告，禁止临时创建功能不完整的替代应用。
 5. 创建且只启用一条“企业清单：投递进度变更 ↔ 求职进展” workflow，监听 `投递进度` 的所有变更。求职进展必须有

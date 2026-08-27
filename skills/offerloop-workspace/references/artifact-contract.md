@@ -2,66 +2,46 @@
 
 ## 职责
 
-`scripts/artifact_contract.py` 只处理确定性本地逻辑：schema v6 迁移、固定目录定位、`run_id`、标题、状态路由和 Markdown 校验。它不访问飞书，也不保存凭证或私人正文。
+`scripts/artifact_contract.py` 只处理确定性本地逻辑：schema v7 迁移、固定目录定位、`run_id`、标题、状态路由和 Markdown 校验。它不访问飞书，也不保存凭证或私人正文。
 
 在线读取和写入由 Agent 按 `lark-wiki`、`lark-doc`、`lark-base` 的规则完成。OfferLoop 私有空间内的唯一匹配材料可自动读取；零匹配、多匹配、冲突或空间外材料才询问用户。
 
 ## 安装模式
 
-先执行 `installation-mode.md`。`full` 模式使用下述飞书目录、门禁和默认自动保存规则；`single`
-模式跳过全局画像门禁，默认只在 Chat 中交付，不自动读取或写入飞书。单 Skill 用户明确要求连接
-飞书且相应权限与 locator 已配置后，才按本契约中与当前任务相关的目录执行读写。
+先执行 `installation-mode.md`。OfferLoop 只支持 `full` 飞书完整模式，使用下述目录、门禁和默认
+自动保存规则；没有全局画像门禁，每个 Skill 只收集当前任务需要的最小信息。旧 `single` 配置必须
+先完成完整模式迁移，不再作为 Chat-only 交付路径。
 
-## 用户画像前置门禁
+## 任务级上下文
 
-在 `full` 模式中，除 `career-profile` 外，8 个 OfferLoop 业务 Skill 必须把 `profile-gate.md` 作为第一项业务检查。
-`02｜用户画像` 下的岗位选择偏好、个人性格探索和语言表达习惯文档全部缺失、空白或只有模板
-占位内容时，不得启动原 Skill；改由 `career-profile` 一次只问一个问题，并在每条确认信息后自动
-保存对应文档。只要存在至少一条用户确认的有效信息即可通过全局门禁，不要求状态已经是
-`completed`；`job-collection` 仍必须单独要求岗位选择偏好文档已经完成。
-
-确定性正文判定使用 `scripts/profile_gate.py`。脚本不访问飞书、不保留或回显用户画像值。
-
-三份文档分别提供岗位选择、自我认识和个人语言画像。需要生成自我评价、自我介绍、面试
-逐字稿或参考回答的 Skill 同时执行 `voice-contract.md`；招聘信息同步按用户已确认的岗位迁移
-边界执行 `job-collection/references/prewrite-confirmation.md`。
+全局画像门禁已经退役。Skill 只读取当前任务所需材料；`job-collection` 以 Base「用户偏好」为
+完整模式唯一真源，`voice-contract.md` 只使用当前会话或用户主动提供的样本。旧
+`profile-gate.md` 仅作无副作用兼容说明。
 
 ## 固定目录与 locator
 
 ```text
-02｜用户画像                         user_profile
-03｜定制简历                         current_resumes（根定位；按岗位路由到 01–08 子目录）
-04｜经历深挖                         experience_deepthink（根定位）
-04｜经历深挖/细节复原文档             细节复原稿固定子目录
-04｜经历深挖/面试逐字文档             面试逐字稿固定子目录
-05｜岗位能力与训练/岗位能力画像       competency_profiles
-05｜岗位能力与训练/专项训练           competency_training（根定位）
-05｜岗位能力与训练/专项训练/方法论训练  方法论及其逐题训练文档
-05｜岗位能力与训练/专项训练/行业认知训练 行业认知及其逐题训练文档
-05｜岗位能力与训练/每日三题            每日题单固定子目录
-05｜岗位能力与训练/周报                周报固定子目录
-06｜面试准备                         interview_prep
-07｜模拟面试                         mock_lab
-08｜真实面试复盘/ASR 待复盘           interview_asr
-08｜真实面试复盘/已完成复盘           interview_review
+02｜定制简历                         current_resumes（根定位；按岗位路由到 01–08 子目录）
+03｜经历深挖                         experience_deepthink（根定位）
+03｜经历深挖/细节复原文档             细节复原稿固定子目录
+03｜经历深挖/面试逐字文档             面试逐字稿固定子目录
+04｜面试准备                         interview_prep
+05｜模拟面试                         mock_lab
+06｜真实面试复盘/ASR 待复盘           interview_asr
+06｜真实面试复盘/已完成复盘           interview_review
+99｜历史归档/用户画像                  旧内容，只读
+99｜历史归档/岗位能力与训练            旧内容，只读
 ```
 
-旧 schema v4 的 `resume_deepthink`、`pm_sense` 等 locator 在迁移时映射到新键，沿用原节点；迁移不删除、复制或静默移动线上文档。
+旧 `user_profile`、`competency_profiles`、`competency_training` 与 schema v4 的
+`resume_deepthink`、`pm_sense` 等 locator 仅作兼容键保留。升级迁移仅在快照、预演和用户确认后
+移动原节点并改名，不删除或复制线上文档。
 
 ## 标题标准
 
-- `岗位选择偏好｜<显示名>`
-- `个人性格探索｜<显示名>`
-- `语言表达习惯｜<显示名>`
-- 旧 `用户画像｜<显示名>` 仅作迁移兼容，不再新建
 - `简历｜<目标岗位>｜<公司或通用>`；用户明确要求另建版本时追加 `｜v<版本>`
 - `细节复原稿｜<经历>｜<岗位方向>`
 - `面试逐字稿｜<经历>｜<岗位方向>`
-- `岗位能力地图｜<岗位方向>`；每个岗位方向只维护一份长期主文档
-- `能力训练｜<岗位方向>｜<日期>｜<序号>`
-- `每日三题｜<日期>`
-- `训练题｜<题目名称>`
-- `岗位能力周报｜<开始日期>—<结束日期>`
 - `面试准备｜<公司>｜<岗位>｜<环节>｜<日期>`
 - `模拟面试｜<公司或方向>｜<岗位>｜<环节>｜<日期>｜<序号>`
 - `面试ASR｜<公司>｜<岗位>｜<环节>｜<日期>`
@@ -84,7 +64,8 @@
 
 ## 自动保存
 
-`full` 模式下，所有产出型 Skill（`career-profile`、`experience-deepthink`、`resume-tailor`、`competency-lab`、`interview-prep`、`mock-lab`、`talk-review`）在每次生成、补充或修订内容后默认自动保存。`single` 模式默认不自动保存到飞书，只在用户本轮明确要求且连接已配置时保存：
+产出型 Skill（`experience-deepthink`、`resume-tailor`、`interview-prep`、`mock-lab`、
+`talk-review`）在每次生成、补充或修订内容后默认自动保存到用户私有飞书知识库：
 
 - 正常结束：`completed`。
 - 用户暂停、时间到或提前结束：`incomplete`，正文保留已完成内容、缺口和续做清单。

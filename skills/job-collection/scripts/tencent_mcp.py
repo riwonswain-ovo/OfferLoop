@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Callable, Mapping, Sequence
 from urllib.parse import parse_qsl, urlparse
 
@@ -50,6 +51,102 @@ class PaginationSummary:
     complete: bool
     requested_page_size: int = DEFAULT_PAGE_SIZE
     smallest_page_size: int = DEFAULT_PAGE_SIZE
+    truncation_retries: int = 0
+    field_split_pages: int = 0
+
+
+@dataclass(frozen=True)
+class IncrementalCheckpoint:
+    """Durable continuation for one descending Tencent incremental scan."""
+
+    offset: int
+    expected_total: int
+    seen_record_ids: tuple[str, ...]
+    previous_updated_at_ms: int | None
+    high_water_ms: int | None
+    effective_page_size: int
+
+    def __post_init__(self) -> None:
+        for name in ("offset", "expected_total", "effective_page_size"):
+            value = getattr(self, name)
+            if not isinstance(value, int) or isinstance(value, bool):
+                raise ValueError(f"incremental checkpoint {name} must be an integer")
+        for name in ("previous_updated_at_ms", "high_water_ms"):
+            value = getattr(self, name)
+            if value is not None and (
+                not isinstance(value, int) or isinstance(value, bool)
+            ):
+                raise ValueError(f"incremental checkpoint {name} must be an integer")
+        if not isinstance(self.seen_record_ids, tuple) or any(
+            not isinstance(value, str) for value in self.seen_record_ids
+        ):
+            raise ValueError("incremental checkpoint record IDs must be text")
+        if self.offset < 0 or self.expected_total < 0:
+            raise ValueError("incremental checkpoint offsets must be non-negative")
+        if not 1 <= self.effective_page_size <= MAX_PAGE_SIZE:
+            raise ValueError("incremental checkpoint page size is invalid")
+        if len(self.seen_record_ids) != len(set(self.seen_record_ids)):
+            raise ValueError("incremental checkpoint record IDs must be unique")
+        if any(not value for value in self.seen_record_ids):
+            raise ValueError("incremental checkpoint record IDs must be non-empty")
+
+    def to_json(self) -> str:
+        return json.dumps(
+            {
+                "offset": self.offset,
+                "expected_total": self.expected_total,
+                "seen_record_ids": list(self.seen_record_ids),
+                "previous_updated_at_ms": self.previous_updated_at_ms,
+                "high_water_ms": self.high_water_ms,
+                "effective_page_size": self.effective_page_size,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+
+    @classmethod
+    def from_json(cls, value: str) -> "IncrementalCheckpoint":
+        payload = json.loads(value)
+        if not isinstance(payload, Mapping):
+            raise ValueError("incremental checkpoint must be an object")
+        for key in ("offset", "expected_total", "effective_page_size"):
+            item = payload.get(key)
+            if not isinstance(item, int) or isinstance(item, bool):
+                raise ValueError(f"incremental checkpoint {key} must be an integer")
+        raw_ids = payload.get("seen_record_ids")
+        if not isinstance(raw_ids, list) or any(
+            not isinstance(item, str) for item in raw_ids
+        ):
+            raise ValueError("incremental checkpoint record IDs must be text")
+        previous = payload.get("previous_updated_at_ms")
+        if previous is not None and (
+            not isinstance(previous, int) or isinstance(previous, bool)
+        ):
+            raise ValueError("incremental checkpoint timestamp must be an integer")
+        high_water = payload.get("high_water_ms")
+        if high_water is not None and (
+            not isinstance(high_water, int) or isinstance(high_water, bool)
+        ):
+            raise ValueError("incremental checkpoint high water must be an integer")
+        return cls(
+            offset=payload["offset"],
+            expected_total=payload["expected_total"],
+            seen_record_ids=tuple(raw_ids),
+            previous_updated_at_ms=previous,
+            high_water_ms=high_water,
+            effective_page_size=payload["effective_page_size"],
+        )
+
+
+@dataclass(frozen=True)
+class IncrementalPaginationSummary:
+    pages: int
+    records_read: int
+    window_records: int
+    complete: bool
+    stop_reason: str
+    high_water_ms: int | None
+    checkpoint: IncrementalCheckpoint | None
     truncation_retries: int = 0
     field_split_pages: int = 0
 
@@ -330,6 +427,183 @@ def _read_single_row_by_field_groups(
         pages.append(page)
 
     return _merge_projected_pages(pages[0], pages[1]), nested_truncations
+
+
+def _updated_at_ms(value: object) -> int | None:
+    if value is None or value == "" or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        number = int(value)
+        return number if abs(number) >= 100_000_000_000 else number * 1000
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        text = str(value).strip()
+        if text.isdigit():
+            return _updated_at_ms(int(text))
+        try:
+            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return int(parsed.timestamp() * 1000)
+
+
+def scan_incremental_records(
+    call_tool: Callable[[str, Mapping[str, object]], object],
+    consume_page: Callable[[Sequence[Mapping[str, object]]], None],
+    updated_at: Callable[[Mapping[str, object]], object],
+    save_checkpoint: Callable[[IncrementalCheckpoint], None],
+    *,
+    file_id: str,
+    sheet_id: str,
+    overlap_start: datetime,
+    view_id: str | None = None,
+    field_titles: Sequence[str] = (),
+    sort: Sequence[Mapping[str, object]] = (),
+    page_size: int = DEFAULT_PAGE_SIZE,
+    checkpoint: IncrementalCheckpoint | None = None,
+    max_pages: int = 10_000,
+) -> IncrementalPaginationSummary:
+    """Read a descending overlap window with a durable page checkpoint."""
+    if overlap_start.tzinfo is None:
+        raise ValueError("overlap_start must be timezone-aware")
+    if not 1 <= page_size <= MAX_PAGE_SIZE:
+        raise ValueError(f"page_size must be between 1 and {MAX_PAGE_SIZE}")
+    if max_pages < 1:
+        raise ValueError("max_pages must be positive")
+
+    boundary_ms = int(overlap_start.timestamp() * 1000)
+    offset = checkpoint.offset if checkpoint else 0
+    expected_total = checkpoint.expected_total if checkpoint else None
+    seen_record_ids = set(checkpoint.seen_record_ids if checkpoint else ())
+    previous_ms = checkpoint.previous_updated_at_ms if checkpoint else None
+    effective_page_size = checkpoint.effective_page_size if checkpoint else page_size
+    pages = 0
+    records_read = 0
+    window_records = 0
+    high_water_ms = checkpoint.high_water_ms if checkpoint else None
+    truncation_retries = 0
+    field_split_pages = 0
+
+    while True:
+        if pages >= max_pages:
+            raise TencentMcpError("Tencent MCP incremental scan exceeded max_pages")
+        while True:
+            try:
+                payload = _read_page(
+                    call_tool,
+                    file_id=file_id,
+                    sheet_id=sheet_id,
+                    view_id=view_id,
+                    field_titles=field_titles,
+                    sort=sort,
+                    offset=offset,
+                    limit=effective_page_size,
+                )
+                break
+            except TencentMcpResponseTruncated:
+                truncation_retries += 1
+                if effective_page_size > 1:
+                    effective_page_size = max(1, effective_page_size // 2)
+                    continue
+                payload, nested = _read_single_row_by_field_groups(
+                    call_tool,
+                    file_id=file_id,
+                    sheet_id=sheet_id,
+                    view_id=view_id,
+                    field_titles=field_titles,
+                    sort=sort,
+                    offset=offset,
+                )
+                truncation_retries += nested
+                field_split_pages += 1
+                break
+
+        error = str(payload.get("error", "") or "").strip()
+        if error:
+            raise TencentMcpError(f"Tencent MCP list_records failed: {error}")
+        _require_page_envelope(payload)
+        try:
+            total = int(payload["total"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise TencentMcpError("Tencent MCP page is missing a valid total") from exc
+        if isinstance(payload["total"], bool) or total < 0:
+            raise TencentMcpError("Tencent MCP page returned an invalid total")
+        if expected_total is None:
+            expected_total = total
+        elif total != expected_total:
+            raise TencentMcpError(
+                "Tencent SmartSheet changed during incremental pagination"
+            )
+
+        records = payload.get("records")
+        record_ids = _page_record_ids(payload)
+        has_more_raw = payload.get("has_more", payload.get("hasMore", False))
+        if not isinstance(has_more_raw, bool):
+            raise TencentMcpError("Tencent MCP has_more must be boolean")
+        if has_more_raw and not records:
+            raise TencentMcpError("Tencent MCP returned an empty page while has_more is true")
+        page_times: list[int | None] = []
+        window_page: list[Mapping[str, object]] = []
+        for record, record_id in zip(records, record_ids):
+            if record_id in seen_record_ids:
+                raise TencentMcpError(
+                    "Tencent SmartSheet shifted during incremental pagination"
+                )
+            seen_record_ids.add(record_id)
+            value = _updated_at_ms(updated_at(record))
+            page_times.append(value)
+            if value is not None:
+                if previous_ms is not None and value > previous_ms:
+                    raise TencentMcpError(
+                        "Tencent SmartSheet is not sorted by update time descending"
+                    )
+                previous_ms = value
+                high_water_ms = (
+                    value if high_water_ms is None else max(high_water_ms, value)
+                )
+            if value is None or value >= boundary_ms:
+                window_page.append(record)
+
+        pages += 1
+        records_read += len(records)
+        whole_page_before_boundary = bool(records) and all(
+            value is not None and value < boundary_ms for value in page_times
+        )
+        if not whole_page_before_boundary and window_page:
+            consume_page(window_page)
+            window_records += len(window_page)
+
+        if whole_page_before_boundary:
+            return IncrementalPaginationSummary(
+                pages, records_read, window_records, True, "time_boundary",
+                high_water_ms, None, truncation_retries, field_split_pages,
+            )
+        if not has_more_raw:
+            return IncrementalPaginationSummary(
+                pages, records_read, window_records, True, "source_exhausted",
+                high_water_ms, None, truncation_retries, field_split_pages,
+            )
+        try:
+            next_offset = int(payload["next"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise TencentMcpError(
+                "Tencent MCP page is missing a valid next offset"
+            ) from exc
+        if isinstance(payload["next"], bool) or next_offset <= offset:
+            raise TencentMcpError("Tencent MCP next offset did not advance")
+        next_checkpoint = IncrementalCheckpoint(
+            offset=next_offset,
+            expected_total=expected_total,
+            seen_record_ids=tuple(sorted(seen_record_ids)),
+            previous_updated_at_ms=previous_ms,
+            high_water_ms=high_water_ms,
+            effective_page_size=effective_page_size,
+        )
+        save_checkpoint(next_checkpoint)
+        offset = next_offset
 
 
 def scan_all_records(

@@ -14,12 +14,10 @@ import tempfile
 
 
 SKILL_NAMES = (
-    "career-profile",
     "job-collection",
     "recruiting-reminder",
     "experience-deepthink",
     "resume-tailor",
-    "competency-lab",
     "interview-prep",
     "mock-lab",
     "talk-review",
@@ -315,7 +313,7 @@ def main():
         roots = install_all_agents(source, project, home, env)
         assert_collection_preflight(project, roots["codex"], env)
         print(
-            "cold install accepted: four Agents, nine Skills, idempotency, "
+            "cold install accepted: four Agents, seven Skills, idempotency, "
             "post-install verification, collection preflight, recovery, and redaction"
         )
 

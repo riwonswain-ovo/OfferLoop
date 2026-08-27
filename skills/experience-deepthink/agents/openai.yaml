@@ -1,4 +1,4 @@
 interface:
   display_name: "经历深挖"
-  short_description: "先还原可验证的项目细节，再生成两分钟内可口述的面试逐字稿"
-  default_prompt: "使用 $experience-deepthink 通过连续一题一答先维护细节复原稿；事实稳定后，再仅依据该稿生成 12 题面试逐字稿。"
+  short_description: "深挖互联网产品经理经历，稳定生成固定八章细节复原稿"
+  default_prompt: "使用 $experience-deepthink 先让我自然讲述一段互联网产品经理经历，再按固定阶段一题一答深挖，最终生成固定八章的细节复原稿。"

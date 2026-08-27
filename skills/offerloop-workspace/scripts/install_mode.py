@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Resolve OfferLoop full or single-Skill behavior without network access."""
+"""Resolve the complete OfferLoop Feishu workspace mode without network access."""
 
 from __future__ import annotations
 
@@ -7,9 +7,6 @@ import argparse
 import json
 import os
 from pathlib import Path
-
-
-VALID_MODES = {"full", "single"}
 
 
 def config_file(environ=None) -> Path:
@@ -26,12 +23,7 @@ def resolve_mode(path: Path | None = None, environ=None) -> dict:
     except FileNotFoundError:
         config = {}
     except (OSError, json.JSONDecodeError):
-        return {
-            "mode": "full",
-            "source": "legacy_fallback",
-            "profile_gate": "required",
-            "artifact_storage": "feishu_default",
-        }
+        config = {}
 
     installation = config.get("installation")
     if isinstance(installation, dict):
@@ -40,16 +32,12 @@ def resolve_mode(path: Path | None = None, environ=None) -> dict:
     else:
         mode = config.get("install_mode")
         skills = config.get("selected_skills", [])
-    if mode not in VALID_MODES:
-        mode = "full"
-        source = "legacy_fallback"
-    else:
-        source = "config"
+    source = "config" if mode == "full" else "legacy_requires_full_setup"
     result = {
-        "mode": mode,
+        "mode": "full",
         "source": source,
-        "profile_gate": "required" if mode == "full" else "skipped",
-        "artifact_storage": "feishu_default" if mode == "full" else "chat_default",
+        "artifact_storage": "feishu_default",
+        "migration_required": mode != "full",
     }
     if isinstance(skills, list):
         result["selected_skills"] = [str(item) for item in skills]

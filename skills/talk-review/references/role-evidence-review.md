@@ -11,7 +11,7 @@
    - 简历承诺缺口 → `resume-tailor`
    - 公司/岗位知识缺口 → `interview-prep`
    - 回答组织或承压缺口 → `mock-lab`
-   - 可迁移判断缺口 → `competency-lab`
+   - 可迁移判断或表达承压缺口 → `mock-lab`
 
 ## 十岗位评价镜头
 

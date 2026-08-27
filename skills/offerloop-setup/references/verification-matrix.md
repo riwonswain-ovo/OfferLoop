@@ -4,7 +4,7 @@
 
 ## 0. 开始前
 
-1. 先执行 `python3 scripts/preflight.py --capability <collection|reminder|workspace|coaching|full> --json`。
+1. 先执行 `python3 scripts/preflight.py --capability <collection|reminder|workspace|full> --json`。
 2. 仅对预检中已经配置、且用户本次明确要求验证的能力执行在线核验。
 3. 在线操作前确认当前 `lark-cli` 身份；涉及用户文档、知识库或日历时使用 `--as user`，涉及应用可见性或工作流时使用 `--as bot`。
 4. 所有命令输出只保留状态、资源类型、数量和错误类别；不要粘贴 URL 中的 token、邮箱地址、Cookie、授权码或 IMAP 密码。
@@ -17,7 +17,7 @@
 | 目标表存在 | user / bot | `base +table-list` | 找到已配置的招聘信息表 |
 | 企业字段契约 | user / bot | `base +field-list` | 六张企业表均为相同 13 字段，Select 选项集合一致；缺失记为 `needs_action` |
 | 求职进展 schema v6 | user / bot | `base +field-list` 后把 JSON 传给 `scripts/validate_progress_schema.py` | 返回 `status=ready` |
-| 视图可读取 | user / bot | `base +view-list` | 可读取至少一个视图；不创建、不改筛选 |
+| 求职进展视图契约 | user / bot | `base +view-list`、逐个 `base +view-get-filter` | 已完成节点视图同时按对应 `最近完成节点` 与 schema v6 的完整进行中状态清单筛选，且清单包含 `待测评`；Offer、已结束、状态待确认按各自状态筛选 |
 | 求职进展定位 | 本地 | 查看预检报告的 `local.progress_locator` | 已登记核心空间中的求职进展 Base；缺失时为 `needs_action`，不猜测记录 |
 
 推荐命令顺序（将尖括号替换为已配置值，不要在聊天中回显真实 URL）：
@@ -28,6 +28,7 @@ lark-cli base +base-get --base-token '<BASE_TOKEN>' --as user
 lark-cli base +table-list --base-token '<BASE_TOKEN>' --as user
 lark-cli base +field-list --base-token '<BASE_TOKEN>' --table-id '<TABLE_ID>' --as user
 lark-cli base +view-list --base-token '<BASE_TOKEN>' --table-id '<TABLE_ID>' --as user
+lark-cli base +view-get-filter --base-token '<BASE_TOKEN>' --table-id '<TABLE_ID>' --view-id '<VIEW_ID>' --as user
 ```
 
 求职进展字段验收不得只看字段数量：
@@ -46,8 +47,10 @@ lark-cli base +field-list --base-token '<PROGRESS_BASE_TOKEN>' --table-id '<PROG
 | IMAP 连通性 | 本地 | `fetch_mail.py --check-connection` | 可登录并选择配置的邮箱文件夹；不搜索、不拉取邮件 |
 | 笔面试中心可读取 | user / bot | Base 的 `+base-get`、`+table-list`、`+field-list` | 已配置目标表可读取，字段可检查 |
 | 笔面试中心单表结构 | user / bot | Base 的 `+table-list`、`+view-list`、`+view-get-filter` | 使用 `笔面试安排` 单表；`全部安排` 无筛选，其余受管视图按 `环节` 筛选 |
+| Runtime 状态账本 | bot | Base 的 `+field-list` | `OfferLoop运行状态` 字段符合 reminder schema，只保存最小幂等、失败和分页状态 |
 | 日历可读取 | user | `calendar +agenda` 或 `calendar +freebusy` | 指定的未来 7 天范围可读取；不创建日程 |
-| 面试阶段表可读取 | user / bot | `base +table-list`、`+field-list` | 笔试、群面、一面、二面、三面、HR 面等已配置表可读取 |
+| 环节视图可读取 | user / bot | `base +view-list`、`+view-get-filter` | 测评、笔试、群面、一面、二面、三面、HR 面、其他面试均为同一物理表的受管视图 |
+| 每日卡片配置可定位 | 本地 | 离线预检 | daily_checkin 与 notifications 分离；时间为 22:10 Asia/Shanghai，chat、owner 与 calendar 已登记或明确停用 |
 
 IMAP 检查示例：
 
@@ -78,20 +81,7 @@ lark-cli wiki +node-list --space-id '<SPACE_ID>' --as user
 不要在验收中移动知识库节点、创建文档或更改成员权限。三张 Base 必须通过已登记 URL 与 Wiki
 节点相互核对，不按标题猜测，也不复制记录验证。
 
-## 4. `coaching`：求职训练产物
-
-| 核验项 | 身份 | 只读操作 | 通过条件 |
-| --- | --- | --- | --- |
-| schema v4 | 本地 | `artifact_contract.py resolve-folder` | `artifact_storage` 可解析，不输出 token |
-| 训练目录 | user | `wiki +node-get` / `wiki +node-list` | 所选 Skill 的必需目录唯一且可读 |
-| Markdown 文档 | user | `docx` 只读 | 已有产物包含“产物信息”和 `run_id` |
-| 长期主档 | user | `docx` 只读 | 已登记主档可读；未创建时允许为空 |
-| 笔面试回填字段 | user / bot | Base `+field-list` | `笔面试安排` 单表存在面试准备/复盘字段，且不存在 `子表 record_id` |
-
-只读验收不得创建空主档、训练文档或测试 Base 记录。多个同名目录保持 `needs_action`，等待用户
-选择，不能自动取第一条。
-
-## 5. `integration`：求职进展即时联动
+## 4. `integration`：求职进展即时联动
 
 | 核验项 | 身份 | 只读操作 | 通过条件 |
 | --- | --- | --- | --- |
@@ -110,7 +100,7 @@ lark-cli base +workflow-list --base-token '<BASE_TOKEN>' --table-id '<TABLE_ID>'
 
 执行运行历史查询前先阅读 `lark-base` Skill 的 `references/lark-base-workflow-run-history.md`，以该参考中的当前参数为准。验收阶段禁止启用、停用、创建或执行工作流。
 
-## 6. 状态解释与交接
+## 5. 状态解释与交接
 
 - `ready`：已完成所选能力的离线检查，且本次已执行的只读在线检查通过。
 - `needs_action`：配置、字段、权限或入口缺失，需用户确认后才可修复。

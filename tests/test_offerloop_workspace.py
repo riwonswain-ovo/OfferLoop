@@ -9,6 +9,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 SKILL_ROOT = ROOT / "skills" / "offerloop-workspace"
 SCRIPT = SKILL_ROOT / "scripts" / "workspace.py"
+HOMEPAGE_UPDATER = ROOT / "scripts" / "update_offerloop_homepage.py"
 TEMPLATE = SKILL_ROOT / "assets" / "homepage-template.md"
 LEGACY_TEMPLATE = """# Legacy OfferLoop Home
 <!-- OFFERLOOP:MANAGED:UPCOMING_EVENTS:START -->
@@ -37,7 +38,51 @@ def load_workspace_module():
     return module
 
 
+def load_homepage_updater():
+    spec = importlib.util.spec_from_file_location(
+        "offerloop_homepage_updater", HOMEPAGE_UPDATER
+    )
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
 class OfferLoopWorkspaceTest(unittest.TestCase):
+    def test_schema_v7_homepage_requires_only_active_directories(self):
+        updater = load_homepage_updater()
+        config = {
+            "schema_version": 7,
+            "target_base_url": "https://example.com/target",
+            "progress_base_url": "https://example.com/progress",
+            "reminder_base_url": "https://example.com/reminder",
+            "workspace_core_data_node_token": "core",
+            "artifact_storage": {
+                "folders": {
+                    "current_resumes": "resume",
+                    "experience_deepthink": "experience",
+                    "interview_prep": "prep",
+                    "mock_lab": "mock",
+                    "interview_review": "review",
+                }
+            },
+        }
+        rendered = updater.render(config)
+        self.assertIn("7 个长期 Skill", rendered)
+        self.assertIn("两条闭环", rendered)
+        self.assertNotIn("02｜用户画像", rendered)
+        self.assertNotIn("05｜岗位能力与训练", rendered)
+        for title in (
+            "02｜定制简历",
+            "03｜经历深挖",
+            "04｜面试准备",
+            "05｜模拟面试",
+            "06｜真实面试复盘",
+        ):
+            self.assertIn(title, rendered)
+        self.assertEqual(len(updater.SKILLS), 7)
+        self.assertEqual(len(updater.DIRECTORIES), 6)
+
     def test_workspace_config_uses_the_shared_update_safe_file(self):
         workspace = load_workspace_module()
         with tempfile.TemporaryDirectory() as directory:
@@ -51,8 +96,8 @@ class OfferLoopWorkspaceTest(unittest.TestCase):
         for expected in (
             "# OfferLoop 使用指南",
             "## 三张核心数据表",
-            "## 三条闭环",
-            "## 9 个长期 Skill",
+            "## 两条闭环",
+            "## 7 个长期 Skill",
             "## 固定目录",
             "不复制记录",
             "`进展状态`",

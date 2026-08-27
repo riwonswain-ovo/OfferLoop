@@ -13,7 +13,19 @@
     "PROGRESS_TABLE_ID",
     "REMINDER_BASE_TOKEN",
     "REMINDER_TABLE_ID",
-    "REMINDER_RECONCILE_SECRET"
+    "REMINDER_RECONCILE_SECRET",
+    "RUNTIME_STATE_TABLE_ID",
+    "DAILY_CHECKIN_STATUS"
+  ],
+  "conditional_environment": [
+    {
+      "when": { "DAILY_CHECKIN_STATUS": "enabled" },
+      "required": [
+        "DAILY_CHECKIN_CHAT_ID",
+        "DAILY_CHECKIN_OWNER_OPEN_ID",
+        "DAILY_CHECKIN_CALENDAR_ID"
+      ]
+    }
   ],
   "protected_destination_paths": [
     ".git",

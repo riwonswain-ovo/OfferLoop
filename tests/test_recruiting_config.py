@@ -31,7 +31,7 @@ class RecruitingConfigTest(unittest.TestCase):
             "面试准备文档",
             "面试复盘文档",
             "可选",
-            "未来 7 天",
+            "事件对应时间窗",
         ):
             self.assertIn(expected, content)
         self.assertNotIn("投递简历版本", content)
