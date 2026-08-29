@@ -20,7 +20,8 @@ python3 scripts/deployment_plan.py --capability full --write-checkpoint --json
 
 1. 完整读取 `lark-shared`，确认选定 profile 的 bot 与 user 身份；缺少 user scope 时走 split-flow 授权，不借用 bot 访问个人资源。需要 bot 时，引导启用机器人能力、开通最小权限、发布版本并安装到租户，不能只配置 App ID/Secret 就宣称机器人已安装。
 2. 完整读取 `lark-base`、`job-collection/references/field-contract.md`、`job-collection/references/excel-insert.md`、`recruiting-reminder/SKILL.md` 与 `reminder-schema.md`，创建三张独立 Base。严格按各自的字段、物理表、视图和 workflow 契约创建；不得创建编号、父记录或旧双 Base。
-3. 完整读取 `offerloop-workspace`、`lark-wiki`、`lark-doc`。创建默认私有的 `OfferLoop 求职空间`、
+3. 完整读取隐藏运行时中的 `homepage-contract.md`、`artifact-contract.md`，以及 `lark-wiki`、
+   `lark-doc`。创建默认私有的 `OfferLoop 求职空间`、
    固定目录和使用指南；将三张既有 Base 作为唯一对象纳入 `01｜核心求职数据`，不得复制记录、
    字段或另建同名 Base。
 4. 完整读取 `lark-apps`。即时同步应用只使用 setup 的活动模板。旧 OfferLoop 工作台已经退役，

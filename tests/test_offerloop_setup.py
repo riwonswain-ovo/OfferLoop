@@ -21,27 +21,21 @@ def load_module(name, relative_path):
 
 
 configure = load_module(
-    "offerloop_configure", "skills/offerloop-setup/scripts/configure.py"
+    "offerloop_configure", "runtime/offerloop/admin/scripts/configure.py"
 )
 preflight = load_module(
-    "offerloop_preflight", "skills/offerloop-setup/scripts/preflight.py"
+    "offerloop_preflight", "runtime/offerloop/admin/scripts/preflight.py"
 )
 status_model = load_module(
-    "offerloop_setup_status_model", "skills/offerloop-setup/scripts/status_model.py"
+    "offerloop_setup_status_model", "runtime/offerloop/admin/scripts/status_model.py"
 )
 deployment_plan = load_module(
-    "offerloop_deployment_plan", "skills/offerloop-setup/scripts/deployment_plan.py"
+    "offerloop_deployment_plan", "runtime/offerloop/admin/scripts/deployment_plan.py"
 )
 materialize_app_template = load_module(
     "offerloop_materialize_app_template",
-    "skills/offerloop-setup/scripts/materialize_app_template.py",
+    "runtime/offerloop/admin/scripts/materialize_app_template.py",
 )
-materialize_workbench = load_module(
-    "offerloop_materialize_workbench",
-    "skills/offerloop-workbench/scripts/materialize_workbench.py",
-)
-
-
 class OfferLoopSetupTest(unittest.TestCase):
     def make_skill_root(self, parent, *external_skills):
         root = Path(parent) / "skills"
@@ -100,7 +94,7 @@ class OfferLoopSetupTest(unittest.TestCase):
             completed = subprocess.run(
                 [
                     os.sys.executable,
-                    str(ROOT / "skills/offerloop-setup/scripts/preflight.py"),
+                    str(ROOT / "runtime/offerloop/admin/scripts/preflight.py"),
                     "--capability",
                     "collection",
                     "--json",
@@ -750,7 +744,7 @@ class OfferLoopSetupTest(unittest.TestCase):
             subprocess.run(
                 [
                     "python3",
-                    str(ROOT / "skills/offerloop-setup/scripts/configure.py"),
+                    str(ROOT / "runtime/offerloop/admin/scripts/configure.py"),
                     "--profile",
                     "codex",
                     "--target-base-url",
@@ -822,7 +816,7 @@ class OfferLoopSetupTest(unittest.TestCase):
             subprocess.run(
                 [
                     "python3",
-                    str(ROOT / "skills/offerloop-setup/scripts/configure.py"),
+                    str(ROOT / "runtime/offerloop/admin/scripts/configure.py"),
                     "--notification-target-type",
                     "chat",
                     "--notification-target-name",
@@ -945,7 +939,7 @@ class OfferLoopSetupTest(unittest.TestCase):
 
     def test_bundled_app_templates_have_redacted_manifests(self):
         expected = {
-            ROOT / "skills" / "offerloop-setup" / "assets" / "progress-sync-template":
+            ROOT / "runtime" / "offerloop" / "admin" / "assets" / "progress-sync-template":
                 "offerloop-progress-sync",
         }
         forbidden = {
@@ -983,8 +977,9 @@ class OfferLoopSetupTest(unittest.TestCase):
     def test_progress_sync_template_keeps_tasks_retired_and_defines_v2_daily_card_rules(self):
         root = (
             ROOT
-            / "skills"
-            / "offerloop-setup"
+            / "runtime"
+            / "offerloop"
+            / "admin"
             / "assets"
             / "progress-sync-template"
         )
@@ -1078,8 +1073,9 @@ class OfferLoopSetupTest(unittest.TestCase):
 
         deploy = (
             ROOT
-            / "skills"
-            / "offerloop-setup"
+            / "runtime"
+            / "offerloop"
+            / "admin"
             / "references"
             / "one-click-deploy.md"
         ).read_text(encoding="utf-8")
@@ -1095,18 +1091,15 @@ class OfferLoopSetupTest(unittest.TestCase):
         self.assertNotIn("apps/offerloop-card-ingress", deploy)
         self.assertNotIn("CARD_INGRESS_PUBLIC_URL", deploy)
 
-    def test_legacy_workbench_is_frozen_and_not_an_active_setup_capability(self):
-        retired = (
-            ROOT / "skills" / "offerloop-workbench" / "RETIRED.md"
-        ).read_text(encoding="utf-8")
+    def test_legacy_workbench_is_absent_and_not_an_active_setup_capability(self):
         installer = (ROOT / "scripts" / "install_offerloop.py").read_text(
             encoding="utf-8"
         )
         workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(
             encoding="utf-8"
         )
-        self.assertIn("冻结并退役", retired)
-        self.assertIn("旧模板源码已从活动代码树移除", retired)
+        self.assertFalse((ROOT / "skills" / "offerloop-workbench").exists())
+        self.assertIn('"offerloop-workbench"', installer)
         self.assertNotIn("--deploy-workbench", installer)
         self.assertNotIn("offerloop-workbench/assets/workbench-template", workflow)
         self.assertNotIn("workbench", deployment_plan.CAPABILITIES)
@@ -1130,11 +1123,6 @@ class OfferLoopSetupTest(unittest.TestCase):
             self.assertEqual(private_env.read_text(encoding="utf-8"), "PRIVATE=value\n")
             self.assertTrue((destination / "package.json").is_file())
             self.assertFalse((destination / "template.json").exists())
-
-    def test_workbench_materializer_rejects_new_deployments(self):
-        with tempfile.TemporaryDirectory() as directory:
-            with self.assertRaisesRegex(RuntimeError, "retired on 2026-08-17"):
-                materialize_workbench.materialize(Path(directory), dry_run=True)
 
     def test_deployment_checkpoint_is_private_and_does_not_include_locators(self):
         with tempfile.TemporaryDirectory() as directory:

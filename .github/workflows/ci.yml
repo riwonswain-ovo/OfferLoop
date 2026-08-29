@@ -59,7 +59,7 @@ jobs:
     name: Build active app template
     runs-on: ubuntu-latest
     env:
-      ACTIVE_TEMPLATE: skills/offerloop-setup/assets/progress-sync-template
+      ACTIVE_TEMPLATE: runtime/offerloop/admin/assets/progress-sync-template
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5

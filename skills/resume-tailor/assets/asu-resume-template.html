@@ -44,6 +44,10 @@
       body[data-page-mode="continuous"] .sheet { margin: 0 auto; box-shadow: none; }
     }
     @media print {
+      *, *::before, *::after {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
       .sheet { padding: 0; width: auto; min-height: 0; }
       body[data-page-mode="paged"] .sheet { margin: 0; box-shadow: none; }
       body[data-page-mode="continuous"] .sheet { margin: 0; box-shadow: none; }

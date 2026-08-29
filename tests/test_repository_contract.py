@@ -5,9 +5,34 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILLS = ROOT / "skills"
+RUNTIME = ROOT / "runtime" / "offerloop"
+ADMIN = RUNTIME / "admin"
+WORKSPACE = RUNTIME / "workspace"
 
 
 class RepositoryContractTest(unittest.TestCase):
+    def test_skills_tree_contains_only_the_seven_discoverable_business_skills(self):
+        expected = {
+            "job-collection",
+            "recruiting-reminder",
+            "experience-deepthink",
+            "resume-tailor",
+            "interview-prep",
+            "mock-lab",
+            "talk-review",
+        }
+        directories = {path.name for path in SKILLS.iterdir() if path.is_dir()}
+        discoverable = {
+            path.parent.name for path in SKILLS.glob("*/SKILL.md") if path.is_file()
+        }
+        self.assertEqual(directories, expected)
+        self.assertEqual(discoverable, expected)
+        self.assertEqual(
+            {path.name for path in RUNTIME.iterdir() if path.is_dir()},
+            {"admin", "workspace"},
+        )
+        self.assertFalse(any(RUNTIME.glob("*/SKILL.md")))
+
     def test_experience_deepthink_v2_routes_product_work_with_optional_specializations(self):
         root = SKILLS / "experience-deepthink"
         expected = {
@@ -630,14 +655,14 @@ class RepositoryContractTest(unittest.TestCase):
 
     def test_setup_does_not_expose_retired_daily_checkin(self):
         onboarding = (
-            SKILLS / "offerloop-setup" / "references" / "onboarding.md"
+            ADMIN / "references" / "onboarding.md"
         ).read_text(encoding="utf-8")
         self.assertNotIn("每日群聊确认", onboarding)
         self.assertNotIn("im:chat.members:read", onboarding)
 
     def test_installer_welcome_introduces_the_seven_long_lived_skills(self):
         welcome = (
-            SKILLS / "offerloop-setup" / "references" / "welcome.md"
+            ADMIN / "references" / "welcome.md"
         ).read_text(encoding="utf-8")
         self.assertIn("安装只添加本地 Skill", welcome)
         for name in (
@@ -670,32 +695,23 @@ class RepositoryContractTest(unittest.TestCase):
             self.assertNotIn("路由到 `competency-lab`", skill, name)
 
         gate = (
-            SKILLS
-            / "offerloop-workspace"
-            / "references"
-            / "profile-gate.md"
+            WORKSPACE / "references" / "profile-gate.md"
         ).read_text(encoding="utf-8")
         self.assertIn("已退役", gate)
         self.assertIn("无副作用", gate)
         self.assertIn("直接继续原任务", gate)
         self.assertTrue(
             (
-                SKILLS
-                / "offerloop-workspace"
-                / "scripts"
-                / "profile_gate.py"
+                WORKSPACE / "scripts" / "profile_gate.py"
             ).is_file()
         )
 
-    def test_retired_skill_entrypoints_are_tombstones_only(self):
+    def test_retired_skill_sources_are_absent_from_current_tree(self):
         voice = (
-            SKILLS / "offerloop-workspace" / "references" / "voice-contract.md"
+            WORKSPACE / "references" / "voice-contract.md"
         ).read_text(encoding="utf-8")
-        for name in ("career-profile", "competency-lab"):
-            root = SKILLS / name
-            self.assertFalse((root / "SKILL.md").exists())
-            retired = (root / "RETIRED.md").read_text(encoding="utf-8")
-            self.assertIn("只读", retired)
+        for name in ("career-profile", "competency-lab", "offerloop-workbench"):
+            self.assertFalse((SKILLS / name).exists())
         self.assertIn("当前会话", voice)
         self.assertIn("不创建、更新或提议更新长期语言画像", voice)
 
@@ -725,8 +741,8 @@ class RepositoryContractTest(unittest.TestCase):
             ROOT / "services/job-progress-sync/src/progress-model.js",
             SKILLS / "job-collection/scripts/progress_sync.py",
             SKILLS / "recruiting-reminder/scripts/event_model.py",
-            SKILLS
-            / "offerloop-setup/assets/progress-sync-template/server/modules"
+            ADMIN
+            / "assets/progress-sync-template/server/modules"
             / "job-progress-sync/job-progress-sync.service.ts",
         )
         retired = ("当前阶段", "下一环节", "流程结果", "当前状态")
@@ -749,12 +765,12 @@ class RepositoryContractTest(unittest.TestCase):
 
     def test_workspace_collaboration_boundaries_are_documented(self):
         onboarding = (
-            SKILLS / "offerloop-setup" / "references" / "onboarding.md"
+            ADMIN / "references" / "onboarding.md"
         ).read_text(encoding="utf-8")
         collection = (SKILLS / "job-collection" / "SKILL.md").read_text(
             encoding="utf-8"
         )
-        contract = (SKILLS / "offerloop-workspace" / "references" / "homepage-contract.md").read_text(
+        contract = (WORKSPACE / "references" / "homepage-contract.md").read_text(
             encoding="utf-8"
         )
         self.assertIn("不再要求用户调用一次性 Skill", onboarding)
@@ -815,17 +831,10 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertNotIn("--confirm-schema-v5", migration)
 
     def test_legacy_workbench_has_no_active_deployment_entrypoint(self):
-        retired = (SKILLS / "offerloop-workbench" / "RETIRED.md").read_text(
-            encoding="utf-8"
-        )
         retirement_record = (
             ROOT / "docs" / "cases" / "workbench-retirement-2026-08-17.md"
         ).read_text(encoding="utf-8")
-        materializer = (
-            SKILLS / "offerloop-workbench" / "scripts" / "materialize_workbench.py"
-        ).read_text(encoding="utf-8")
-        self.assertIn("旧模板源码已从活动代码树移除", retired)
-        self.assertIn("cannot be deployed", materializer)
+        self.assertFalse((SKILLS / "offerloop-workbench").exists())
         self.assertIn("不改变当前同步/提醒应用", retirement_record)
 
     def test_readme_follows_the_new_user_journey(self):
@@ -843,7 +852,7 @@ class RepositoryContractTest(unittest.TestCase):
     def test_setup_docs_match_capability_preflight_and_recovery(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         onboarding = (
-            SKILLS / "offerloop-setup" / "references" / "onboarding.md"
+            ADMIN / "references" / "onboarding.md"
         ).read_text(encoding="utf-8")
         for text in (readme, onboarding):
             self.assertIn("三张", text)
@@ -906,7 +915,7 @@ class RepositoryContractTest(unittest.TestCase):
 
     def test_workspace_homepage_template_matches_the_readme_contract(self):
         template = (
-            SKILLS / "offerloop-workspace" / "assets" / "homepage-template.md"
+            WORKSPACE / "assets" / "homepage-template.md"
         ).read_text(encoding="utf-8")
         self.assertIn("# OfferLoop 使用指南", template)
         self.assertNotIn("工作台", template)
@@ -926,7 +935,7 @@ class RepositoryContractTest(unittest.TestCase):
 
     def test_workspace_contract_uses_contiguous_layout_and_archives_legacy_dirs(self):
         homepage = (
-            SKILLS / "offerloop-workspace" / "references" / "homepage-contract.md"
+            WORKSPACE / "references" / "homepage-contract.md"
         ).read_text(encoding="utf-8")
         expected = (
             "01｜核心求职数据",
@@ -953,9 +962,9 @@ class RepositoryContractTest(unittest.TestCase):
         workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(
             encoding="utf-8"
         )
-        self.assertIn("skills/offerloop-setup/assets/progress-sync-template", workflow)
+        self.assertIn("runtime/offerloop/admin/assets/progress-sync-template", workflow)
         self.assertNotIn("skills/offerloop-workbench/assets/workbench-template", workflow)
-        self.assertFalse((SKILLS / "offerloop-workbench" / "assets").exists())
+        self.assertFalse((SKILLS / "offerloop-workbench").exists())
 
     def test_only_offerloop_skills_are_packaged(self):
         discovered = {
@@ -984,7 +993,7 @@ class RepositoryContractTest(unittest.TestCase):
         self.assertTrue((root / "scripts" / "render_resume.py").is_file())
         self.assertTrue((root / "scripts" / "validate_resume.py").is_file())
         artifact_contract = (
-            SKILLS / "offerloop-workspace" / "references" / "artifact-contract.md"
+            WORKSPACE / "references" / "artifact-contract.md"
         ).read_text(encoding="utf-8")
         self.assertIn("`resume-tailor`", artifact_contract)
         self.assertIn("`run_id` 仅用于会话内幂等", artifact_contract)
@@ -1164,7 +1173,7 @@ class RepositoryContractTest(unittest.TestCase):
 
     def test_deployable_templates_do_not_reconfigure_git_hooks(self):
         templates = (
-            SKILLS / "offerloop-setup" / "assets" / "progress-sync-template",
+            ADMIN / "assets" / "progress-sync-template",
         )
         for template in templates:
             package = (template / "package.json").read_text(encoding="utf-8")
@@ -1173,7 +1182,7 @@ class RepositoryContractTest(unittest.TestCase):
 
     def test_templates_do_not_ship_unused_remote_profile_scaffold(self):
         templates = (
-            SKILLS / "offerloop-setup" / "assets" / "progress-sync-template",
+            ADMIN / "assets" / "progress-sync-template",
         )
         for template in templates:
             source = template / "client" / "src"

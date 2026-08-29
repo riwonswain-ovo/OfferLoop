@@ -5,7 +5,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "skills/offerloop-workspace/scripts/profile_gate.py"
+SCRIPT = ROOT / "runtime/offerloop/workspace/scripts/profile_gate.py"
 
 
 def load_module():

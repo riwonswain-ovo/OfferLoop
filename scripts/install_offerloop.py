@@ -17,10 +17,12 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILLS_SOURCE = ROOT / "skills"
-SUPPORT_SOURCE = SKILLS_SOURCE / "offerloop-workspace"
+RUNTIME_SOURCE = ROOT / "runtime" / "offerloop"
+SUPPORT_SOURCE = RUNTIME_SOURCE / "workspace"
 SUPPORT_NAME = ".offerloop-runtime"
-ADMIN_SCRIPTS_SOURCE = SKILLS_SOURCE / "offerloop-setup" / "scripts"
-ADMIN_REFERENCES_SOURCE = SKILLS_SOURCE / "offerloop-setup" / "references"
+ADMIN_SOURCE = RUNTIME_SOURCE / "admin"
+ADMIN_SCRIPTS_SOURCE = ADMIN_SOURCE / "scripts"
+ADMIN_REFERENCES_SOURCE = ADMIN_SOURCE / "references"
 VERSION_FILE = ROOT / "VERSION"
 INSTALLER_VERSION = "3.0"
 SKILL_NAMES = (
