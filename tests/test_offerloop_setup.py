@@ -998,7 +998,12 @@ class OfferLoopSetupTest(unittest.TestCase):
         self.assertEqual(conditional[0]["when"], {"DAILY_CHECKIN_STATUS": "enabled"})
         self.assertEqual(
             set(conditional[0]["required"]),
-            {"DAILY_CHECKIN_CHAT_ID", "DAILY_CHECKIN_OWNER_OPEN_ID", "DAILY_CHECKIN_CALENDAR_ID"},
+            {
+                "DAILY_CHECKIN_CHAT_ID",
+                "DAILY_CHECKIN_OWNER_OPEN_ID",
+                "DAILY_CHECKIN_CALENDAR_ID",
+                "FEISHU_CALLBACK_VERIFICATION_TOKEN",
+            },
         )
         self.assertNotIn("OFFERLOOP_CALLBACK_RELAY_SECRET", required)
 
@@ -1028,33 +1033,41 @@ class OfferLoopSetupTest(unittest.TestCase):
         self.assertNotIn("type: 'callback'", service)
         self.assertIn("sendDailyCheckin", service)
         self.assertIn("reconcileReminderRecord", service)
-        self.assertIn("DailyCheckinAutomation", module)
+        self.assertIn("JobProgressSyncAutomation", module)
+        automation = (
+            root
+            / "server"
+            / "modules"
+            / "job-progress-sync"
+            / "job-progress-sync.automation.ts"
+        ).read_text(encoding="utf-8")
+        self.assertIn("offerloop-daily-checkin", automation)
+        self.assertIn("offerloop-daily-checkin-action", automation)
         self.assertFalse(
             (
                 root
                 / "server"
                 / "modules"
                 / "job-progress-sync"
-                / "job-progress-sync.automation.ts"
+                / "daily-checkin.automation.ts"
             ).exists()
         )
-        daily_automation = (
-            root / "server" / "modules" / "job-progress-sync" / "daily-checkin.automation.ts"
-        ).read_text(encoding="utf-8")
-        self.assertIn("offerloop-daily-checkin", daily_automation)
-        self.assertIn("offerloop-daily-checkin-action", daily_automation)
         self.assertNotIn("reconcileTaskStates()", controller)
         self.assertIn("full-table reconciliation is disabled", controller)
         self.assertNotIn("子表 record_id", service)
         self.assertNotIn("getReminderChildTableId", service)
-        self.assertFalse(
-            (
-                root
-                / "server"
-                / "modules"
-                / "job-progress-sync"
-                / "job-progress-sync.callback.controller.ts"
-            ).exists()
+        callback_controller = (
+            root
+            / "server"
+            / "modules"
+            / "job-progress-sync"
+            / "job-progress-sync.callback.controller.ts"
+        ).read_text(encoding="utf-8")
+        self.assertIn("@Controller('callbacks/feishu')", callback_controller)
+        self.assertIn("@Post('card-action')", callback_controller)
+        self.assertIn(
+            "processDailyCheckinActionAfterAck",
+            callback_controller,
         )
 
         daily_checkin = (
@@ -1087,7 +1100,8 @@ class OfferLoopSetupTest(unittest.TestCase):
         self.assertIn("不执行全表对账", deploy)
         self.assertIn("不得创建 `offerloop-base-reconcile`", deploy)
         self.assertIn("card.action.trigger", deploy)
-        self.assertIn("offerloop-daily-checkin-action", deploy)
+        self.assertIn("/callbacks/feishu/card-action", deploy)
+        self.assertIn("FEISHU_CALLBACK_VERIFICATION_TOKEN", deploy)
         self.assertNotIn("apps/offerloop-card-ingress", deploy)
         self.assertNotIn("CARD_INGRESS_PUBLIC_URL", deploy)
 

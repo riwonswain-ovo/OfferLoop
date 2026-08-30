@@ -17,7 +17,16 @@ const FIXED_STAGES: Set<string> = new Set([
 const ASYNC_STAGES: Set<string> = new Set(['测评', '笔试']);
 
 function text(value: unknown): string {
-  return String(value ?? '').trim();
+  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value)) {
+    return value.map((item: unknown): string => text(item)).filter(Boolean).join('');
+  }
+  if (typeof value === 'object' && value !== null) {
+    const candidate: Record<string, unknown> = value as Record<string, unknown>;
+    return text(candidate.text ?? candidate.name ?? candidate.value ?? '');
+  }
+  return '';
 }
 
 function cardText(value: unknown, limit: number = 160): string {

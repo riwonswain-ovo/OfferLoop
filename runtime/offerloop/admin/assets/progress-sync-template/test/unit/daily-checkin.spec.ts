@@ -120,6 +120,23 @@ describe('daily check-in v2 rules', () => {
     expect(parseCheckinAction({ operator_id: 'ou_owner', action_name: 'adjust:recFullIdentifier123', form_value: '{"planned_date":"2026-08-25","planned_start":"15:30"}' }, 'ou_owner')).toMatchObject({ action: 'adjust', recordId: 'recFullIdentifier123' });
   });
 
+  it('renders rich-text field values instead of object placeholders', () => {
+    const groups = groupPendingRecords([{
+      record_id: 'recRichText',
+      fields: {
+        完成状态: '待完成',
+        事件状态: '有效',
+        环节: '测评',
+        进行方式: '异步',
+        截止时间: '2026-08-25T20:00:00+08:00',
+        安排名称: [{ text: '示例公司' }, { text: '－测评' }],
+      },
+    }], now);
+    const rendered = JSON.stringify(populatedCheckinCard(groups));
+    expect(rendered).toContain('示例公司－测评');
+    expect(rendered).not.toContain('[object Object]');
+  });
+
   it('paginates large histories and bounds untrusted card text', () => {
     const records = Array.from({ length: MAX_RECORDS_PER_CARD + 1 }, (_, index) => ({
       record_id: `rec${index}`,
