@@ -1,13 +1,19 @@
 import { HttpModule } from '@nestjs/axios';
 import { Module } from '@nestjs/common';
 
+import {
+  JobProgressSyncCallbackController,
+} from './job-progress-sync.callback.controller';
 import { JobProgressSyncOpenApiController } from './job-progress-sync.openapi.controller';
+import { JobProgressSyncAutomation } from './job-progress-sync.automation';
 import { JobProgressSyncService } from './job-progress-sync.service';
-import { DailyCheckinAutomation } from './daily-checkin.automation';
 
 @Module({
   imports: [HttpModule],
-  controllers: [JobProgressSyncOpenApiController],
-  providers: [JobProgressSyncService, DailyCheckinAutomation],
+  controllers: [
+    JobProgressSyncCallbackController,
+    JobProgressSyncOpenApiController,
+  ],
+  providers: [JobProgressSyncService, JobProgressSyncAutomation],
 })
 export class JobProgressSyncModule {}

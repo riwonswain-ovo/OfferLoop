@@ -33,6 +33,7 @@ import type {
 
 const OPEN_API_ROOT = 'https://open.feishu.cn/open-apis';
 const TOKEN_URL = `${OPEN_API_ROOT}/auth/v3/tenant_access_token/internal`;
+const MANAGED_CALENDAR_SUMMARY = 'OfferLoop 求职日程';
 const REQUIRED_ENV_NAMES: string[] = [
   'FEISHU_APP_ID',
   'FEISHU_APP_SECRET',
@@ -101,6 +102,7 @@ interface DeploymentConfig {
   dailyCheckinOwnerOpenId: string;
   dailyCheckinCalendarId: string;
   runtimeStateTableId: string;
+  verificationToken: string;
 }
 
 interface ReminderOutcomeResult {
@@ -117,6 +119,36 @@ export interface ReminderReconcileResult {
   completionStatus: string;
 }
 
+export interface CardActionCallback {
+  schema?: string;
+  header?: {
+    token?: string;
+    event_type?: string;
+    app_id?: string;
+  };
+  event?: {
+    operator?: { open_id?: string };
+    action?: { tag?: string; value?: unknown; form_value?: unknown; name?: string };
+    context?: { open_chat_id?: string; open_message_id?: string };
+  };
+}
+
+export type CardActionResponse = Record<string, unknown>;
+
+export interface ReminderRescheduleResult {
+  ok: boolean;
+  recordId: string;
+  plannedStart: string;
+  managedCalendarId: string;
+  response: CardActionResponse;
+}
+
+export interface FeishuCallbackChallenge {
+  challenge?: string;
+  token?: string;
+  type?: string;
+}
+
 function requireDeploymentConfig(env: NodeJS.ProcessEnv): DeploymentConfig {
   for (const name of REQUIRED_ENV_NAMES) {
     if (!String(env[name] ?? '').trim()) {
@@ -127,7 +159,12 @@ function requireDeploymentConfig(env: NodeJS.ProcessEnv): DeploymentConfig {
     ? 'enabled'
     : 'disabled';
   if (dailyCheckinStatus === 'enabled') {
-    for (const name of ['DAILY_CHECKIN_CHAT_ID', 'DAILY_CHECKIN_OWNER_OPEN_ID', 'DAILY_CHECKIN_CALENDAR_ID']) {
+    for (const name of [
+      'DAILY_CHECKIN_CHAT_ID',
+      'DAILY_CHECKIN_OWNER_OPEN_ID',
+      'DAILY_CHECKIN_CALENDAR_ID',
+      'FEISHU_CALLBACK_VERIFICATION_TOKEN',
+    ]) {
       if (!String(env[name] ?? '').trim()) {
         throw new Error(`missing required environment variable for enabled daily check-in: ${name}`);
       }
@@ -148,6 +185,7 @@ function requireDeploymentConfig(env: NodeJS.ProcessEnv): DeploymentConfig {
     dailyCheckinOwnerOpenId: String(env.DAILY_CHECKIN_OWNER_OPEN_ID),
     dailyCheckinCalendarId: String(env.DAILY_CHECKIN_CALENDAR_ID),
     runtimeStateTableId: String(env.RUNTIME_STATE_TABLE_ID),
+    verificationToken: String(env.FEISHU_CALLBACK_VERIFICATION_TOKEN),
   };
 }
 
@@ -253,6 +291,20 @@ function readText(value: unknown): string {
     return readText(candidate.text ?? candidate.name ?? candidate.value ?? '');
   }
   return '';
+}
+
+function readPickerDate(value: unknown): string {
+  const match: RegExpMatchArray | null = readText(value).match(
+    /^(\d{4}-\d{2}-\d{2})(?:\s+[+-]\d{4})?$/u,
+  );
+  return match?.[1] ?? '';
+}
+
+function readPickerTime(value: unknown): string {
+  const match: RegExpMatchArray | null = readText(value).match(
+    /^((?:[01]\d|2[0-3]):[0-5]\d)(?:\s+[+-]\d{4})?$/u,
+  );
+  return match?.[1] ?? '';
 }
 
 function readOptions(value: unknown): string[] {
@@ -438,6 +490,7 @@ export class JobProgressSyncService {
   private readonly config: DeploymentConfig;
   private cachedToken: string = '';
   private tokenExpiresAt: number = 0;
+  private managedCalendarIdPromise?: Promise<string>;
 
   constructor(@Inject(HttpService) private readonly httpService: HttpService) {
     this.config = requireDeploymentConfig(process.env);
@@ -580,6 +633,145 @@ export class JobProgressSyncService {
     return { sent: true, count };
   }
 
+  private async sendRescheduleCard(recordId: string, sourceMessageId: string): Promise<void> {
+    const uuid: string = createHash('sha256')
+      .update(`daily-reschedule:${this.config.dailyCheckinChatId}:${sourceMessageId}:${recordId}`)
+      .digest('hex').slice(0, 40);
+    await this.feishuRequest<{ message_id?: string }>({
+      method: 'POST',
+      url: `${OPEN_API_ROOT}/im/v1/messages?receive_id_type=chat_id`,
+      data: {
+        receive_id: this.config.dailyCheckinChatId,
+        msg_type: 'interactive',
+        content: JSON.stringify(rescheduleCard(recordId)),
+        uuid,
+      },
+    });
+  }
+
+  private normalizeAndValidateDailyCallback(callback: CardActionCallback): {
+    callback: CardActionCallback;
+    parsed: ReturnType<typeof parseCheckinAction>;
+    messageId: string;
+  } {
+    if (
+      callback.schema !== '2.0'
+      || callback.header?.token !== this.config.verificationToken
+      || callback.header?.event_type !== 'card.action.trigger'
+      || callback.header?.app_id !== this.config.appId
+      || callback.event?.operator?.open_id !== this.config.dailyCheckinOwnerOpenId
+      || callback.event?.context?.open_chat_id !== this.config.dailyCheckinChatId
+    ) {
+      throw new BadRequestException('invalid Feishu card action');
+    }
+    const rawValue: unknown = callback.event?.action?.value;
+    const value: Record<string, unknown> = rawValue
+      && typeof rawValue === 'object'
+      && !Array.isArray(rawValue)
+      ? rawValue as Record<string, unknown>
+      : {};
+    const normalizedCallback: CardActionCallback = readText(value.action) === 'incomplete'
+      ? {
+        ...callback,
+        event: {
+          ...callback.event,
+          action: {
+            ...callback.event?.action,
+            value: { ...value, action: 'not_completed' },
+          },
+        },
+      }
+      : callback;
+    const parsed = parseCheckinAction(
+      normalizedCallback as Record<string, unknown>,
+      this.config.dailyCheckinOwnerOpenId,
+    );
+    const messageId: string = readText(normalizedCallback.event?.context?.open_message_id);
+    if (!/^om_[A-Za-z0-9]+$/u.test(messageId)) {
+      throw new BadRequestException('invalid card message ID');
+    }
+    return { callback: normalizedCallback, parsed, messageId };
+  }
+
+  acknowledgeDailyCheckinAction(callback: CardActionCallback): CardActionResponse {
+    this.normalizeAndValidateDailyCallback(callback);
+    return {
+      toast: { type: 'info', content: '请求已收到，处理结果会以新卡片发送' },
+    };
+  }
+
+  private async sendDailyActionResultCard(
+    sourceMessageId: string,
+    recordId: string,
+    action: string,
+    result: CardActionResponse,
+  ): Promise<void> {
+    const rawCard = result.card && typeof result.card === 'object'
+      ? (result.card as Record<string, unknown>).data
+      : undefined;
+    const toast = result.toast && typeof result.toast === 'object'
+      ? result.toast as Record<string, unknown>
+      : {};
+    const content: string = readText(toast.content) || '操作已处理';
+    const toastType: string = readText(toast.type);
+    const success: boolean = toastType === 'success' || toastType === 'info';
+    const card: Record<string, unknown> = rawCard
+      && typeof rawCard === 'object'
+      && !Array.isArray(rawCard)
+      ? rawCard as Record<string, unknown>
+      : {
+        schema: '2.0',
+        config: { width_mode: 'default', update_multi: true },
+        header: {
+          title: { tag: 'plain_text', content: success ? 'OfferLoop 操作完成' : 'OfferLoop 操作未完成' },
+          template: success ? 'green' : 'red',
+          icon: { tag: 'standard_icon', token: 'todo_colorful' },
+        },
+        body: {
+          padding: '12px 12px 20px 12px',
+          elements: [{ tag: 'markdown', content }],
+        },
+      };
+    const uuid: string = createHash('sha256')
+      .update(`daily-action-result:${sourceMessageId}:${recordId}:${action}:${content}`)
+      .digest('hex').slice(0, 40);
+    await this.feishuRequest<{ message_id?: string }>({
+      method: 'POST',
+      url: `${OPEN_API_ROOT}/im/v1/messages?receive_id_type=chat_id`,
+      data: {
+        receive_id: this.config.dailyCheckinChatId,
+        msg_type: 'interactive',
+        content: JSON.stringify(card),
+        uuid,
+      },
+    });
+  }
+
+  async processDailyCheckinActionAfterAck(callback: CardActionCallback): Promise<void> {
+    const prepared = this.normalizeAndValidateDailyCallback(callback);
+    const opensForm: boolean = prepared.parsed.action === 'not_completed'
+      || (prepared.parsed.action === 'adjust' && Object.keys(prepared.parsed.formValue).length === 0);
+    let result: CardActionResponse;
+    try {
+      result = await this.acceptDailyCheckinAction(prepared.callback);
+    } catch (error: unknown) {
+      result = { toast: { type: 'error', content: `操作失败：${errorMessage(error)}` } };
+    }
+    if (opensForm) return;
+    try {
+      await this.sendDailyActionResultCard(
+        prepared.messageId,
+        prepared.parsed.recordId,
+        prepared.parsed.action,
+        result,
+      );
+    } catch (error: unknown) {
+      this.logger.error(
+        `daily action result delivery failed for ${prepared.parsed.recordId}: ${errorMessage(error)}`,
+      );
+    }
+  }
+
   async handleDailyCheckinAction(payload: Record<string, unknown>): Promise<Record<string, unknown>> {
     if (this.config.dailyCheckinStatus !== 'enabled') {
       throw new BadRequestException('daily check-in is disabled');
@@ -590,15 +782,16 @@ export class JobProgressSyncService {
     const requestedStart: string = parsed.action === 'adjust_confirmed' || parsed.action === 'adjust_retry'
       ? parsed.plannedStart
       : (() => {
-        const date: string = readText(parsed.formValue.planned_date);
-        const start: string = readText(parsed.formValue.planned_start);
+        const date: string = readPickerDate(parsed.formValue.planned_date);
+        const start: string = readPickerTime(parsed.formValue.planned_start);
         return date && start ? `${date}T${start}:00+08:00` : '';
       })();
     const requestedStartMillis: number = Date.parse(requestedStart);
-    const currentStartMillis: number = Date.parse(readText(record.fields['开始时间']));
+    const currentStartMillis: number | null = readDateMillis(record.fields['开始时间']);
     const exactAdjustmentReplay: boolean = parsed.action.startsWith('adjust')
       && readText(record.fields['事件状态']) === '有效'
       && !Number.isNaN(requestedStartMillis)
+      && currentStartMillis !== null
       && requestedStartMillis === currentStartMillis;
     if (completionStatus === '待完成') {
       try {
@@ -700,11 +893,12 @@ export class JobProgressSyncService {
         card: { type: 'raw', data: rescheduleCard(parsed.recordId) },
       };
     }
+    const managedCalendarId: string = await this.getManagedCalendarId();
     const rawEventId: string = readText(record.fields['已建日程ID']);
     const existingEventId: string = rawEventId.startsWith('pending:') ? '' : rawEventId;
     if (parsed.action !== 'adjust_confirmed') {
       try {
-        if (await this.hasCalendarConflict(window.start, window.end, existingEventId)) {
+        if (await this.hasCalendarConflict(window.start, window.end, existingEventId, managedCalendarId)) {
           return {
             toast: { type: 'warning', content: '所选时间与现有日程冲突，请确认是否继续' },
             card: { type: 'raw', data: conflictConfirmationCard(parsed.recordId, window.start) },
@@ -733,6 +927,7 @@ export class JobProgressSyncService {
     const actionKey: string = createHash('sha256')
       .update(`daily-adjust:${parsed.recordId}:${window.start}`)
       .digest('hex').slice(0, 24);
+    const calendarIdempotencyKey: string = stableUuidV4(`daily-calendar:${actionKey}`);
     const marker: string = `OfferLoop action ${actionKey}`;
     let eventId: string = rawEventId.startsWith('pending:') ? '' : rawEventId;
     const markerDescription: string = calendarDescription(record.fields, marker);
@@ -748,37 +943,59 @@ export class JobProgressSyncService {
         const previousEndMillis: number | null = readDateMillis(record.fields['结束时间']);
         if (previousStartMillis !== null && previousEndMillis !== null) {
           eventId = await this.findCalendarEventByMarker(
+            managedCalendarId,
             `OfferLoop action ${rawEventId.slice('pending:'.length)}`,
             readText(record.fields['安排名称']),
-            new Date(previousStartMillis).toISOString(),
-            new Date(previousEndMillis).toISOString(),
           );
         }
       }
       if (!eventId) {
         await this.updateReminderRecord(parsed.recordId, {
-          '开始时间': window.start,
-          '结束时间': window.end,
+          '开始时间': Date.parse(window.start),
+          '结束时间': Date.parse(window.end),
           '日历状态': '待安排',
           '已建日程ID': `pending:${actionKey}`,
         });
       }
       let finalEventId: string = eventId;
       if (finalEventId) {
-        await this.feishuRequest<Record<string, unknown>>({ method: 'PATCH', url: `${OPEN_API_ROOT}/calendar/v4/calendars/${encodeURIComponent(this.config.dailyCheckinCalendarId)}/events/${encodeURIComponent(finalEventId)}`, data: calendarData });
-      } else {
+        try {
+          await this.feishuRequest<Record<string, unknown>>({ method: 'PATCH', url: `${OPEN_API_ROOT}/calendar/v4/calendars/${encodeURIComponent(managedCalendarId)}/events/${encodeURIComponent(finalEventId)}`, data: calendarData });
+        } catch (error: unknown) {
+          if (!/code=(?:190004|191002)\b|not found|no calendar access_role/iu.test(errorMessage(error))) {
+            throw error;
+          }
+          // A legacy event ID may belong to the user's personal calendar. It
+          // cannot be edited with the app token, so migrate it into the
+          // app-owned calendar and let the caller remove the verified legacy
+          // event afterwards.
+          await this.updateReminderRecord(parsed.recordId, {
+            '开始时间': Date.parse(window.start),
+            '结束时间': Date.parse(window.end),
+            '日历状态': '待安排',
+            '已建日程ID': `pending:${actionKey}`,
+          });
+          finalEventId = '';
+        }
+      }
+      if (!finalEventId) {
         finalEventId = await this.findCalendarEventByMarker(
+          managedCalendarId,
           marker,
           readText(record.fields['安排名称']),
-          window.start,
-          window.end,
         );
         if (!finalEventId) {
-          const created = await this.feishuRequest<{ event: { event_id: string } }>({ method: 'POST', url: `${OPEN_API_ROOT}/calendar/v4/calendars/${encodeURIComponent(this.config.dailyCheckinCalendarId)}/events?idempotency_key=${encodeURIComponent(actionKey)}`, data: calendarData });
+          const created = await this.feishuRequest<{ event: { event_id: string } }>({ method: 'POST', url: `${OPEN_API_ROOT}/calendar/v4/calendars/${encodeURIComponent(managedCalendarId)}/events?idempotency_key=${encodeURIComponent(calendarIdempotencyKey)}`, data: calendarData });
           finalEventId = created.event.event_id;
         }
       }
-      await this.updateReminderRecord(parsed.recordId, { '开始时间': window.start, '结束时间': window.end, '日历状态': '已建日程', '已建日程ID': finalEventId });
+      await this.ensureManagedCalendarAttendee(managedCalendarId, finalEventId);
+      await this.updateReminderRecord(parsed.recordId, {
+        '开始时间': Date.parse(window.start),
+        '结束时间': Date.parse(window.end),
+        '日历状态': '已建日程',
+        '已建日程ID': finalEventId,
+      });
       if (parsed.retryFailedStep === 'calendar_upsert') {
         await this.tryResolveRuntimeFailure(
           `daily-adjust:${parsed.recordId}:${window.start}`,
@@ -801,7 +1018,12 @@ export class JobProgressSyncService {
     }
   }
 
-  private async hasCalendarConflict(start: string, end: string, excludedEventId: string = ''): Promise<boolean> {
+  private async hasCalendarConflict(
+    start: string,
+    end: string,
+    excludedEventId: string = '',
+    calendarId: string = this.config.dailyCheckinCalendarId,
+  ): Promise<boolean> {
     const data = await this.feishuRequest<{ freebusy_list?: Array<Record<string, unknown>> }>({
       method: 'POST',
       url: `${OPEN_API_ROOT}/calendar/v4/freebusy/list?user_id_type=open_id`,
@@ -820,7 +1042,7 @@ export class JobProgressSyncService {
     try {
       const detail = await this.feishuRequest<{ event?: { start_time?: { timestamp?: string }; end_time?: { timestamp?: string } } }>({
         method: 'GET',
-        url: `${OPEN_API_ROOT}/calendar/v4/calendars/${encodeURIComponent(this.config.dailyCheckinCalendarId)}/events/${encodeURIComponent(excludedEventId)}`,
+        url: `${OPEN_API_ROOT}/calendar/v4/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(excludedEventId)}`,
       });
       const ownStart: number = Number(detail.event?.start_time?.timestamp ?? 0) * 1000;
       const ownEnd: number = Number(detail.event?.end_time?.timestamp ?? 0) * 1000;
@@ -831,7 +1053,11 @@ export class JobProgressSyncService {
     }
   }
 
-  private async findCalendarEventByMarker(marker: string, summary: string, start: string, end: string): Promise<string> {
+  private async findCalendarEventByMarker(
+    calendarId: string,
+    marker: string,
+    summary: string,
+  ): Promise<string> {
     if (!summary) return '';
     const query = new URLSearchParams({ page_size: '30' });
     let pageToken: string = '';
@@ -839,27 +1065,97 @@ export class JobProgressSyncService {
       if (pageToken) query.set('page_token', pageToken);
       const data = await this.feishuRequest<{ items?: Array<{ meta_data?: { event_id?: string } }>; has_more?: boolean; page_token?: string }>({
         method: 'POST',
-        url: `${OPEN_API_ROOT}/calendar/v4/calendars/${encodeURIComponent(this.config.dailyCheckinCalendarId)}/events/search_event?${query.toString()}`,
-        data: {
-          query: summary,
-          filter: {
-            calendar_ids: [this.config.dailyCheckinCalendarId],
-            time_range: { start_time: start, end_time: end },
-          },
-        },
+        url: `${OPEN_API_ROOT}/calendar/v4/calendars/${encodeURIComponent(calendarId)}/events/search_event?${query.toString()}`,
+        data: { query: summary },
       });
       for (const item of data.items ?? []) {
         const candidateId: string = readText(item.meta_data?.event_id);
         if (!candidateId) continue;
         const detail = await this.feishuRequest<{ event: { event_id?: string; description?: string } }>({
           method: 'GET',
-          url: `${OPEN_API_ROOT}/calendar/v4/calendars/${encodeURIComponent(this.config.dailyCheckinCalendarId)}/events/${encodeURIComponent(candidateId)}`,
+          url: `${OPEN_API_ROOT}/calendar/v4/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(candidateId)}`,
         });
         if (readText(detail.event.description).includes(marker)) return readText(detail.event.event_id) || candidateId;
       }
       pageToken = data.has_more ? readText(data.page_token) : '';
     } while (pageToken);
     return '';
+  }
+
+  private async getManagedCalendarId(): Promise<string> {
+    this.managedCalendarIdPromise ??= this.findOrCreateManagedCalendar();
+    try {
+      return await this.managedCalendarIdPromise;
+    } catch (error: unknown) {
+      this.managedCalendarIdPromise = undefined;
+      throw error;
+    }
+  }
+
+  private async findOrCreateManagedCalendar(): Promise<string> {
+    let pageToken: string = '';
+    do {
+      const query = new URLSearchParams({ page_size: '500' });
+      if (pageToken) query.set('page_token', pageToken);
+      const data = await this.feishuRequest<{
+        calendar_list?: Array<{ calendar_id?: string; summary?: string; role?: string; is_deleted?: boolean }>;
+        has_more?: boolean;
+        page_token?: string;
+      }>({
+        method: 'GET',
+        url: `${OPEN_API_ROOT}/calendar/v4/calendars?${query.toString()}`,
+      });
+      const calendars = data.calendar_list ?? [];
+      const configured = calendars.find((calendar): boolean => (
+        readText(calendar.calendar_id) === this.config.dailyCheckinCalendarId
+        && calendar.role === 'owner'
+        && calendar.is_deleted !== true
+      ));
+      if (configured) return readText(configured.calendar_id);
+      const existing = calendars.find((calendar): boolean => (
+        readText(calendar.summary) === MANAGED_CALENDAR_SUMMARY
+        && calendar.role === 'owner'
+        && calendar.is_deleted !== true
+      ));
+      if (existing) return readText(existing.calendar_id);
+      pageToken = data.has_more ? readText(data.page_token) : '';
+    } while (pageToken);
+
+    const created = await this.feishuRequest<{ calendar: { calendar_id: string } }>({
+      method: 'POST',
+      url: `${OPEN_API_ROOT}/calendar/v4/calendars`,
+      data: {
+        summary: MANAGED_CALENDAR_SUMMARY,
+        description: '由 OfferLoop 管理的求职笔试、测评和面试日程',
+        permissions: 'private',
+      },
+    });
+    const calendarId: string = readText(created.calendar.calendar_id);
+    if (!calendarId) throw new ServiceUnavailableException('managed calendar creation returned no calendar ID');
+    return calendarId;
+  }
+
+  private async ensureManagedCalendarAttendee(calendarId: string, eventId: string): Promise<void> {
+    const data = await this.feishuRequest<{
+      items?: Array<{ type?: string; user_id?: string }>;
+    }>({
+      method: 'GET',
+      url: `${OPEN_API_ROOT}/calendar/v4/calendars/${encodeURIComponent(calendarId)}`
+        + `/events/${encodeURIComponent(eventId)}/attendees?user_id_type=open_id&page_size=100`,
+    });
+    if ((data.items ?? []).some((attendee): boolean => (
+      attendee.type === 'user'
+      && readText(attendee.user_id) === this.config.dailyCheckinOwnerOpenId
+    ))) return;
+    await this.feishuRequest<Record<string, unknown>>({
+      method: 'POST',
+      url: `${OPEN_API_ROOT}/calendar/v4/calendars/${encodeURIComponent(calendarId)}`
+        + `/events/${encodeURIComponent(eventId)}/attendees?user_id_type=open_id`,
+      data: {
+        attendees: [{ type: 'user', user_id: this.config.dailyCheckinOwnerOpenId }],
+        add_operator_to_attendee: false,
+      },
+    });
   }
 
   private async findRuntimeState(idempotencyKey: string): Promise<FeishuRecord | undefined> {
@@ -1065,6 +1361,73 @@ export class JobProgressSyncService {
     if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) {
       throw new UnauthorizedException('invalid reminder reconciliation secret');
     }
+  }
+
+  verifyCallbackChallenge(payload: FeishuCallbackChallenge): { challenge: string } {
+    const challenge: string = readText(payload.challenge);
+    if (!challenge || readText(payload.token) !== this.config.verificationToken) {
+      throw new BadRequestException('invalid Feishu callback challenge');
+    }
+    return { challenge };
+  }
+
+  async acceptDailyCheckinAction(callback: CardActionCallback): Promise<CardActionResponse> {
+    const prepared = this.normalizeAndValidateDailyCallback(callback);
+    const normalizedCallback: CardActionCallback = prepared.callback;
+    const normalizedPayload = normalizedCallback as Record<string, unknown>;
+    const parsed = prepared.parsed;
+    const messageId: string = prepared.messageId;
+    if (
+      parsed.action === 'not_completed'
+      || (parsed.action === 'adjust' && Object.keys(parsed.formValue).length === 0)
+    ) {
+      try {
+        await this.sendRescheduleCard(parsed.recordId, messageId);
+      } catch (error: unknown) {
+        this.logger.error(`reschedule card delivery failed for ${parsed.recordId}: ${errorMessage(error)}`);
+        return { toast: { type: 'error', content: '调整日程卡片发送失败，请重试' } };
+      }
+      return {
+        toast: { type: 'info', content: '正在发送调整日程卡片' },
+      };
+    }
+    try {
+      return await this.handleDailyCheckinAction(normalizedPayload);
+    } catch (error: unknown) {
+      return {
+        toast: { type: 'error', content: `操作失败：${errorMessage(error)}` },
+      };
+    }
+  }
+
+  async rescheduleReminderRecord(
+    recordId: string,
+    plannedStart: string,
+  ): Promise<ReminderRescheduleResult> {
+    if (!/^rec[A-Za-z0-9]+$/u.test(recordId)) {
+      throw new BadRequestException('recordId is invalid');
+    }
+    if (Number.isNaN(Date.parse(plannedStart))) {
+      throw new BadRequestException('plannedStart must be a valid ISO 8601 timestamp');
+    }
+    const response = await this.handleDailyCheckinAction({
+      operator_id: this.config.dailyCheckinOwnerOpenId,
+      action_value: {
+        action: 'adjust_confirmed',
+        record_id: recordId,
+        planned_start: plannedStart,
+      },
+    });
+    const toast = response.toast && typeof response.toast === 'object'
+      ? response.toast as Record<string, unknown>
+      : {};
+    return {
+      ok: readText(toast.type) === 'success',
+      recordId,
+      plannedStart,
+      managedCalendarId: await this.getManagedCalendarId(),
+      response,
+    };
   }
 
   private async applyReminderOutcome(

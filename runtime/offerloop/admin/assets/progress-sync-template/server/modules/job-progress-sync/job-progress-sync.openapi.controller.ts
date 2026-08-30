@@ -17,6 +17,7 @@ import type {
 
 import {
   type ReminderReconcileResult,
+  type ReminderRescheduleResult,
   JobProgressSyncService,
 } from './job-progress-sync.service';
 
@@ -97,5 +98,25 @@ export class JobProgressSyncOpenApiController {
       );
     }
     return this.jobProgressSyncService.reconcileReminderRecord(recordId);
+  }
+
+  @Post('reminder-reschedule')
+  @HttpCode(200)
+  async rescheduleReminder(
+    @Body() body: {
+      recordId?: string;
+      plannedStart?: string;
+    },
+    @Headers('x-offerloop-workflow-secret') workflowSecret?: string,
+  ): Promise<ReminderRescheduleResult> {
+    this.jobProgressSyncService.verifyReminderReconcileSecret(workflowSecret);
+    const recordId: string = extractRecordId({ sourceRecordId: body?.recordId });
+    if (!recordId) {
+      throw new BadRequestException('an exact reminder record ID is required');
+    }
+    return this.jobProgressSyncService.rescheduleReminderRecord(
+      recordId,
+      String(body?.plannedStart ?? '').trim(),
+    );
   }
 }

@@ -23,9 +23,11 @@ const TEST_ENV: Record<string, string> = {
   DAILY_CHECKIN_CHAT_ID: 'oc_daily',
   DAILY_CHECKIN_OWNER_OPEN_ID: 'ou_owner',
   DAILY_CHECKIN_CALENDAR_ID: 'cal_owner',
+  FEISHU_CALLBACK_VERIFICATION_TOKEN: 'verification-token',
 };
 
 const UUID_V4_QUERY_PATTERN = /[?&]client_token=[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}(?:&|$)/u;
+const CALENDAR_UUID_V4_QUERY_PATTERN = /[?&]idempotency_key=[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}(?:&|$)/u;
 
 function installTestEnv(): void {
   for (const [name, value] of Object.entries(TEST_ENV)) {
@@ -61,7 +63,32 @@ function createMockService(
       });
       responseData = { code: 0, data: { records } };
     } else {
-      responseData = await responder(config);
+      try {
+        responseData = await responder(config);
+      } catch (error: unknown) {
+        const method: string = String(config.method ?? '').toUpperCase();
+        if (url.includes('/calendar/v4/calendars?page_size=500') && method === 'GET') {
+          responseData = {
+            code: 0,
+            data: {
+              calendar_list: [{
+                calendar_id: 'cal_owner',
+                summary: 'OfferLoop 求职日程',
+                role: 'owner',
+                is_deleted: false,
+              }],
+              has_more: false,
+            },
+          };
+        } else if (url.includes('/attendees?user_id_type=open_id&page_size=100') && method === 'GET') {
+          responseData = {
+            code: 0,
+            data: { items: [{ type: 'user', user_id: 'ou_owner' }] },
+          };
+        } else {
+          throw error;
+        }
+      }
     }
     return {
       data: responseData,
@@ -92,6 +119,145 @@ function requestedReminderStatus(config: InternalAxiosRequestConfig): string {
 describe('JobProgressSyncService', (): void => {
   beforeEach((): void => {
     installTestEnv();
+  });
+
+  it('authenticates the Feishu callback and sends the reschedule form as a new card', async (): Promise<void> => {
+    const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
+      const url: string = String(config.url ?? '');
+      if (url.endsWith('/auth/v3/tenant_access_token/internal')) {
+        return { code: 0, tenant_access_token: 'tenant-token', expire: 7200 };
+      }
+      if (url.endsWith('/im/v1/messages?receive_id_type=chat_id')) {
+        return { code: 0, data: { message_id: 'om_reschedule' } };
+      }
+      throw new Error(`unexpected request: ${String(config.method)} ${url}`);
+    });
+    const callback = {
+      schema: '2.0',
+      header: {
+        token: 'verification-token',
+        event_type: 'card.action.trigger',
+        app_id: 'cli_test',
+      },
+      event: {
+        operator: { open_id: 'ou_owner' },
+        context: { open_chat_id: 'oc_daily', open_message_id: 'om_source' },
+        action: {
+          tag: 'button',
+          value: { action: 'incomplete', record_id: 'recDaily' },
+        },
+      },
+    };
+
+    await expect(mock.service.acceptDailyCheckinAction(callback)).resolves.toEqual({
+      toast: { type: 'info', content: '正在发送调整日程卡片' },
+    });
+    await expect(mock.service.acceptDailyCheckinAction({
+      ...callback,
+      header: { ...callback.header, token: 'wrong-token' },
+    })).rejects.toThrow('invalid Feishu card action');
+    const sendCall = mock.calls.find(
+      (config: InternalAxiosRequestConfig): boolean =>
+        String(config.method).toUpperCase() === 'POST'
+        && String(config.url ?? '').endsWith('/im/v1/messages?receive_id_type=chat_id'),
+    );
+    expect(sendCall).toBeDefined();
+    const sendBody = parseRequestData(sendCall!) as {
+      receive_id?: string;
+      msg_type?: string;
+      content?: string;
+      uuid?: string;
+    };
+    expect(sendBody).toMatchObject({
+      receive_id: 'oc_daily',
+      msg_type: 'interactive',
+    });
+    expect(sendBody.uuid).toMatch(/^[0-9a-f]{40}$/u);
+    expect(JSON.parse(String(sendBody.content))).toMatchObject({
+      schema: '2.0',
+      header: { title: { content: '调整日程' } },
+    });
+    expect(String(sendBody.content)).not.toContain('[object Object]');
+  });
+
+  it('finishes a write action before returning the callback response', async (): Promise<void> => {
+    const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
+      const url: string = String(config.url ?? '');
+      if (url.endsWith('/auth/v3/tenant_access_token/internal')) {
+        return { code: 0, tenant_access_token: 'tenant-token', expire: 7200 };
+      }
+      throw new Error(`unexpected request: ${String(config.method)} ${url}`);
+    });
+    const handleAction = jest.spyOn(mock.service, 'handleDailyCheckinAction').mockResolvedValue({
+      toast: { type: 'success', content: '关联进展已核对' },
+    });
+    const response = await mock.service.acceptDailyCheckinAction({
+      schema: '2.0',
+      header: {
+        token: 'verification-token',
+        event_type: 'card.action.trigger',
+        app_id: 'cli_test',
+      },
+      event: {
+        operator: { open_id: 'ou_owner' },
+        context: { open_chat_id: 'oc_daily', open_message_id: 'om_callback' },
+        action: {
+          tag: 'button',
+          value: { action: 'completed', record_id: 'recDaily', retry_failed_step: '求职进展联动' },
+        },
+      },
+    });
+    expect(response).toEqual({ toast: { type: 'success', content: '关联进展已核对' } });
+    expect(handleAction).toHaveBeenCalledTimes(1);
+    expect(mock.calls).toHaveLength(0);
+  });
+
+  it('acknowledges immediately and sends the completed action as a new card', async (): Promise<void> => {
+    const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
+      const url: string = String(config.url ?? '');
+      if (url.endsWith('/auth/v3/tenant_access_token/internal')) {
+        return { code: 0, tenant_access_token: 'tenant-token', expire: 7200 };
+      }
+      if (url.endsWith('/im/v1/messages?receive_id_type=chat_id')) {
+        return { code: 0, data: { message_id: 'om_result' } };
+      }
+      throw new Error(`unexpected request: ${String(config.method)} ${url}`);
+    });
+    const callback = {
+      schema: '2.0',
+      header: {
+        token: 'verification-token',
+        event_type: 'card.action.trigger',
+        app_id: 'cli_test',
+      },
+      event: {
+        operator: { open_id: 'ou_owner' },
+        context: { open_chat_id: 'oc_daily', open_message_id: 'om_callback' },
+        action: {
+          tag: 'button',
+          value: { action: 'completed', record_id: 'recDaily' },
+        },
+      },
+    };
+    const handleAction = jest.spyOn(mock.service, 'handleDailyCheckinAction').mockResolvedValue({
+      toast: { type: 'success', content: '已标记完成' },
+    });
+
+    expect(mock.service.acknowledgeDailyCheckinAction(callback)).toEqual({
+      toast: { type: 'info', content: '请求已收到，处理结果会以新卡片发送' },
+    });
+    expect(handleAction).not.toHaveBeenCalled();
+    await mock.service.processDailyCheckinActionAfterAck(callback);
+    expect(handleAction).toHaveBeenCalledTimes(1);
+    const sendCall = mock.calls.find((call): boolean => (
+      String(call.method).toUpperCase() === 'POST'
+      && String(call.url).endsWith('/im/v1/messages?receive_id_type=chat_id')
+    ));
+    const body = parseRequestData(sendCall!) as { content?: string };
+    expect(JSON.parse(String(body.content))).toMatchObject({
+      schema: '2.0',
+      header: { title: { content: 'OfferLoop 操作完成' }, template: 'green' },
+    });
   });
 
   it('creates a progress record with blank user-maintained fields', async (): Promise<void> => {
@@ -758,22 +924,97 @@ describe('JobProgressSyncService', (): void => {
         Object.assign(fields, (parseRequestData(config) as { fields: Record<string, unknown> }).fields);
         return { code: 0, data: { record: { record_id: 'recDaily', fields: { ...fields } } } };
       }
+      if (url.includes('/calendar/v4/freebusy/list')) return { code: 0, data: { freebusy_list: [] } };
       if (url.includes('/calendar/v4/calendars/cal_owner/events/search_event?') && method === 'POST') return { code: 0, data: { items: [] } };
       if (url.includes('/calendar/v4/calendars/cal_owner/events?idempotency_key=') && method === 'POST') return { code: 0, data: { event: { event_id: 'evt-created' } } };
       if (url.endsWith('/calendar/v4/calendars/cal_owner/events/evt-created') && method === 'PATCH') return { code: 0, data: {} };
       throw new Error(`unexpected request: ${method} ${url}`);
     });
+    const pickerPayload = {
+      operator_id: 'ou_owner',
+      action_value: { action: 'adjust', record_id: 'recDaily' },
+      form_value: { planned_date: '2099-08-25 +0800', planned_start: '15:30 +0800' },
+    };
+    await expect(mock.service.handleDailyCheckinAction(pickerPayload)).resolves.toMatchObject({ toast: { type: 'success' } });
     const payload = { operator_id: 'ou_owner', action_value: { action: 'adjust_confirmed', record_id: 'recDaily', planned_start: '2099-08-25T15:30:00+08:00' } };
     await expect(mock.service.handleDailyCheckinAction(payload)).resolves.toMatchObject({ toast: { type: 'success' } });
-    await expect(mock.service.handleDailyCheckinAction(payload)).resolves.toMatchObject({ toast: { type: 'success' } });
-    expect(mock.calls.filter((call): boolean => String(call.method).toUpperCase() === 'POST' && String(call.url).includes('/events?idempotency_key='))).toHaveLength(1);
+    const eventCreateCalls = mock.calls.filter((call): boolean => String(call.method).toUpperCase() === 'POST' && String(call.url).includes('/events?idempotency_key='));
+    expect(eventCreateCalls).toHaveLength(1);
+    expect(String(eventCreateCalls[0].url)).toMatch(CALENDAR_UUID_V4_QUERY_PATTERN);
     expect(fields['已建日程ID']).toBe('evt-created');
+    expect(fields['开始时间']).toBe(Date.parse('2099-08-25T07:30:00.000Z'));
+    expect(fields['结束时间']).toBe(Date.parse('2099-08-25T09:00:00.000Z'));
+  });
+
+  it('creates the app-owned calendar and adds the owner to a migrated event', async (): Promise<void> => {
+    const fields: Record<string, unknown> = {
+      完成状态: '待完成',
+      事件状态: '有效',
+      环节: '测评',
+      进行方式: '异步',
+      安排名称: '示例公司－测评',
+      截止时间: '2099-08-30T18:00:00+08:00',
+      '预计时长（分钟）': 70,
+      已建日程ID: 'evt-personal',
+    };
+    const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
+      const url: string = String(config.url ?? '');
+      const method: string = String(config.method ?? '').toUpperCase();
+      if (url.endsWith('/auth/v3/tenant_access_token/internal')) {
+        return { code: 0, tenant_access_token: 'tenant-token', expire: 7200 };
+      }
+      if (url.endsWith('/reminder-table/records/recDaily') && method === 'GET') {
+        return { code: 0, data: { record: { record_id: 'recDaily', fields: { ...fields } } } };
+      }
+      if (url.endsWith('/reminder-table/records/recDaily') && method === 'PUT') {
+        Object.assign(fields, (parseRequestData(config) as { fields: Record<string, unknown> }).fields);
+        return { code: 0, data: { record: { record_id: 'recDaily', fields: { ...fields } } } };
+      }
+      if (url.includes('/calendar/v4/calendars?page_size=500') && method === 'GET') {
+        return { code: 0, data: { calendar_list: [], has_more: false } };
+      }
+      if (url.endsWith('/calendar/v4/calendars') && method === 'POST') {
+        return { code: 0, data: { calendar: { calendar_id: 'cal_managed' } } };
+      }
+      if (url.endsWith('/calendar/v4/calendars/cal_managed/events/evt-personal') && method === 'PATCH') {
+        return { code: 191002, msg: 'no calendar access_role' };
+      }
+      if (url.includes('/calendar/v4/calendars/cal_managed/events/search_event?') && method === 'POST') {
+        return { code: 0, data: { items: [] } };
+      }
+      if (url.includes('/calendar/v4/calendars/cal_managed/events?idempotency_key=') && method === 'POST') {
+        return { code: 0, data: { event: { event_id: 'evt-managed' } } };
+      }
+      if (url.includes('/events/evt-managed/attendees?user_id_type=open_id&page_size=100') && method === 'GET') {
+        return { code: 0, data: { items: [] } };
+      }
+      if (url.endsWith('/events/evt-managed/attendees?user_id_type=open_id') && method === 'POST') {
+        return { code: 0, data: { attendees: [{ type: 'user', user_id: 'ou_owner' }] } };
+      }
+      throw new Error(`unexpected request: ${method} ${url}`);
+    });
+
+    const result = await mock.service.rescheduleReminderRecord(
+      'recDaily',
+      '2099-08-25T15:30:00+08:00',
+    );
+
+    expect(result).toMatchObject({ ok: true, managedCalendarId: 'cal_managed' });
+    expect(fields).toMatchObject({ 日历状态: '已建日程', 已建日程ID: 'evt-managed' });
+    const attendeeCall = mock.calls.find((call): boolean => (
+      String(call.method).toUpperCase() === 'POST'
+      && String(call.url).endsWith('/events/evt-managed/attendees?user_id_type=open_id')
+    ));
+    expect(parseRequestData(attendeeCall!)).toMatchObject({
+      attendees: [{ type: 'user', user_id: 'ou_owner' }],
+    });
   });
 
   it('recovers a calendar event created before Base backfill failed', async (): Promise<void> => {
     const fields: Record<string, unknown> = {
       完成状态: '待完成', 事件状态: '有效', 环节: '测评', 进行方式: '异步', 安排名称: '示例公司－测评',
-      开始时间: '2099-08-25T07:30:00.000Z', 结束时间: '2099-08-25T09:00:00.000Z',
+      开始时间: Date.parse('2099-08-25T07:30:00.000Z'),
+      结束时间: Date.parse('2099-08-25T09:00:00.000Z'),
       截止时间: '2099-08-30T18:00:00+08:00', 已建日程ID: 'pending:old-action-key',
     };
     const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {

@@ -23,7 +23,8 @@
       "required": [
         "DAILY_CHECKIN_CHAT_ID",
         "DAILY_CHECKIN_OWNER_OPEN_ID",
-        "DAILY_CHECKIN_CALENDAR_ID"
+        "DAILY_CHECKIN_CALENDAR_ID",
+        "FEISHU_CALLBACK_VERIFICATION_TOKEN"
       ]
     }
   ],
