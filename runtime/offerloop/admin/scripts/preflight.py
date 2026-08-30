@@ -14,9 +14,21 @@ import subprocess
 import sys
 
 
-SKILL_ROOT = Path(__file__).resolve().parents[1]
-SKILLS_ROOT = SKILL_ROOT.parent
-STATUS_MODEL_PATH = Path(__file__).with_name("status_model.py")
+SCRIPT_PATH = Path(__file__).resolve()
+RUNTIME_ROOT = SCRIPT_PATH.parents[1]
+
+
+def _resolve_skills_root():
+    """Resolve bundled Skills from either the repository or an installed runtime."""
+    for ancestor in SCRIPT_PATH.parents:
+        candidate = ancestor / "skills"
+        if (candidate / "job-collection" / "SKILL.md").is_file():
+            return candidate
+    return RUNTIME_ROOT.parent
+
+
+SKILLS_ROOT = _resolve_skills_root()
+STATUS_MODEL_PATH = SCRIPT_PATH.with_name("status_model.py")
 
 BUNDLED_SKILLS = (
     "job-collection",

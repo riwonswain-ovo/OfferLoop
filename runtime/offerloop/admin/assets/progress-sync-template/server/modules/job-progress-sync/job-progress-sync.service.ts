@@ -215,10 +215,10 @@ const COMPLETED_NODE_RANK: Record<string, number> = {
   'HR面完成': 9,
 };
 
-function stableClientToken(sourceRecordId: string): string {
+function stableUuidV4(seed: string): string {
   const bytes: Buffer = Buffer.from(
     createHash('sha256')
-      .update(`offerloop-progress:${sourceRecordId}`)
+      .update(seed)
       .digest()
       .subarray(0, 16),
   );
@@ -227,6 +227,10 @@ function stableClientToken(sourceRecordId: string): string {
   const hex: string = bytes.toString('hex');
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}`
     + `-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+function stableClientToken(sourceRecordId: string): string {
+  return stableUuidV4(`offerloop-progress:${sourceRecordId}`);
 }
 
 function progressStatusFor(fields: Record<string, unknown>): string {
@@ -870,7 +874,7 @@ export class JobProgressSyncService {
   }
 
   private async createDailyPageLedger(idempotencyKey: string, now: Date, pageIndex: number): Promise<string> {
-    const clientToken: string = createHash('sha256').update(`daily-ledger:${idempotencyKey}`).digest('hex').slice(0, 32);
+    const clientToken: string = stableUuidV4(`daily-ledger:${idempotencyKey}`);
     const data = await this.feishuRequest<RecordCreateData>({
       method: 'POST',
       url: `${OPEN_API_ROOT}/bitable/v1/apps/${this.config.reminderBaseToken}/tables/${this.config.runtimeStateTableId}/records?client_token=${clientToken}`,
@@ -894,7 +898,7 @@ export class JobProgressSyncService {
       await this.updateDailyPageLedger(existing.record_id, payload);
       return;
     }
-    const clientToken: string = createHash('sha256').update(`runtime-state:${idempotencyKey}`).digest('hex').slice(0, 32);
+    const clientToken: string = stableUuidV4(`runtime-state:${idempotencyKey}`);
     await this.feishuRequest<RecordCreateData>({
       method: 'POST',
       url: `${OPEN_API_ROOT}/bitable/v1/apps/${this.config.reminderBaseToken}/tables/${this.config.runtimeStateTableId}/records?client_token=${clientToken}`,
@@ -948,7 +952,7 @@ export class JobProgressSyncService {
       const retryClaimKey: string = `operation-claim:${createHash('sha256')
         .update(`${idempotencyKey}:${status}:${updatedAt}:${claimBucket}`)
         .digest('hex').slice(0, 40)}`;
-      const retryClientToken: string = createHash('sha256').update(`runtime-state:${retryClaimKey}`).digest('hex').slice(0, 32);
+      const retryClientToken: string = stableUuidV4(`runtime-state:${retryClaimKey}`);
       const retryClaim = await this.feishuRequest<RecordCreateData>({
         method: 'POST',
         url: `${OPEN_API_ROOT}/bitable/v1/apps/${this.config.reminderBaseToken}/tables/${this.config.runtimeStateTableId}/records?client_token=${retryClientToken}`,
@@ -969,7 +973,7 @@ export class JobProgressSyncService {
       });
       return { recordId: existing.record_id, claimId };
     }
-    const clientToken: string = createHash('sha256').update(`runtime-state:${idempotencyKey}`).digest('hex').slice(0, 32);
+    const clientToken: string = stableUuidV4(`runtime-state:${idempotencyKey}`);
     const created = await this.feishuRequest<RecordCreateData>({
       method: 'POST',
       url: `${OPEN_API_ROOT}/bitable/v1/apps/${this.config.reminderBaseToken}/tables/${this.config.runtimeStateTableId}/records?client_token=${clientToken}`,
@@ -1253,6 +1257,7 @@ export class JobProgressSyncService {
       url: `${OPEN_API_ROOT}/bitable/v1/apps/`
         + `${this.config.reminderBaseToken}/tables/${this.config.reminderTableId}`
         + `/records/${encodeURIComponent(recordId)}`,
+      params: { automatic_fields: true },
     });
     return data.record;
   }

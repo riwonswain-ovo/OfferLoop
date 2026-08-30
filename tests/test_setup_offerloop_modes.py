@@ -23,7 +23,7 @@ class OfferLoopSetupModesTest(unittest.TestCase):
         self.setup = load_module("offerloop_setup_entry", "scripts/setup_offerloop.py")
         self.mode = load_module(
             "offerloop_install_mode",
-            "skills/offerloop-workspace/scripts/install_mode.py",
+            "runtime/offerloop/workspace/scripts/install_mode.py",
         )
 
     def test_legacy_single_mode_is_rejected(self):

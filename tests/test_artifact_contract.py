@@ -9,8 +9,9 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = (
     ROOT
-    / "skills"
-    / "offerloop-workspace"
+    / "runtime"
+    / "offerloop"
+    / "workspace"
     / "scripts"
     / "artifact_contract.py"
 )

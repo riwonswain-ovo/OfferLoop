@@ -12,8 +12,20 @@ import tempfile
 from urllib.parse import urlparse
 
 
-SKILL_ROOT = Path(__file__).resolve().parents[1]
-SKILLS_ROOT = SKILL_ROOT.parent
+SCRIPT_PATH = Path(__file__).resolve()
+RUNTIME_ROOT = SCRIPT_PATH.parents[1]
+
+
+def _resolve_skills_root():
+    """Resolve bundled Skills from either the repository or an installed runtime."""
+    for ancestor in SCRIPT_PATH.parents:
+        candidate = ancestor / "skills"
+        if (candidate / "job-collection" / "SKILL.md").is_file():
+            return candidate
+    return RUNTIME_ROOT.parent
+
+
+SKILLS_ROOT = _resolve_skills_root()
 PUBLIC_LOCATOR_KEYS = {
     "lark_profile",
     "target_base_url",

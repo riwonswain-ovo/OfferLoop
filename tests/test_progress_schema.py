@@ -6,8 +6,9 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = (
     ROOT
-    / "skills"
-    / "offerloop-setup"
+    / "runtime"
+    / "offerloop"
+    / "admin"
     / "scripts"
     / "validate_progress_schema.py"
 )
@@ -36,8 +37,9 @@ class ProgressSchemaTest(unittest.TestCase):
     def test_completed_view_contract_includes_every_active_status(self):
         contract = (
             ROOT
-            / "skills"
-            / "offerloop-setup"
+            / "runtime"
+            / "offerloop"
+            / "admin"
             / "references"
             / "progress-schema-v6.md"
         ).read_text(encoding="utf-8")

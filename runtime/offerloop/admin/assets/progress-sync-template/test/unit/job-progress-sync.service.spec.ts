@@ -25,6 +25,8 @@ const TEST_ENV: Record<string, string> = {
   DAILY_CHECKIN_CALENDAR_ID: 'cal_owner',
 };
 
+const UUID_V4_QUERY_PATTERN = /[?&]client_token=[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}(?:&|$)/u;
+
 function installTestEnv(): void {
   for (const [name, value] of Object.entries(TEST_ENV)) {
     process.env[name] = value;
@@ -486,6 +488,17 @@ describe('JobProgressSyncService', (): void => {
     });
     expect(mock.calls.some(
       (config: InternalAxiosRequestConfig): boolean =>
+        String(config.method).toUpperCase() === 'POST'
+        && String(config.url ?? '').includes('/runtime-state-table/records?client_token=')
+        && UUID_V4_QUERY_PATTERN.test(String(config.url ?? '')),
+    )).toBe(true);
+    expect(mock.calls.find(
+      (config: InternalAxiosRequestConfig): boolean =>
+        String(config.method).toUpperCase() === 'GET'
+        && String(config.url ?? '').endsWith('/reminder-table/records/recReminder'),
+    )?.params).toEqual({ automatic_fields: true });
+    expect(mock.calls.some(
+      (config: InternalAxiosRequestConfig): boolean =>
         String(config.method).toUpperCase() === 'PUT'
         && String(config.url ?? '').endsWith('/reminder-table/records/recReminder'),
     )).toBe(false);
@@ -549,6 +562,12 @@ describe('JobProgressSyncService', (): void => {
       throw new Error(`unexpected request: ${String(config.method)} ${url}`);
     });
     await expect(mock.service.sendDailyCheckin(new Date('2026-08-24T22:10:00+08:00'))).resolves.toEqual({ sent: true, count: 26 });
+    expect(mock.calls.some(
+      (config: InternalAxiosRequestConfig): boolean =>
+        String(config.method).toUpperCase() === 'POST'
+        && String(config.url ?? '').includes('/runtime-state-table/records?client_token=')
+        && UUID_V4_QUERY_PATTERN.test(String(config.url ?? '')),
+    )).toBe(true);
     const sends = mock.calls.filter((call): boolean => String(call.url).includes('/im/v1/messages?'));
     expect(sends).toHaveLength(2);
     const uuids = sends.map((call): string => String((parseRequestData(call) as { uuid?: string }).uuid));

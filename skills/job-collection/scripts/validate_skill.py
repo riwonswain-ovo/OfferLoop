@@ -77,10 +77,17 @@ def validate_references(errors: list[str]) -> None:
         for reference in pattern.findall(content):
             if reference.startswith("../.offerloop-runtime/"):
                 runtime_reference = reference.removeprefix("../.offerloop-runtime/")
-                target = ROOT.parent / "offerloop-workspace" / runtime_reference
+                targets = (
+                    ROOT.parent / ".offerloop-runtime" / runtime_reference,
+                    ROOT.parents[1]
+                    / "runtime"
+                    / "offerloop"
+                    / "workspace"
+                    / runtime_reference,
+                )
             else:
-                target = ROOT / reference
-            if not target.is_file():
+                targets = (ROOT / reference,)
+            if not any(target.is_file() for target in targets):
                 errors.append(f"{path.relative_to(ROOT)}: missing reference {reference}")
 
     skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")

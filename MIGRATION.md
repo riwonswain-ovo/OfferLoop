@@ -64,7 +64,7 @@ python3 scripts/setup_offerloop.py --agent codex --mode full --verify
 同一份目录元数据生成只读迁移计划：
 
 ```bash
-python3 skills/offerloop-workspace/scripts/artifact_contract.py \
+python3 runtime/offerloop/workspace/scripts/artifact_contract.py \
   plan-directory-migration --nodes workspace-directories.json --json
 ```
 

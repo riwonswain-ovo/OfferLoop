@@ -10,7 +10,7 @@
 `loop-store.js` 提供原子持久化和合法边校验；`progress-model.js` 以“进展状态 / 最近完成节点”维护
 求职进展。`daily-checkin.js` 只是平台中立的纯规则/契约镜像，用于验证 22:10 分组、owner 校验与异步
 改期时长，不发送卡片、不接收飞书回调，也不执行 Base 或日历写入。可部署的每日卡片实现位于
-`skills/offerloop-setup/assets/progress-sync-template`；
+`runtime/offerloop/admin/assets/progress-sync-template`；
 笔面试中心仍是完成状态唯一真源，不创建飞书原生任务。
 
 ## Agent 边界

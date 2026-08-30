@@ -7,10 +7,10 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SKILL_ROOT = ROOT / "skills" / "offerloop-workspace"
-SCRIPT = SKILL_ROOT / "scripts" / "workspace.py"
+WORKSPACE_ROOT = ROOT / "runtime" / "offerloop" / "workspace"
+SCRIPT = WORKSPACE_ROOT / "scripts" / "workspace.py"
 HOMEPAGE_UPDATER = ROOT / "scripts" / "update_offerloop_homepage.py"
-TEMPLATE = SKILL_ROOT / "assets" / "homepage-template.md"
+TEMPLATE = WORKSPACE_ROOT / "assets" / "homepage-template.md"
 LEGACY_TEMPLATE = """# Legacy OfferLoop Home
 <!-- OFFERLOOP:MANAGED:UPCOMING_EVENTS:START -->
 旧事件
