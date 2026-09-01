@@ -535,7 +535,74 @@ class OfferLoopInstallerTest(unittest.TestCase):
 
     def test_version_reports_installer_and_offerloop_versions(self):
         self.assertEqual(self.installer.INSTALLER_VERSION, "3.0")
-        self.assertEqual(self.installer.offerloop_version(), "0.1.0-alpha.14")
+        self.assertEqual(self.installer.offerloop_version(), "0.1.0-alpha.15")
+
+    def test_skill_index_is_bounded_and_prunes_generated_and_symlinked_trees(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+
+            def write_skill(parent, name="job-collection"):
+                parent.mkdir(parents=True, exist_ok=True)
+                (parent / "SKILL.md").write_text(
+                    f"---\nname: {name}\ndescription: fixture\n---\n",
+                    encoding="utf-8",
+                )
+
+            allowed = root.joinpath(*[f"level-{index}" for index in range(1, 7)])
+            too_deep = allowed / "level-7"
+            write_skill(allowed)
+            write_skill(too_deep)
+            for ignored in ("node_modules", "tests", "evals", "dist", "build"):
+                write_skill(root / ignored / "generated")
+            if hasattr(os, "symlink"):
+                try:
+                    os.symlink(
+                        allowed.parent,
+                        root / "linked-root",
+                        target_is_directory=True,
+                    )
+                except OSError:
+                    pass
+
+            index = self.installer._skill_directory_index(
+                root, ("job-collection",)
+            )
+
+            self.assertEqual(index["job-collection"], (allowed,))
+
+    def test_workbuddy_and_hermes_scan_each_root_once(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            workbuddy_root = home / ".workbuddy" / "skills"
+            workbuddy_root.mkdir(parents=True)
+            with mock.patch.object(
+                self.installer,
+                "_skill_directory_index",
+                wraps=self.installer._skill_directory_index,
+            ) as indexed:
+                self.installer._workbuddy_import_duplicates(workbuddy_root)
+                self.assertEqual(indexed.call_count, 1)
+
+            hermes_root = home / ".hermes" / "skills"
+            external_one = home / "external-one"
+            external_two = home / "external-two"
+            for path in (hermes_root, external_one, external_two):
+                path.mkdir(parents=True)
+            (hermes_root.parent / "config.yaml").write_text(
+                "skills:\n  external_dirs:\n"
+                f"    - {external_one}\n"
+                f"    - {external_two}\n",
+                encoding="utf-8",
+            )
+            with mock.patch.object(
+                self.installer,
+                "_skill_directory_index",
+                wraps=self.installer._skill_directory_index,
+            ) as indexed:
+                self.installer._hermes_external_duplicates(
+                    home, hermes_root, {"HOME": directory}
+                )
+                self.assertEqual(indexed.call_count, 2)
 
     def test_workbuddy_install_is_complete_and_idempotent(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -1,5 +1,7 @@
 from pathlib import Path
+import contextlib
 import importlib.util
+import io
 import json
 import os
 import tempfile
@@ -40,6 +42,26 @@ class OfferLoopSetupModesTest(unittest.TestCase):
             skills = Path(directory) / ".codex" / "skills"
             self.assertEqual(result["status"], "needs_setup")
             self.assertIn("next_prompt", result)
+            self.assertEqual(result["phases"]["local_install"]["status"], "ready")
+            self.assertEqual(
+                result["phases"]["workspace_prerequisites"]["status"],
+                "blocked",
+            )
+            self.assertEqual(
+                result["phases"]["feishu_workspace"]["status"],
+                "needs_setup",
+            )
+            self.assertEqual(
+                result["phases"]["sync_automation"]["status"],
+                "needs_setup",
+            )
+            self.assertEqual(
+                result["phases"]["daily_checkin"]["status"],
+                "needs_decision",
+            )
+            self.assertEqual(
+                result["next_action"], "install_workspace_prerequisites"
+            )
             for name in self.setup._load_installer().SKILL_NAMES:
                 self.assertTrue((skills / name / "SKILL.md").is_file())
             for name in ("career-profile", "competency-lab"):
@@ -50,6 +72,79 @@ class OfferLoopSetupModesTest(unittest.TestCase):
             )
             self.assertEqual(config["installation"]["mode"], "full")
             self.assertNotIn("workbench_url", config)
+
+    def test_ready_dependencies_advance_to_feishu_initialization(self):
+        if os.name == "nt":
+            self.skipTest("POSIX executable fixture")
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            skills = home / ".codex" / "skills"
+            for name in ("lark-base", "lark-doc", "lark-wiki"):
+                target = skills / name
+                target.mkdir(parents=True, exist_ok=True)
+                (target / "SKILL.md").write_text(
+                    f"---\nname: {name}\ndescription: fixture\n---\n",
+                    encoding="utf-8",
+                )
+            binary = home / "bin" / "lark-cli"
+            binary.parent.mkdir()
+            binary.write_text(
+                "#!/bin/sh\nprintf 'lark-cli version 1.0.73\\n'\n",
+                encoding="utf-8",
+            )
+            binary.chmod(0o755)
+            environment = {"HOME": directory, "PATH": str(binary.parent)}
+
+            result = self.setup.setup("codex", "full", environ=environment)
+
+            self.assertEqual(
+                result["phases"]["workspace_prerequisites"]["status"],
+                "ready",
+            )
+            self.assertEqual(result["next_action"], "start_agent_workspace_setup")
+            self.assertEqual(result["status"], "needs_setup")
+
+    def test_missing_dependencies_never_trigger_a_network_installer(self):
+        with tempfile.TemporaryDirectory() as directory:
+            environment = {"HOME": directory, "PATH": ""}
+            with mock.patch(
+                "subprocess.run",
+                side_effect=AssertionError("setup must not run npm, npx, or a downloader"),
+            ):
+                result = self.setup.setup("codex", "full", environ=environment)
+
+            self.assertEqual(result["next_action"], "install_workspace_prerequisites")
+            self.assertTrue(
+                (
+                    Path(directory)
+                    / ".codex"
+                    / "skills"
+                    / "job-collection"
+                    / "SKILL.md"
+                ).is_file()
+            )
+
+    def test_json_setup_is_progress_free_ascii_and_redacted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            secret = "DO_NOT_PRINT_LOCAL_SECRET"
+            output = io.StringIO()
+            with mock.patch.dict(
+                self.setup.os.environ,
+                {"HOME": directory, "PATH": "", "IMAP_PASSWORD": secret},
+                clear=True,
+            ), contextlib.redirect_stdout(output):
+                exit_code = self.setup.main(
+                    ["--agent", "codex", "--mode", "full", "--json"]
+                )
+
+            rendered = output.getvalue()
+            payload = json.loads(rendered)
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(payload["status"], "needs_setup")
+            self.assertNotIn("OfferLoop ·", rendered)
+            self.assertNotIn(directory, rendered)
+            self.assertNotIn(secret, rendered)
+            self.assertTrue(all(ord(character) < 128 for character in rendered))
 
     def test_upgrade_migrates_schema_v7_and_keeps_legacy_locators_read_only(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -104,6 +199,15 @@ class OfferLoopSetupModesTest(unittest.TestCase):
             self.assertTrue(
                 (skills / ".offerloop-runtime" / "references" / "full-setup.md").is_file()
             )
+            self.assertTrue(
+                (
+                    skills
+                    / ".offerloop-runtime"
+                    / "assets"
+                    / "progress-sync-template"
+                    / "template.json"
+                ).is_file()
+            )
 
     def test_full_verify_requires_real_workspace_locators(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -129,15 +233,97 @@ class OfferLoopSetupModesTest(unittest.TestCase):
             unverified = self.setup.verify("codex", "full", environ=environment)
             self.assertFalse(unverified["verified"])
             self.assertEqual(unverified["workspace"], "needs_online_verification")
-            self.setup.record_workspace_verification("codex", environ=environment)
+            workspace_result = self.setup.record_workspace_verification(
+                "codex", environ=environment
+            )
+            self.assertEqual(workspace_result["status"], "needs_setup")
+            workspace_only = self.setup.verify("codex", "full", environ=environment)
+            self.assertFalse(workspace_only["verified"])
+            self.assertEqual(workspace_only["workspace"], "ready")
+            self.assertEqual(workspace_only["sync_automation"], "needs_setup")
+
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+            config["progress_sync"] = {
+                "app_id": "app_sync",
+                "endpoint": "https://example.feishuapp.com/openapi/sync",
+                "workflow_id": "wkf_sync",
+                "status": "enabled",
+            }
+            config["daily_checkin"] = {"status": "disabled"}
+            self.setup._write_private_json(config_path, config)
+            self.setup.record_automation_verification("codex", environ=environment)
             after = self.setup.verify("codex", "full", environ=environment)
             self.assertTrue(after["verified"])
+            self.assertEqual(
+                after["readiness"],
+                {
+                    "workspace_ready": True,
+                    "sync_ready": True,
+                    "daily_checkin_ready": False,
+                    "daily_checkin_selected": True,
+                },
+            )
             config = json.loads(config_path.read_text(encoding="utf-8"))
             config["wiki_space_id"] = "changed_space"
             self.setup._write_private_json(config_path, config)
             stale = self.setup.verify("codex", "full", environ=environment)
             self.assertFalse(stale["verified"])
             self.assertEqual(stale["workspace"], "needs_online_verification")
+
+    def test_enabled_daily_checkin_requires_separate_online_verification(self):
+        with tempfile.TemporaryDirectory() as directory:
+            environment = {"HOME": directory, "PATH": ""}
+            self.setup.setup("codex", "full", environ=environment)
+            path = self.setup.config_file(environment)
+            config = json.loads(path.read_text(encoding="utf-8"))
+            config.update(
+                {
+                    "lark_profile": "offerloop",
+                    "target_base_url": "https://example.feishu.cn/base/target",
+                    "progress_base_url": "https://example.feishu.cn/base/progress",
+                    "reminder_base_url": "https://example.feishu.cn/base/reminder",
+                    "wiki_space_id": "space_id",
+                    "workspace_home_node_token": "home_node",
+                    "workspace_core_data_node_token": "core_node",
+                    "schema_version": 7,
+                    "progress_sync": {
+                        "app_id": "app_sync",
+                        "endpoint": "https://example.feishuapp.com/openapi/sync",
+                        "workflow_id": "wkf_sync",
+                        "status": "enabled",
+                    },
+                    "daily_checkin": {
+                        "status": "enabled",
+                        "chat_id": "oc_daily",
+                        "owner_open_id": "ou_owner",
+                        "calendar_id": "cal_owner",
+                        "timezone": "Asia/Shanghai",
+                        "time": "22:10",
+                    },
+                }
+            )
+            self.setup._write_private_json(path, config)
+            self.setup.record_workspace_verification("codex", environ=environment)
+            before = self.setup.verify("codex", "full", environ=environment)
+            self.assertEqual(before["sync_automation"], "needs_online_verification")
+            self.assertEqual(before["daily_checkin"], "needs_online_verification")
+
+            self.setup.record_automation_verification("codex", environ=environment)
+            ready = self.setup.verify("codex", "full", environ=environment)
+            self.assertTrue(ready["verified"])
+            self.assertTrue(ready["readiness"]["daily_checkin_ready"])
+            config = json.loads(path.read_text(encoding="utf-8"))
+            self.assertIn(
+                "calendar_scope_isolation_verified",
+                config["automation_verification"]["checks"],
+            )
+
+            config["daily_checkin"]["chat_id"] = "oc_changed"
+            self.setup._write_private_json(path, config)
+            stale = self.setup.verify("codex", "full", environ=environment)
+            self.assertEqual(stale["sync_automation"], "ready")
+            self.assertEqual(stale["daily_checkin"], "needs_online_verification")
+            self.assertFalse(stale["verified"])
 
     def test_dry_run_does_not_write_install_or_mode_config(self):
         with tempfile.TemporaryDirectory() as directory:

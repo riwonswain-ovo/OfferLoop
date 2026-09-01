@@ -33,7 +33,6 @@ import type {
 
 const OPEN_API_ROOT = 'https://open.feishu.cn/open-apis';
 const TOKEN_URL = `${OPEN_API_ROOT}/auth/v3/tenant_access_token/internal`;
-const MANAGED_CALENDAR_SUMMARY = 'OfferLoop 求职日程';
 const REQUIRED_ENV_NAMES: string[] = [
   'FEISHU_APP_ID',
   'FEISHU_APP_SECRET',
@@ -491,6 +490,7 @@ export class JobProgressSyncService {
   private cachedToken: string = '';
   private tokenExpiresAt: number = 0;
   private managedCalendarIdPromise?: Promise<string>;
+  private managedCalendarAccessRole: 'owner' | 'writer' | '' = '';
 
   constructor(@Inject(HttpService) private readonly httpService: HttpService) {
     this.config = requireDeploymentConfig(process.env);
@@ -1108,34 +1108,26 @@ export class JobProgressSyncService {
       const calendars = data.calendar_list ?? [];
       const configured = calendars.find((calendar): boolean => (
         readText(calendar.calendar_id) === this.config.dailyCheckinCalendarId
-        && calendar.role === 'owner'
         && calendar.is_deleted !== true
       ));
-      if (configured) return readText(configured.calendar_id);
-      const existing = calendars.find((calendar): boolean => (
-        readText(calendar.summary) === MANAGED_CALENDAR_SUMMARY
-        && calendar.role === 'owner'
-        && calendar.is_deleted !== true
-      ));
-      if (existing) return readText(existing.calendar_id);
+      if (configured) {
+        if (configured.role !== 'owner' && configured.role !== 'writer') {
+          throw new ServiceUnavailableException(
+            'configured daily check-in calendar is not writable by the app',
+          );
+        }
+        this.managedCalendarAccessRole = configured.role;
+        return readText(configured.calendar_id);
+      }
       pageToken = data.has_more ? readText(data.page_token) : '';
     } while (pageToken);
-
-    const created = await this.feishuRequest<{ calendar: { calendar_id: string } }>({
-      method: 'POST',
-      url: `${OPEN_API_ROOT}/calendar/v4/calendars`,
-      data: {
-        summary: MANAGED_CALENDAR_SUMMARY,
-        description: '由 OfferLoop 管理的求职笔试、测评和面试日程',
-        permissions: 'private',
-      },
-    });
-    const calendarId: string = readText(created.calendar.calendar_id);
-    if (!calendarId) throw new ServiceUnavailableException('managed calendar creation returned no calendar ID');
-    return calendarId;
+    throw new ServiceUnavailableException(
+      'configured daily check-in calendar is not visible to the app',
+    );
   }
 
   private async ensureManagedCalendarAttendee(calendarId: string, eventId: string): Promise<void> {
+    if (this.managedCalendarAccessRole === 'writer') return;
     const data = await this.feishuRequest<{
       items?: Array<{ type?: string; user_id?: string }>;
     }>({

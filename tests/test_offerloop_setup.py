@@ -926,6 +926,8 @@ class OfferLoopSetupTest(unittest.TestCase):
         self.assertEqual(
             {item["id"] for item in plan["resources"]},
             {
+                "base_workflows",
+                "daily_checkin",
                 "enterprise_base",
                 "progress_base",
                 "reminder_base",

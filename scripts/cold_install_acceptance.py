@@ -82,37 +82,47 @@ def assert_installed(home, agent):
 
 
 def install_all_agents(source, project, home, env):
+    setup = source / "scripts" / "setup_offerloop.py"
     installer = source / "scripts" / "install_offerloop.py"
-    command = [sys.executable, str(installer)]
+    reports = {}
     for agent in AGENT_ROOTS:
-        command.extend(("--agent", agent))
-    command.append("--json")
-    try:
-        completed = run(command, cwd=project, env=env)
-    except subprocess.CalledProcessError as exc:
-        installer_output = (exc.stdout or "").strip()
-        raise RuntimeError(
-            f"OfferLoop installer failed with exit code {exc.returncode}: "
-            f"{installer_output}"
-        ) from None
-    if "Failed to install" in completed.stdout:
-        raise AssertionError("documented installer emitted a contradictory failure")
-    report = json.loads(completed.stdout)
-    statuses = {item["agent"]: item["status"] for item in report["results"]}
-    if statuses != {agent: "installed" for agent in AGENT_ROOTS}:
-        raise AssertionError(f"unexpected install statuses: {statuses}")
-    welcome = report.get("welcome")
-    if not isinstance(welcome, dict):
-        raise AssertionError("first install did not return the welcome payload")
-    welcome_skills = [
-        skill["name"]
-        for group in welcome.get("groups", [])
-        for skill in group.get("skills", [])
-    ]
-    if len(welcome_skills) != len(SKILL_NAMES) or set(welcome_skills) != set(
-        SKILL_NAMES
-    ):
-        raise AssertionError(f"unexpected welcome catalog: {welcome_skills}")
+        command = [
+            sys.executable,
+            str(setup),
+            "--agent",
+            agent,
+            "--mode",
+            "full",
+            "--json",
+        ]
+        report = load_report(command, cwd=project, env=env)
+        reports[agent] = report
+        if report["status"] != "needs_setup":
+            raise AssertionError(f"{agent}: unexpected setup status: {report}")
+        if report["install"]["status"] != "installed":
+            raise AssertionError(f"{agent}: local install did not complete: {report}")
+        expected_phases = {
+            "local_install": "ready",
+            "workspace_prerequisites": "blocked",
+            "feishu_workspace": "needs_setup",
+            "sync_automation": "needs_setup",
+            "daily_checkin": "needs_decision",
+        }
+        actual_phases = {
+            name: value["status"] for name, value in report["phases"].items()
+        }
+        if actual_phases != expected_phases:
+            raise AssertionError(f"{agent}: unexpected setup phases: {actual_phases}")
+        if report.get("next_action") != "install_workspace_prerequisites":
+            raise AssertionError(f"{agent}: missing dependency recovery action")
+        serialized = json.dumps(report, ensure_ascii=False)
+        for private_value in (
+            str(project),
+            env["XDG_CONFIG_HOME"],
+            "COLD_INSTALL_SECRET_DO_NOT_PRINT",
+        ):
+            if private_value in serialized:
+                raise AssertionError("setup report exposed local or secret data")
     roots = {agent: assert_installed(home, agent) for agent in AGENT_ROOTS}
 
     verify_command = [sys.executable, str(installer)]
@@ -132,16 +142,66 @@ def install_all_agents(source, project, home, env):
     } != {agent: "ready" for agent in AGENT_ROOTS}:
         raise AssertionError("post-install manifest verification failed")
 
-    repeated = run(command, cwd=project, env=env)
-    repeated_report = json.loads(repeated.stdout)
-    repeated_statuses = {
-        item["agent"]: item["status"] for item in repeated_report["results"]
-    }
-    if repeated_statuses != {agent: "already_installed" for agent in AGENT_ROOTS}:
-        raise AssertionError(f"installer is not idempotent: {repeated_statuses}")
-    if "welcome" in repeated_report:
-        raise AssertionError("idempotent reinstall repeated the welcome payload")
+    for agent in AGENT_ROOTS:
+        repeated_report = load_report(
+            [
+                sys.executable,
+                str(setup),
+                "--agent",
+                agent,
+                "--mode",
+                "full",
+                "--json",
+            ],
+            cwd=project,
+            env=env,
+        )
+        if repeated_report["install"]["status"] != "already_installed":
+            raise AssertionError(
+                f"{agent}: setup entrypoint is not idempotent: {repeated_report}"
+            )
     return roots
+
+
+def assert_conflict_and_upgrade(source, project, env):
+    setup = source / "scripts" / "setup_offerloop.py"
+    conflict = Path(env["HOME"]) / ".codex" / "skills" / "job-collection"
+    shutil.rmtree(conflict)
+    conflict.mkdir(parents=True)
+    (conflict / "SKILL.md").write_text("user-owned fixture\n", encoding="utf-8")
+    command = [
+        sys.executable,
+        str(setup),
+        "--agent",
+        "codex",
+        "--mode",
+        "full",
+        "--json",
+    ]
+    completed = subprocess.run(
+        command,
+        cwd=project,
+        env=env,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+    )
+    report = json.loads(completed.stdout)
+    if completed.returncode == 0 or report["status"] != "conflict":
+        raise AssertionError("conflicting user Skill must stop setup")
+    if (conflict / "SKILL.md").read_text(encoding="utf-8") != "user-owned fixture\n":
+        raise AssertionError("conflict preview modified user-owned content")
+
+    upgraded = load_report([*command[:-1], "--upgrade", "--json"], cwd=project, env=env)
+    if upgraded["install"]["status"] != "upgraded":
+        raise AssertionError("--upgrade did not recover the conflicting install")
+    backups = list(
+        (conflict.parent.parent / ".offerloop-backups").glob(
+            "*/job-collection/SKILL.md"
+        )
+    )
+    if len(backups) != 1 or backups[0].read_text(encoding="utf-8") != "user-owned fixture\n":
+        raise AssertionError("--upgrade did not preserve the conflicting Skill backup")
 
 
 def assert_collection_preflight(project, skills_root, env):
@@ -237,7 +297,7 @@ def assert_collection_preflight(project, skills_root, env):
 
     missing_env = dict(env)
     missing_env["PATH"] = str(project / "empty-bin")
-    Path(missing_env["PATH"]).mkdir()
+    Path(missing_env["PATH"]).mkdir(exist_ok=True)
     missing_report = load_report(
         [sys.executable, str(preflight), "--capability", "collection", "--json"],
         cwd=project,
@@ -310,11 +370,24 @@ def main():
                 "IMAP_PASSWORD": "COLD_INSTALL_SECRET_DO_NOT_PRINT",
             }
         )
+        empty_bin = project / "empty-bin"
+        empty_bin.mkdir()
+        env["PATH"] = str(empty_bin)
+        nonempty = home / ".claude" / "skills" / "unrelated-user-skill"
+        nonempty.mkdir(parents=True)
+        (nonempty / "SKILL.md").write_text(
+            "---\nname: unrelated-user-skill\ndescription: preserve me\n---\n",
+            encoding="utf-8",
+        )
         roots = install_all_agents(source, project, home, env)
+        if not (nonempty / "SKILL.md").is_file():
+            raise AssertionError("setup modified an unrelated non-empty Skill directory")
+        assert_conflict_and_upgrade(source, project, env)
         assert_collection_preflight(project, roots["codex"], env)
         print(
-            "cold install accepted: four Agents, seven Skills, idempotency, "
-            "post-install verification, collection preflight, recovery, and redaction"
+            "cold install accepted: README setup entrypoint, four Agents, empty and "
+            "non-empty roots, idempotency, conflict recovery, post-install verification, "
+            "collection preflight, dependency recovery, and redaction"
         )
 
 

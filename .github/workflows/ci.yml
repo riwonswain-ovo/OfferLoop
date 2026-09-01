@@ -24,6 +24,8 @@ jobs:
         run: python scripts/readme_install_contract.py
       - name: Install, verify, and exercise first-run recovery
         run: python scripts/cold_install_acceptance.py --source .
+      - name: Build, extract, and install the minimal release bundle
+        run: python scripts/bundle_install_acceptance.py
 
   test:
     runs-on: ubuntu-latest

@@ -6,7 +6,7 @@
 
 **招聘机会 · 求职进展 · 笔面试提醒 · 经历深挖 · 定制简历 · 面试准备与复盘**
 
-[![Version](https://img.shields.io/badge/Version-v0.1.0--alpha.14-7C3AED)](RELEASE_NOTES.md)
+[![Version](https://img.shields.io/badge/Version-v0.1.0--alpha.15-7C3AED)](RELEASE_NOTES.md)
 [![Skills](https://img.shields.io/badge/Skills-7-2563EB)](#-认识-7-个-skill)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![Agents](https://img.shields.io/badge/Agents-4-0F766E)](#支持的-agent)
@@ -97,18 +97,34 @@ OfferLoop 是一套由 7 个 Agent Skill、三张飞书业务 Base 和一个私�
 |---|---|---|
 | Python | 3.10 或更高版本 | Windows 可使用 `py -3` 代替 `python3` |
 | Agent | Codex、Claude Code、Hermes Agent 或 WorkBuddy | Agent 需要支持标准 `SKILL.md` 目录 |
-| GitHub | 能访问公开仓库 | 用于下载和后续升级 |
+| GitHub | 能访问公开 Release | 用于下载精简安装包和后续升级 |
+| Node.js / npm | Node.js 20 或更高版本，随附 npm | 只用于安装官方 Lark CLI 与 Lark Skills；本地 OfferLoop 安装不会自动调用 |
+| Lark CLI | `lark-cli >= 1.0.73` | 飞书工作区阶段需要；同时准备 `lark-base`、`lark-doc`、`lark-wiki` |
 | 飞书账号 | 必需 | 需要创建或编辑知识空间与多维表格的权限 |
 
 安装 Skill 文件不需要 App Secret、邮箱密码、Cookie、token 或授权码。不要把任何凭证粘贴到 Chat。
 
 ### 完整安装 7 个 Skill
 
-先下载稳定版并预演安装：
+推荐下载 Release 中不超过 2 MiB 的精简安装包。先下载 ZIP 和 SHA-256 文件，校验后再解压：
 
 ```bash
-git clone https://github.com/riwonswain-ovo/OfferLoop.git
-cd OfferLoop
+curl -LO https://github.com/riwonswain-ovo/OfferLoop/releases/download/v0.1.0-alpha.15/OfferLoop-v0.1.0-alpha.15.zip
+curl -LO https://github.com/riwonswain-ovo/OfferLoop/releases/download/v0.1.0-alpha.15/OfferLoop-v0.1.0-alpha.15.zip.sha256
+shasum -a 256 -c OfferLoop-v0.1.0-alpha.15.zip.sha256
+unzip OfferLoop-v0.1.0-alpha.15.zip
+cd OfferLoop-v0.1.0-alpha.15
+python3 scripts/setup_offerloop.py --agent codex --mode full --dry-run
+```
+
+Windows PowerShell 可用 `Invoke-WebRequest` 下载、`Get-FileHash -Algorithm SHA256` 校验，随后用
+`Expand-Archive` 解压，并把下方命令中的 `python3` 替换为 `py -3`。
+
+如果所在网络无法下载 Release 资产，可浅克隆同一版本作为备用：
+
+```bash
+git clone --depth 1 --branch v0.1.0-alpha.15 https://github.com/riwonswain-ovo/OfferLoop.git OfferLoop-v0.1.0-alpha.15
+cd OfferLoop-v0.1.0-alpha.15
 python3 scripts/setup_offerloop.py --agent codex --mode full --dry-run
 ```
 
@@ -126,17 +142,26 @@ python3 scripts/setup_offerloop.py --agent codex --mode full
 ```
 
 Agent 会先只读检查已有资源并展示计划。只有得到明确确认后，才会创建或接管三张业务 Base、
-私有知识库和固定目录。中途退出不会重复创建资源，下次会从第一个未通过的阶段继续。
+私有知识库、固定目录、同步服务和必要 workflow。每日 22:10 群卡片会单独询问启用或停用；
+不会因为下载或安装而静默向群聊发送消息。中途退出不会重复创建资源，下次会从第一个未通过的阶段继续。
+
+安装输出会分别报告本地 Skill、工作区依赖和飞书工作区三个阶段。缺少 `lark-cli` 或官方 Lark
+Skills 时，本地 7 个 Skill 仍会安装完成，安装器不会自动运行 `npm` / `npx`，只会给出恢复命令。
+`needs_setup` 明确表示“本地安装成功、飞书初始化待进行”，不是安装卡住；依赖补齐并新开 Agent
+会话后，重新运行同一安装命令即可继续。
 
 完成真实线上验收后，由 Agent 记录并核验工作区：
 
 ```bash
 python3 scripts/setup_offerloop.py --agent codex --mode full --record-workspace-verified
+python3 scripts/setup_offerloop.py --agent codex --mode full --record-automation-verified
 python3 scripts/setup_offerloop.py --agent codex --mode full --verify
 ```
 
-只有本地安装、三张 Base、知识库目录、schema v7 locator 与权限全部通过时，OfferLoop 才会报告
-`ready`。安装器不会用示例 URL、空资源或未经回读的配置冒充完成状态。
+只有本地安装、三张 Base、知识库目录、schema v7 locator、同步服务、12 条必要 Base workflow 与权限
+全部通过，且每日卡片已经验证或由用户明确停用时，OfferLoop 才会报告 `ready`。`--verify --json`
+会分别给出 `workspace_ready`、`sync_ready`、`daily_checkin_ready` 和 `daily_checkin_selected`；安装器不会用
+示例 URL、空资源、禁用的空白 workflow 或未经回读的配置冒充完成状态。
 
 ### 支持的 Agent
 
@@ -193,7 +218,7 @@ OfferLoop 会创建或接管连续的 `00`–`06` 目录。三张 Base 只保留
 
 **它做什么。** 维护笔面试中心，并把确认后的招聘事件关联到求职进展。启用邮箱或日历能力后，还可以识别招聘通知和创建日程；这些集成只在用户明确配置后运行。
 
-**第一次使用。** 可以直接登记一场测评、笔试或面试，也可以在本机配置授权后扫描招聘通知。写 Base、创建日历或发送群通知前都会展示范围并等待确认。
+**第一次使用。** 可以直接登记一场测评、笔试或面试，也可以在本机配置授权后扫描招聘通知。写 Base、创建日历或发送群通知前都会展示范围并等待确认。日程只会写入用户显式配置且已授予应用 `owner` 或 `writer` 权限的日历；目标日历不可见或只读时会停止并提示修复权限，不会静默新建替代日历。应用以 `writer` 身份使用共享日历时，也不会把日历所有者添加为参与人。
 
 **你会得到。** 结构化笔面试事件、求职进展关联、完成状态与复盘文档。真实复盘完成后，对应进展会更新为“X 面完成”；没有下一轮安排时进入“待反馈”。
 
@@ -339,6 +364,20 @@ OfferLoop 使用三张业务 Base 保存企业、投递与笔面试事实，并�
 > [!NOTE]
 > 下载仓库和安装本地 Skill 不会自动创建线上资源。飞书资源始终经过“只读预检 → 展示计划 → 用户确认 → 写入后回读”的流程。
 
+### 自动化闭环
+
+完整模式包含 12 条必要的 Base workflow：企业主表与五张分类子表双向同步共 10 条、企业清单到
+求职进展 1 条、笔面试中心到求职进展 1 条。跨 Base 联动由安装包内随附的妙搭同步服务执行；
+五张分类子表是独立物理表，不会依靠视图自动同步。
+同步应用必须经过用户确认后获得三张业务 Base 和内部运行状态表的最小读写权限；安装器会用验收
+前缀合成记录验证真实写入和回读，只有 schema 可读但记录写入返回 403 时仍视为未完成。
+
+每日卡片是独立的可选能力。选择启用后，妙搭在每天 `22:10 Asia/Shanghai` 汇总当天待完成、已过
+计划时间、已过真实截止和尚未排期的异步测评/笔试，并向用户确认的飞书群发送 Card 2.0；只有
+配置的 owner 可以操作按钮。启用时还会验证妙搭回调地址无需登录即可访问，并要求回调同时校验
+应用、群、owner、Verification Token 和真实卡片消息 ID；OAuth 登录重定向或 404 不会被记为就绪。
+选择停用会被明确记录，不影响核心同步自动化就绪。
+
 ---
 
 ## 🔄 升级与迁移
@@ -366,7 +405,7 @@ python3 scripts/install_offerloop.py --agent codex --verify
 
 旧版 `single` 配置只用于识别迁移来源，不再继续提供独立使用入口。升级后需要完成三张 Base、私有知识库、schema v7 locator 与权限验收，才会进入 `ready`。
 
-`needs_setup` 表示飞书工作区尚未完成接入，不能当作可正式使用的状态。安装和升级都是幂等操作；
+`needs_setup` 表示“本地安装成功、飞书初始化待进行”，不能当作可正式使用的状态，也不表示安装卡住。安装和升级都是幂等操作；
 同名但内容不同的目录会先报告冲突，只有显式 `--upgrade` 才会备份并替换旧版。
 
 旧版安装入口仍可用于本地兼容检查，但不会恢复单 Skill 模式：

@@ -946,7 +946,7 @@ describe('JobProgressSyncService', (): void => {
     expect(fields['结束时间']).toBe(Date.parse('2099-08-25T09:00:00.000Z'));
   });
 
-  it('creates the app-owned calendar and adds the owner to a migrated event', async (): Promise<void> => {
+  it('uses the configured owner calendar and adds the owner to a migrated event', async (): Promise<void> => {
     const fields: Record<string, unknown> = {
       完成状态: '待完成',
       事件状态: '有效',
@@ -971,18 +971,15 @@ describe('JobProgressSyncService', (): void => {
         return { code: 0, data: { record: { record_id: 'recDaily', fields: { ...fields } } } };
       }
       if (url.includes('/calendar/v4/calendars?page_size=500') && method === 'GET') {
-        return { code: 0, data: { calendar_list: [], has_more: false } };
+        return { code: 0, data: { calendar_list: [{ calendar_id: 'cal_owner', summary: 'OfferLoop 求职日程', role: 'owner', is_deleted: false }], has_more: false } };
       }
-      if (url.endsWith('/calendar/v4/calendars') && method === 'POST') {
-        return { code: 0, data: { calendar: { calendar_id: 'cal_managed' } } };
-      }
-      if (url.endsWith('/calendar/v4/calendars/cal_managed/events/evt-personal') && method === 'PATCH') {
+      if (url.endsWith('/calendar/v4/calendars/cal_owner/events/evt-personal') && method === 'PATCH') {
         return { code: 191002, msg: 'no calendar access_role' };
       }
-      if (url.includes('/calendar/v4/calendars/cal_managed/events/search_event?') && method === 'POST') {
+      if (url.includes('/calendar/v4/calendars/cal_owner/events/search_event?') && method === 'POST') {
         return { code: 0, data: { items: [] } };
       }
-      if (url.includes('/calendar/v4/calendars/cal_managed/events?idempotency_key=') && method === 'POST') {
+      if (url.includes('/calendar/v4/calendars/cal_owner/events?idempotency_key=') && method === 'POST') {
         return { code: 0, data: { event: { event_id: 'evt-managed' } } };
       }
       if (url.includes('/events/evt-managed/attendees?user_id_type=open_id&page_size=100') && method === 'GET') {
@@ -999,7 +996,7 @@ describe('JobProgressSyncService', (): void => {
       '2099-08-25T15:30:00+08:00',
     );
 
-    expect(result).toMatchObject({ ok: true, managedCalendarId: 'cal_managed' });
+    expect(result).toMatchObject({ ok: true, managedCalendarId: 'cal_owner' });
     expect(fields).toMatchObject({ 日历状态: '已建日程', 已建日程ID: 'evt-managed' });
     const attendeeCall = mock.calls.find((call): boolean => (
       String(call.method).toUpperCase() === 'POST'
@@ -1008,6 +1005,67 @@ describe('JobProgressSyncService', (): void => {
     expect(parseRequestData(attendeeCall!)).toMatchObject({
       attendees: [{ type: 'user', user_id: 'ou_owner' }],
     });
+  });
+
+  it('uses a configured writer calendar without creating a fallback calendar or inviting the owner', async (): Promise<void> => {
+    const fields: Record<string, unknown> = {
+      完成状态: '待完成', 事件状态: '有效', 环节: '测评', 进行方式: '异步',
+      安排名称: '隔离验收－测评', 截止时间: '2099-08-30T18:00:00+08:00', 已建日程ID: '',
+    };
+    const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
+      const url: string = String(config.url ?? '');
+      const method: string = String(config.method ?? '').toUpperCase();
+      if (url.endsWith('/auth/v3/tenant_access_token/internal')) return { code: 0, tenant_access_token: 'tenant-token', expire: 7200 };
+      if (url.endsWith('/reminder-table/records/recDaily') && method === 'GET') return { code: 0, data: { record: { record_id: 'recDaily', fields: { ...fields } } } };
+      if (url.endsWith('/reminder-table/records/recDaily') && method === 'PUT') {
+        Object.assign(fields, (parseRequestData(config) as { fields: Record<string, unknown> }).fields);
+        return { code: 0, data: { record: { record_id: 'recDaily', fields: { ...fields } } } };
+      }
+      if (url.includes('/calendar/v4/calendars?page_size=500') && method === 'GET') {
+        return { code: 0, data: { calendar_list: [{ calendar_id: 'cal_owner', summary: '隔离测试日历', role: 'writer', is_deleted: false }], has_more: false } };
+      }
+      if (url.includes('/calendar/v4/calendars/cal_owner/events/search_event?') && method === 'POST') return { code: 0, data: { items: [] } };
+      if (url.includes('/calendar/v4/calendars/cal_owner/events?idempotency_key=') && method === 'POST') return { code: 0, data: { event: { event_id: 'evt-isolated' } } };
+      throw new Error(`unexpected request: ${method} ${url}`);
+    });
+
+    await expect(mock.service.rescheduleReminderRecord(
+      'recDaily',
+      '2099-08-25T15:30:00+08:00',
+    )).resolves.toMatchObject({ ok: true, managedCalendarId: 'cal_owner' });
+    expect(mock.calls.some((call): boolean => (
+      String(call.method).toUpperCase() === 'POST'
+      && String(call.url).endsWith('/calendar/v4/calendars')
+    ))).toBe(false);
+    expect(mock.calls.some((call): boolean => String(call.url).includes('/attendees'))).toBe(false);
+  });
+
+  it('fails closed when the configured calendar is not visible', async (): Promise<void> => {
+    const fields: Record<string, unknown> = {
+      完成状态: '待完成', 事件状态: '有效', 环节: '测评', 进行方式: '异步',
+      安排名称: '隔离验收－测评', 截止时间: '2099-08-30T18:00:00+08:00', 已建日程ID: '',
+    };
+    const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
+      const url: string = String(config.url ?? '');
+      const method: string = String(config.method ?? '').toUpperCase();
+      if (url.endsWith('/auth/v3/tenant_access_token/internal')) return { code: 0, tenant_access_token: 'tenant-token', expire: 7200 };
+      if (url.endsWith('/reminder-table/records/recDaily') && method === 'GET') return { code: 0, data: { record: { record_id: 'recDaily', fields: { ...fields } } } };
+      if (url.endsWith('/reminder-table/records/recDaily') && method === 'PUT') {
+        Object.assign(fields, (parseRequestData(config) as { fields: Record<string, unknown> }).fields);
+        return { code: 0, data: { record: { record_id: 'recDaily', fields: { ...fields } } } };
+      }
+      if (url.includes('/calendar/v4/calendars?page_size=500') && method === 'GET') return { code: 0, data: { calendar_list: [], has_more: false } };
+      throw new Error(`unexpected request: ${method} ${url}`);
+    });
+
+    await expect(mock.service.rescheduleReminderRecord(
+      'recDaily',
+      '2099-08-25T15:30:00+08:00',
+    )).rejects.toThrow('configured daily check-in calendar is not visible to the app');
+    expect(mock.calls.some((call): boolean => (
+      String(call.method).toUpperCase() === 'POST'
+      && String(call.url).endsWith('/calendar/v4/calendars')
+    ))).toBe(false);
   });
 
   it('recovers a calendar event created before Base backfill failed', async (): Promise<void> => {
