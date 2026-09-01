@@ -8,6 +8,23 @@
 
 固定群配置缺失或权限失效时保留已写入数据、旧正式游标和恢复检查点，转入初始化修复。初始化同步、增量同步、零新增、部分完成、失败和待确认写入都发送通知；清单查询和纯结构审计不发送。
 
+外发目的地的授权在同步开始前解决。每次先运行 `scripts/notification_authorization.py check`；返回
+`authorized=true` 就代表当前配置的准确目标与身份已获得 `job-collection.notifications` 长期授权，初始化
+同步、增量同步、零新增、部分完成、失败摘要和待确认清单均直接发送，禁止在同步末尾再次要求用户回复
+“确认发送”。工具层或操作系统仍可显示必要的权限提示，这类提示不得用脚本规避。
+
+返回 `authorized=false` 时，在同步开始前展示脚本返回的准确群名和身份，并询问是否为 `job-collection`
+开启长期自动发送；用户明确同意后才运行
+`scripts/notification_authorization.py authorize --confirm-standing-authorization`。授权通过不可逆指纹绑定目标
+类型、目标 ID 和身份，但授权文件不保存或输出原始目标 ID。默认群或身份一旦变化，旧授权自动失效并只为
+新目标重新询问一次。用户要求停止自动发送时运行 `scripts/notification_authorization.py revoke`。不得把这份
+授权扩展到其他 Skill、其他群或其他消息类型，也不得先执行五分钟同步，最后才询问目的地。
+
+不得发送由错误连接判定产生的失败摘要。腾讯 MCP 未经 `scripts/tencent_mcporter.py probe` 验证，或只在
+受限沙箱中得到 DNS/离线错误时，不得生成“缺少官方 MCP 连接”的群消息或持久化通知阶段。
+恢复到尚未成功发送的此类旧摘要时，先按 `failure-handling.md` 的“旧连接误判自愈”重新探测；探测已
+`ready` 就废弃旧摘要并重扫，不能为了完成历史通知阶段而继续发送已知错误的信息。
+
 ## 2. 持久化状态
 
 每个来源在「信息源登记」保存：

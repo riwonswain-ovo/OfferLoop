@@ -16,6 +16,7 @@ from scripts.sync_utils import (
     normalize_url,
     overlap_start,
     parse_feishu_bitable_url,
+    recruitment_type_match,
     recruitment_fingerprint,
     resolve_profile_field,
     route_candidate,
@@ -176,7 +177,7 @@ class SyncUtilsTest(unittest.TestCase):
                 "awaiting_write_confirmation",
             )
 
-    def test_industry_is_not_a_route_input_and_missing_links_require_confirmation(self):
+    def test_industry_is_not_a_route_input_and_missing_links_are_filtered(self):
         self.assertEqual(
             route_candidate(
                 candidate=ROUTE_CANDIDATE,
@@ -193,8 +194,36 @@ class SyncUtilsTest(unittest.TestCase):
                 has_announcement_link=False,
                 has_application_link=False,
             ),
-            "awaiting_write_confirmation",
+            "hard_filtered",
         )
+        self.assertEqual(
+            route_candidate(
+                candidate=ROUTE_CANDIDATE,
+                inputs=route_inputs(city_matches=None),
+                has_announcement_link=False,
+                has_application_link=False,
+            ),
+            "hard_filtered",
+        )
+
+    def test_recruitment_type_exclusions_cover_internship_variants(self):
+        excluded = ["普通实习"]
+        for value in ("实习", "日常实习", "寒假实习", "Talent Acquisition Intern", "Internship"):
+            with self.subTest(value=value):
+                self.assertIs(recruitment_type_match(value, excluded), False)
+
+    def test_summer_internship_uses_its_own_exclusion(self):
+        self.assertIs(recruitment_type_match("Summer Internship", ["暑期实习"]), False)
+        self.assertIs(recruitment_type_match("暑期实习", ["普通实习"]), True)
+
+    def test_allowed_campus_recruitment_passes_internship_exclusions(self):
+        self.assertIs(
+            recruitment_type_match("秋招专场", ["普通实习", "暑期实习", "社招"]),
+            True,
+        )
+
+    def test_unknown_recruitment_type_remains_uncertain(self):
+        self.assertIs(recruitment_type_match("人才项目", ["普通实习"]), None)
 
     def test_explicit_role_exclusion_requires_complete_source_scope(self):
         incomplete = route_candidate(

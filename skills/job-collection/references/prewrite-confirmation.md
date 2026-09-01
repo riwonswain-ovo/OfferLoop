@@ -31,7 +31,9 @@ Agent 只负责把已确认事实转换成 `CandidateRouteInputs`；`route_candi
 5. 排除公司；
 6. 岗位偏好与明确不考虑岗位。
 
-前五项任一明确不满足时为 `hard_filtered`，任一缺失或无法可靠判断时为 `awaiting_write_confirmation`。两个来源链接都缺失时为 `awaiting_write_confirmation`。通过前置条件后：
+前五项任一明确不满足时为 `hard_filtered`。公告链接和投递链接都缺失时同样为 `hard_filtered`，且该链接
+门禁优先于前五项的缺失或无法判断；其余记录的前五项任一缺失或无法可靠判断时为
+`awaiting_write_confirmation`。通过前置条件后：
 
 - 岗位名称、用户确认的同义词或已确认迁移方向明确命中：`auto_write`；
 - 来源可靠展示该企业本批次的完整岗位范围，且全部岗位明确命中 `excluded_job_preferences`：`hard_filtered`；
@@ -48,6 +50,11 @@ Agent 只负责把已确认事实转换成 `CandidateRouteInputs`；`route_candi
 `job_preference_matches=true` 和 `all_positions_explicitly_excluded=true` 来暗示冲突：存在明确考虑岗位时，
 `job_preference_matches=true`；只要还存在未被明确排除或明确考虑的岗位，
 `all_positions_explicitly_excluded=false`。只有完整枚举且每个岗位都明确排除时，后者才可为 `true`。
+
+招聘类型证据必须交给 `scripts/sync_utils.py` 的 `recruitment_type_match()`，并传入 Base 当前
+`excluded_recruitment_types`；不得在来源适配器中写死排除词。明确的“实习”“普通/日常/寒假/冬季实习”
+以及 `Intern`、`Internship`、`off-cycle` 统一映射为“普通实习”，“暑期/暑假/Summer Internship”映射为
+“暑期实习”。命中已确认排除类型时返回 `False` 并硬筛；只有来源确实无法判断招聘类型时才返回 `None`。
 
 明确排除岗位只保存少量硬边界，不要求用户穷举。按明确排除岗位执行硬筛时必须同时满足“来源完整”和“全部岗位明确命中”；任一条件不确定都进入待确认写入。
 
@@ -76,15 +83,21 @@ Agent 只负责把已确认事实转换成 `CandidateRouteInputs`；`route_candi
 ## 3. 链接
 
 - 公告链接和投递链接至少存在一个：不改变岗位路由，缺失字段留空。
-- 两个链接都缺失：`awaiting_write_confirmation`。
+- 两个链接都缺失：直接 `hard_filtered`，不写入、不去重、不创建待确认编号。
 - 只保存来源真实提供的链接；不搜索、编造或从其他记录复制链接。
 
-链接门禁在写入前执行。两个链接都缺失时，即使岗位、城市和毕业届次明确命中，也不得返回
-`auto_write` 或调用写入；必须先创建并持久化待确认候选，持久化成功后才能把它计入待确认数量。
+链接门禁在筛选条件的不确定判断之前执行。两个链接都缺失时，即使岗位、城市和毕业届次明确命中，或
+其他筛选字段缺失、无法判断，也不得返回 `auto_write` 或 `awaiting_write_confirmation`；直接作为
+`hard_filtered` 跳过，不调用去重、写入或 `pending.create`，也不计入待确认数量。
 
 链接判断逐来源记录执行，结果以 `source_id + source_record_id` 关联，不按公司或相邻行合并。若 A 记录
-至少有一个真实链接而 B 记录两个链接都缺失，A 保持自己的原岗位路由并明确标记缺少哪一项，只有 B
-进入待确认集合。调用 `pending.create` 时传入的稳定键集合必须与该集合完全相等，非空且无重复。
+至少有一个真实链接而 B 记录两个链接都缺失，A 保持自己的原岗位路由并明确标记缺少哪一项，B 直接
+`hard_filtered`。真正的待确认候选构成该集合；调用 `pending.create` 时传入的稳定键集合不得包含 B，
+且必须与该集合完全相等，非空且无重复。
+
+恢复由旧版规则创建的待确认批次时，`PendingBatchState` 自动把两个链接仍都缺失的未决候选标记为跳过；
+这些候选不再出现在剩余待确认清单中。保留原稳定编号和来源高水位，不重新编号、不写入，并把更新后的
+批次状态持久化后再发送其余候选或完成通知。
 
 ## 4. 待确认写入
 
@@ -112,7 +125,8 @@ Agent 只负责把已确认事实转换成 `CandidateRouteInputs`；`route_candi
 
 含糊回复、无效编号或只讨论偏好时不执行写入。
 
-待确认数量只统计已成功持久化的候选。仅在内存中判断为 `awaiting_write_confirmation`、准备创建候选或
+存在待确认候选时，必须先创建并持久化待确认候选。待确认数量只统计已成功持久化的候选。
+仅在内存中判断为 `awaiting_write_confirmation`、准备创建候选或
 最终回复中声称“已进入待确认”，都不算完成。
 
 硬过滤、待确认和零新增都不是写入。不得调用写入工具提交 `dry_run`、`written=false`、空列表、空对象或
