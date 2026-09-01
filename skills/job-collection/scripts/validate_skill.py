@@ -21,9 +21,15 @@ REQUIRED_FILES = {
     "references/failure-handling.md",
     "references/notification.md",
     "scripts/tencent_mcp.py",
+    "scripts/tencent_mcporter.py",
+    "scripts/notification_authorization.py",
     "scripts/incremental_scan.py",
+    "scripts/dedupe_candidates.py",
     "scripts/sync_pipeline.py",
     "scripts/execution_contract.py",
+    "tests/test_sync_utils.py",
+    "tests/test_dedupe_candidates.py",
+    "tests/test_sync_pipeline_missing_links.py",
 }
 
 TEXT_SUFFIXES = {".md", ".py", ".toml", ".yml", ".yaml", ".example"}
@@ -77,17 +83,20 @@ def validate_references(errors: list[str]) -> None:
         for reference in pattern.findall(content):
             if reference.startswith("../.offerloop-runtime/"):
                 runtime_reference = reference.removeprefix("../.offerloop-runtime/")
-                targets = (
-                    ROOT.parent / ".offerloop-runtime" / runtime_reference,
+                installed_target = ROOT.parent / ".offerloop-runtime" / runtime_reference
+                source_target = (
                     ROOT.parents[1]
                     / "runtime"
                     / "offerloop"
                     / "workspace"
-                    / runtime_reference,
+                    / runtime_reference
+                )
+                target = (
+                    installed_target if installed_target.is_file() else source_target
                 )
             else:
-                targets = (ROOT / reference,)
-            if not any(target.is_file() for target in targets):
+                target = ROOT / reference
+            if not target.is_file():
                 errors.append(f"{path.relative_to(ROOT)}: missing reference {reference}")
 
     skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
@@ -154,6 +163,10 @@ def validate_current_contract(errors: list[str]) -> None:
         "legacy fixed view count": re.compile(r"48\s*个\s*grid|48/48|6/6.*已投递"),
         "legacy 22-column schema": re.compile(r"主表\s*22\s*列|飞书主表\s*22\s*列"),
         "legacy sequence allocation": re.compile(r"当前主表最大编号\s*\+\s*1|下一批起始编号"),
+        "legacy missing-link confirmation": re.compile(
+            r"两个链接都缺失(?:时)?(?:为|：)?\s*`?awaiting_write_confirmation`?|"
+            r"两个链接都缺失时进入待确认写入"
+        ),
     }
     for path in text_files():
         if path == ROOT / "scripts/validate_skill.py":
@@ -172,6 +185,9 @@ def validate_current_contract(errors: list[str]) -> None:
             "has_more=false",
             "scan_incremental_records()",
             "IncrementalCheckpoint",
+            "scripts/tencent_mcporter.py probe",
+            "--server tencent-docs",
+            "不得通过在 `.config`、`.codex`、`.agents`",
         ],
         "references/init-workflow.md": [
             "不自行创建或补建另一套资源",
@@ -185,6 +201,12 @@ def validate_current_contract(errors: list[str]) -> None:
             "每次只传一个 `--record-id`",
             "--filter-json",
             "--full-audit",
+        ],
+        "references/dedup_judge.md": [
+            "同一规范公司、同一真实招聘批次",
+            "已投递` 或 `已拒绝",
+            "秋招专场",
+            "去法定后缀后的名称",
         ],
         "references/prewrite-confirmation.md": [
             "hard_filtered",
@@ -201,6 +223,12 @@ def validate_current_contract(errors: list[str]) -> None:
             "record.normalize",
             "stable_keys",
             "第一次 finalize",
+            "两个链接都缺失：直接 `hard_filtered`",
+            "不计入待确认数量",
+            "旧版规则创建的待确认批次",
+            "recruitment_type_match()",
+            "不得在来源适配器中写死排除词",
+            "Summer Internship",
         ],
         "references/notification.md": [
             "群消息是持久化状态的展示投影",
@@ -212,10 +240,17 @@ def validate_current_contract(errors: list[str]) -> None:
             "merge_source_json",
             "NotificationState",
             "内容哈希",
+            "外发目的地的授权在同步开始前解决",
+            "不得先执行五分钟同步",
+            "scripts/notification_authorization.py check",
+            "长期授权",
+            "其他 Skill、其他群或其他消息类型",
         ],
         "references/failure-handling.md": [
             "初次调用失败后最多自动重试三次",
             "最多执行四次",
+            "旧连接误判自愈",
+            "废弃尚未成功发送的旧失败摘要",
         ],
     }
     for relative, markers in required_markers.items():

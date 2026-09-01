@@ -680,6 +680,17 @@ class PendingBatchState:
             raise ValueError("skipped candidate numbers must be unique")
         if written & skipped:
             raise ValueError("a candidate cannot be both written and skipped")
+        unresolved = candidate_set - written - skipped
+        auto_skipped = sorted(
+            item.number
+            for item in self.candidates
+            if item.number in unresolved
+            and not str(item.announcement_url).strip()
+            and not str(item.application_url).strip()
+        )
+        if auto_skipped:
+            self.skipped_numbers.extend(auto_skipped)
+            skipped.update(auto_skipped)
         unknown = (written | skipped) - candidate_set
         if unknown:
             values = "、".join(f"{number:02d}" for number in sorted(unknown))

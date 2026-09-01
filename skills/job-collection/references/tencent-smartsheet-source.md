@@ -6,7 +6,8 @@
 
 用户提供来源 URL 后：
 
-1. 按当前 Agent 的连接器发现规则查找 `tencent-docs` MCP。
+1. 运行 `python3 scripts/tencent_mcporter.py probe` 查找并验证 `tencent-docs` MCP；该脚本只输出脱敏状态，
+   不输出 Token、请求头或完整工具 Schema。
 2. 未连接时一次只指导一个官方配置步骤；Personal Token 只进入本地安全存储，不粘贴到对话、Markdown、日志、Base 或 Git。
 3. 连接后读取实际 `tools/list`，确认存在工作表、视图、字段和记录的只读工具。
 4. 从 URL 解析 `file_id`、`tab` 和 `viewId`，再用 MCP 返回值复核真实工作表和视图。
@@ -14,6 +15,19 @@
 6. 探测通过后登记 `credential_status=mcp_token`、`is_active=true`；未完成时登记为 `pending`、`is_active=false`。
 
 Token 失效或来源不可见时登记 `expired` 并暂停该来源。日常同步不切换访问方式。
+
+### 连接状态判定
+
+- `ready`：连接和四个 SmartSheet 只读工具均可用，继续同步。
+- `not_configured` / `mcporter_missing`：才可判定为未配置；一次只引导一个官方配置步骤。
+- `credential_invalid` / `configuration_invalid`：登记 `expired` 或转入连接修复，不自动重试。
+- `network_unavailable`：配置仍然存在，属于临时网络/沙箱状态。若第一次探测在受限沙箱中运行，立即以
+  允许联网的同一命令复测；沙箱探测不计作来源失败。真实联网复测仍失败时，按
+  `failure-handling.md` 初次调用之外最多重试三次，最终只记录“临时网络不可用”，不得改写为“缺少连接”。
+- `capability_missing` / `mcp_error`：保留配置和正式游标，报告实际缺失能力或服务异常。
+
+不得通过在 `.config`、`.codex`、`.agents` 等目录中搜索字符串来判断 MCP 是否安装，也不得因为当前
+Agent 的原生工具面板未暴露腾讯工具就判定未连接。
 
 ## 2. 工具发现
 
@@ -23,6 +37,16 @@ Token 失效或来源不可见时登记 `expired` 并暂停该来源。日常同
 - 列出视图；
 - 完整分页列出字段；
 - 分页读取记录。
+
+`mcporter` 调用统一使用显式选择器，例如：
+
+```bash
+mcporter call --server tencent-docs --tool 'smartsheet.list_records' --args '<JSON>' --timeout 60000
+```
+
+工具名包含点号，禁止使用 `tencent-docs.smartsheet.list_records` 这一单参数写法。工具目录很大，禁止把
+完整 `mcporter list tencent-docs --json` 管道给 `jq`；该输出可能被截断为无效 JSON。探测统一调用
+`scripts/tencent_mcporter.py probe`，单个工具的参数以文本 `mcporter list` 中对应函数签名为准。
 
 URL 参数只作定位提示。必须以 MCP 返回的 ID 与标题唯一确认目标；多个候选时展示选项并等待用户选择。
 
@@ -88,7 +112,9 @@ offset=0, limit=25
 `scripts/sync_utils.py` 的 `batch_time_window_match()`。函数使用运行日期和用户 `graduation_year`
 自动判断招聘季；能识别且不在当前投递期的批次进入硬筛，批次缺失或无法识别时进入待确认写入。
 
-结构化字段直接读取，不由模型重新抽取。日期使用 MCP 返回的毫秒时间戳或明确日期字符串；URL 字段必须取得真实链接。一个链接缺失时留空并继续原岗位路由；两个链接都缺失时进入待确认写入。
+结构化字段直接读取，不由模型重新抽取。日期使用 MCP 返回的毫秒时间戳或明确日期字符串；URL 字段必须
+取得真实链接。一个链接缺失时留空并继续原岗位路由；两个链接都缺失时直接 `hard_filtered`，不写入、
+不去重且不进入待确认清单。
 
 ## 6. 运行结果
 

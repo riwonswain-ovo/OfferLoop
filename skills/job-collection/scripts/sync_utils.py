@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import html
 import re
 import unicodedata
 from dataclasses import dataclass
@@ -180,9 +181,9 @@ def route_candidate(
     )
     if any(value is False for value in hard_conditions):
         return "hard_filtered"
-    if any(value is None for value in hard_conditions):
-        return "awaiting_write_confirmation"
     if not has_announcement_link and not has_application_link:
+        return "hard_filtered"
+    if any(value is None for value in hard_conditions):
         return "awaiting_write_confirmation"
     if inputs.same_position_preference_conflict:
         return "awaiting_write_confirmation"
@@ -254,7 +255,10 @@ def overlap_start(last_sync_time: datetime) -> datetime:
 
 
 def normalize_url(url: str) -> str:
-    value = url.strip()
+    value = html.unescape(url.strip())
+    markdown_link = re.fullmatch(r"\[[^\]]*\]\((https?://.*)\)", value)
+    if markdown_link:
+        value = markdown_link.group(1).strip()
     if not value.lower().startswith(("http://", "https://")):
         return value
     parsed = urlparse(value)
@@ -286,6 +290,111 @@ def normalize_url(url: str) -> str:
 def normalize_text(value: str) -> str:
     normalized = unicodedata.normalize("NFKC", value).lower().strip()
     return re.sub(r"[\W_]+", "", normalized, flags=re.UNICODE)
+
+
+def normalize_company_name(value: str) -> str:
+    """Normalize cosmetic legal suffixes without collapsing subsidiaries."""
+    normalized = normalize_text(value)
+    suffixes = (
+        "集团股份有限公司", "集团有限责任公司", "股份有限责任公司", "股份有限公司",
+        "集团有限公司", "有限责任公司", "companylimited", "incorporated",
+        "corporation", "控股集团", "有限公司", "coltd", "limited", "company",
+        "集团", "公司", "corp", "ltd", "inc", "group",
+    )
+    for suffix in suffixes:
+        if normalized.endswith(suffix) and len(normalized) >= len(suffix) + 2:
+            return normalized[:-len(suffix)]
+    return normalized
+
+
+def canonical_recruitment_type(value: str) -> str:
+    """Map explicit source labels to the recruitment-type preference taxonomy."""
+    normalized = normalize_text(value)
+    if not normalized:
+        return ""
+    if any(token in normalized for token in ("暑期实习", "暑假实习", "summerintern", "summerinternship")):
+        return "暑期实习"
+    if any(token in normalized for token in ("社招", "社会招聘", "experiencedhire", "experiencedhiring")):
+        return "社招"
+    if any(token in normalized for token in (
+        "普通实习", "日常实习", "寒假实习", "冬季实习", "实习生", "实习",
+        "internship", "intern", "offcycle", "winterintern",
+    )):
+        return "普通实习"
+    if any(token in normalized for token in (
+        "秋招", "春招", "校招", "校园招聘", "提前批", "补招", "补录", "graduateprogram",
+    )):
+        return "校招"
+    return ""
+
+
+def normalize_recruitment_batch(value: str) -> str:
+    """Collapse wording variants while preserving genuinely distinct hiring stages."""
+    normalized = re.sub(r"(?:20)?\d{2}届", "", normalize_text(value))
+    if not normalized:
+        return ""
+    is_autumn = "秋" in normalized
+    is_spring = "春" in normalized
+    if is_autumn and "提前" in normalized:
+        return "秋招提前批"
+    if is_autumn and any(token in normalized for token in ("补招", "补录")):
+        return "秋招补录"
+    if is_spring and any(token in normalized for token in ("补招", "补录")):
+        return "春招补录"
+    if is_autumn:
+        return "秋招"
+    if is_spring:
+        return "春招"
+    recruitment_type = canonical_recruitment_type(normalized)
+    if recruitment_type:
+        return recruitment_type
+    if any(token in normalized for token in ("校招", "校园招聘", "graduateprogram")):
+        return "校招"
+    return normalized
+
+
+def recruitment_type_match(
+    recruitment_batch: str,
+    excluded_recruitment_types: Sequence[str],
+    *,
+    project_name: str = "",
+    announcement_title: str = "",
+    job_positions: str = "",
+    job_scope_complete: bool = False,
+) -> bool | None:
+    """Return whether explicit recruitment-type evidence passes confirmed exclusions.
+
+    Generic, daily, winter and English internship labels map to ``普通实习``;
+    summer internships remain a separate preference category. Conflicting explicit
+    evidence is uncertain rather than silently weakened.
+    """
+    excluded = {
+        canonical
+        for value in excluded_recruitment_types
+        if (canonical := canonical_recruitment_type(str(value)))
+    }
+    evidence_types = {
+        canonical
+        for value in (recruitment_batch, project_name, announcement_title)
+        if (canonical := canonical_recruitment_type(value))
+    }
+    if job_scope_complete and job_positions.strip():
+        roles = [
+            item.strip()
+            for item in re.split(r"[、,，;；/|\n]+", job_positions)
+            if item.strip()
+        ]
+        role_types = [canonical_recruitment_type(role) for role in roles]
+        if roles and all(role_types):
+            evidence_types.update(role_types)
+    if not evidence_types:
+        return None
+    excluded_evidence = {value for value in evidence_types if value in excluded}
+    if not excluded_evidence:
+        return True
+    if excluded_evidence == evidence_types:
+        return False
+    return None
 
 
 def recruitment_fingerprint(
