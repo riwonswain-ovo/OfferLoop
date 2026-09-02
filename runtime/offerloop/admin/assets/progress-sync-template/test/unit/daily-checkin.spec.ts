@@ -25,7 +25,7 @@ describe('daily check-in v2 rules', () => {
   });
 
   it('matches the shared Python/JS/TS contract fixture', () => {
-    const fixture = JSON.parse(readFileSync(resolve(process.cwd(), '../../../../../skills/recruiting-reminder/contracts/daily-checkin-cases.json'), 'utf8')) as {
+    const fixture = JSON.parse(readFileSync(resolve(process.cwd(), 'test/fixtures/daily-checkin-cases.json'), 'utf8')) as {
       now: string; records: Array<{record_id: string; fields: Record<string, unknown>}>;
       expected_groups: Record<string, string[]>;
     };

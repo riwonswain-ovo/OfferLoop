@@ -35,7 +35,9 @@ PHASES = (
     ("bot_setup", "按需启用机器人能力、发布并安装应用，验证目标群成员关系"),
     ("bases", "创建或接管求职企业清单、求职进展与笔面试中心"),
     ("workspace", "创建私有知识库、固定目录和使用指南"),
-    ("progress_sync", "发布投递进度双向同步服务并创建唯一 Base workflow"),
+    ("progress_sync", "发布求职进展同步服务"),
+    ("base_workflows", "创建并启用 12 条主子表与跨 Base workflow"),
+    ("daily_checkin", "记录每日 22:10 群卡片选择，并按需验证匿名回调、群权限和日历权限"),
     ("imap", "创建本地 IMAP 模板，等待用户在本机填写授权码"),
     ("acceptance", "运行只读验收；即时联动演练必须使用并清理临时记录"),
 )
@@ -92,6 +94,25 @@ def _configured(config, resource):
         return isinstance(bridge, dict) and bridge.get("status") == "enabled" and all(
             bridge.get(name) for name in ("app_id", "endpoint", "workflow_id")
         )
+    if resource == "base_workflows":
+        verification = config.get("automation_verification")
+        required = {
+            "sync_service_release",
+            "enterprise_main_child_workflows",
+            "enterprise_progress_workflow",
+            "reminder_progress_workflow",
+        }
+        return bool(
+            isinstance(verification, dict)
+            and verification.get("status") == "verified"
+            and required.issubset(set(verification.get("checks", [])))
+        )
+    if resource == "daily_checkin":
+        daily = config.get("daily_checkin")
+        return isinstance(daily, dict) and daily.get("status") in {
+            "enabled",
+            "disabled",
+        }
     locator = RESOURCE_LOCATORS.get(resource)
     return bool(locator and config.get(locator))
 
@@ -105,7 +126,7 @@ def _required_resources(selected):
         "core_data",
     }
     if "integration" in selected:
-        required.add("progress_sync")
+        required.update({"progress_sync", "base_workflows", "daily_checkin"})
     return required
 
 
@@ -136,7 +157,8 @@ def build_plan(config, capability="full"):
             if (phase_id != "imap" or "reminder" in selected)
         ],
         "confirmations": [
-            "创建或接管三张 Base、必需知识库和即时同步服务前的一次总确认",
+            "创建或接管三张 Base、必需知识库、即时同步服务和 12 条 workflow 前的一次总确认",
+            "每日 22:10 群卡片必须明确选择 enabled 或 disabled；启用时确认群、owner、日历和卡片回调",
             "启用通知时确认接收方式、目标名称、发送身份和最终摘要模板",
             "用户填写 IMAP 授权码后的一次仅连通性检查确认",
         ],

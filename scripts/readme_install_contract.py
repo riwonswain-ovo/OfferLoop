@@ -13,8 +13,11 @@ README = ROOT / "README.md"
 MIGRATION = ROOT / "MIGRATION.md"
 INSTALLER = ROOT / "scripts" / "install_offerloop.py"
 SETUP = ROOT / "scripts" / "setup_offerloop.py"
+BUILDER = ROOT / "scripts" / "build_installer_bundle.py"
 PUBLIC_REPOSITORY = "https://github.com/riwonswain-ovo/OfferLoop.git"
 SETUP_SCRIPT = "scripts/setup_offerloop.py"
+VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+BUNDLE_NAME = f"OfferLoop-v{VERSION}.zip"
 
 
 def load_installer():
@@ -32,6 +35,8 @@ def main() -> None:
     installer = load_installer()
     if not SETUP.is_file():
         raise AssertionError("repository is missing the full-mode setup entrypoint")
+    if not BUILDER.is_file():
+        raise AssertionError("repository is missing the minimal bundle builder")
     readme = README.read_text(encoding="utf-8")
     migration = MIGRATION.read_text(encoding="utf-8")
 
@@ -60,7 +65,10 @@ def main() -> None:
             raise AssertionError(f"MIGRATION.md is missing Skill: {name}")
 
     required_readme_commands = (
-        f"git clone {PUBLIC_REPOSITORY}",
+        f"releases/download/v{VERSION}/{BUNDLE_NAME}",
+        f"{BUNDLE_NAME}.sha256",
+        f"shasum -a 256 -c {BUNDLE_NAME}.sha256",
+        f"git clone --depth 1 --branch v{VERSION} {PUBLIC_REPOSITORY}",
         f"python3 {SETUP_SCRIPT} --agent codex --mode full --dry-run",
         f"python3 {SETUP_SCRIPT} --agent codex --mode full",
         f"python3 {SETUP_SCRIPT} --agent codex --mode full --verify",
@@ -84,7 +92,9 @@ def main() -> None:
     for marker in (
         "旧用户迁移到 7 个 Skill",
         ".offerloop-backups/<时间戳>/",
-        "`needs_setup` 表示飞书工作区尚未完成接入",
+        "`needs_setup` 表示“本地安装成功、飞书初始化待进行”",
+        "lark-cli >= 1.0.73",
+        "安装器不会自动运行 `npm` / `npx`",
     ):
         if marker not in readme:
             raise AssertionError(f"README is missing legacy two-Skill migration guidance: {marker}")

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
@@ -68,6 +69,7 @@ LARK_SKILLS_RECOVERY = (
 )
 MIN_LARK_CLI_VERSION = (1, 0, 73)
 MIN_PYTHON_VERSION = (3, 10)
+AUTOMATION_VERIFICATION_SCHEMA = 1
 PYTHON_REEXEC_GUARD = "OFFERLOOP_PYTHON_REEXEC"
 PYTHON_CANDIDATES = tuple(
     (name, ()) for name in (
@@ -602,8 +604,9 @@ def _daily_checkin_check(config):
     daily = config.get("daily_checkin")
     if daily in (None, {}):
         return _check(
-            "local.reminder_daily_checkin", "reminder", "ready",
-            "每日群卡片未启用（可选）",
+            "local.reminder_daily_checkin", "reminder", "needs_action",
+            "尚未选择是否启用每日群卡片",
+            "明确选择 enabled 或 disabled；不得用缺失配置代替用户选择",
         )
     if not isinstance(daily, dict):
         return _check(
@@ -629,6 +632,30 @@ def _daily_checkin_check(config):
         "每日群卡片已按 22:10 登记，待在线验证" if valid else "每日群卡片定位或时间不完整",
         "验证群、owner、日历与 IM 回调权限" if valid else "重新登记 chat、owner、calendar、Asia/Shanghai 与 22:10",
     )
+
+
+def _sync_automation_fingerprint(config):
+    bridge = config.get("progress_sync")
+    public_bridge = (
+        {
+            key: bridge.get(key)
+            for key in ("app_id", "endpoint", "workflow_id", "status")
+        }
+        if isinstance(bridge, dict)
+        else None
+    )
+    payload = {
+        "schema_version": config.get("schema_version"),
+        "lark_profile": config.get("lark_profile"),
+        "target_base_url": config.get("target_base_url"),
+        "progress_base_url": config.get("progress_base_url"),
+        "reminder_base_url": config.get("reminder_base_url"),
+        "progress_sync": public_bridge,
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode(
+        "utf-8"
+    )
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def _capability_report(source, capability, skills_roots=None):
@@ -849,6 +876,54 @@ def _capability_report(source, capability, skills_roots=None):
                 else "",
             )
         )
+        template = (
+            RUNTIME_ROOT
+            / "assets"
+            / "progress-sync-template"
+            / "template.json"
+        )
+        checks.append(
+            _check(
+                "local.progress_sync_template",
+                "integration",
+                "ready" if template.is_file() else "blocked",
+                "同步服务部署模板已随安装包安装"
+                if template.is_file()
+                else "安装包缺少同步服务部署模板",
+                "重新安装包含 runtime admin assets 的完整候选包"
+                if not template.is_file()
+                else "",
+            )
+        )
+        verification = config.get("automation_verification")
+        required_checks = {
+            "sync_service_release",
+            "enterprise_main_child_workflows",
+            "enterprise_progress_workflow",
+            "reminder_progress_workflow",
+        }
+        verified = bool(
+            isinstance(verification, dict)
+            and verification.get("status") == "verified"
+            and verification.get("schema_version")
+            == AUTOMATION_VERIFICATION_SCHEMA
+            and verification.get("sync_fingerprint")
+            == _sync_automation_fingerprint(config)
+            and required_checks.issubset(set(verification.get("checks", [])))
+        )
+        checks.append(
+            _check(
+                "local.automation_verification",
+                "integration",
+                "ready" if verified else "unverified",
+                "同步服务与 12 条 Base workflow 已记录在线验收"
+                if verified
+                else "同步服务或 12 条 Base workflow 尚未记录在线验收",
+                "按 verification-matrix 和 automation_contract 完成真实回读"
+                if not verified
+                else "",
+            )
+        )
 
     return status_model.build_report(selected=selected, checks=checks)
 
@@ -858,6 +933,57 @@ def run_checks(environ=None, capability=None, skills_roots=None):
     if capability is None:
         return _legacy_checks(source)
     return _capability_report(source, capability, skills_roots=skills_roots)
+
+
+def run_prerequisite_checks(environ=None, capability="workspace", skills_roots=None):
+    """Check only local executable and Skill prerequisites, without online I/O."""
+    source = dict(os.environ if environ is None else environ)
+    selected = _selected_capabilities(capability)
+    roots = _skill_roots(source, skills_roots)
+    checks = []
+    lark_check, _profile_check = _probe_lark_cli(source, None)
+    for selected_capability in sorted(selected):
+        checks.extend(
+            [
+                _check(
+                    "local.python",
+                    selected_capability,
+                    "ready" if sys.version_info >= MIN_PYTHON_VERSION else "blocked",
+                    "Python 版本符合要求"
+                    if sys.version_info >= MIN_PYTHON_VERSION
+                    else "Python 版本低于 3.10",
+                    "安装或选择 Python 3.10 及以上版本"
+                    if sys.version_info < MIN_PYTHON_VERSION
+                    else "",
+                ),
+                _check("local.lark_cli", selected_capability, *lark_check),
+                _external_skills_check({}, selected_capability, roots),
+            ]
+        )
+    blocked = [check for check in checks if check["status"] != "ready"]
+    next_actions = []
+    for check in blocked:
+        action = check.get("next_action")
+        if not action:
+            continue
+        if (
+            check["id"] == "local.external_skills"
+            and any(
+                item["id"] == "local.lark_cli"
+                and item.get("next_action") == LARK_CLI_RECOVERY
+                for item in blocked
+            )
+        ):
+            continue
+        if action not in next_actions:
+            next_actions.append(action)
+    return {
+        "schema_version": 1,
+        "status": "blocked" if blocked else "ready",
+        "checks": checks,
+        "next_actions": next_actions,
+        "online_checks_run": False,
+    }
 
 
 def main():

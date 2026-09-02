@@ -18,7 +18,23 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 INSTALLER_PATH = ROOT / "scripts" / "install_offerloop.py"
+PREFLIGHT_PATH = (
+    ROOT / "runtime" / "offerloop" / "admin" / "scripts" / "preflight.py"
+)
 WORKSPACE_CONFIG_SCHEMA = 7
+AUTOMATION_VERIFICATION_SCHEMA = 1
+SYNC_AUTOMATION_CHECKS = {
+    "sync_service_release",
+    "enterprise_main_child_workflows",
+    "enterprise_progress_workflow",
+    "reminder_progress_workflow",
+}
+DAILY_CHECKIN_CHECKS = {
+    "daily_checkin_trigger",
+    "daily_checkin_card_callback",
+    "daily_checkin_permissions",
+    "calendar_scope_isolation_verified",
+}
 ACTIVE_ARTIFACT_READINESS = {
     "experience_deepthink",
     "current_resumes",
@@ -44,6 +60,42 @@ def _load_installer():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def _load_preflight():
+    spec = importlib.util.spec_from_file_location(
+        "offerloop_prerequisite_preflight", PREFLIGHT_PATH
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError("OfferLoop prerequisite preflight is unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _emit_progress(progress, event: str, *, agent: str | None = None) -> None:
+    if progress is not None:
+        progress(event, agent=agent)
+
+
+_PROGRESS_LABELS = {
+    "source_validation": "校验安装源",
+    "hash_sources": "校验本地文件完整性",
+    "scan_targets": "扫描目标 Skill 目录（最多六层）",
+    "stage_files": "暂存 OfferLoop 文件",
+    "commit_files": "安装 OfferLoop 文件",
+    "local_complete": "本地 Skill 安装完成",
+    "local_conflict": "目标扫描完成，发现同名冲突",
+    "dependency_check": "检查工作区依赖",
+    "write_config": "记录本地安装状态",
+    "complete": "安装流程完成",
+}
+
+
+def _human_progress(event: str, *, agent: str | None = None) -> None:
+    label = _PROGRESS_LABELS.get(event, event)
+    prefix = f"[{agent}] " if agent else ""
+    print(f"OfferLoop · {prefix}{label}…", flush=True)
 
 
 def _xdg_path(environ, variable: str, fallback: Path, filename: str) -> Path:
@@ -474,11 +526,173 @@ def workspace_status(config: dict) -> str:
     return "ready"
 
 
+def _progress_sync_config_ready(config: dict) -> bool:
+    bridge = config.get("progress_sync")
+    return bool(
+        isinstance(bridge, dict)
+        and bridge.get("status") == "enabled"
+        and all(
+            bridge.get(key) not in (None, "")
+            for key in ("app_id", "endpoint", "workflow_id")
+        )
+    )
+
+
+def _daily_checkin_config_status(config: dict) -> str:
+    daily = config.get("daily_checkin")
+    if daily in (None, {}):
+        return "needs_decision"
+    if not isinstance(daily, dict):
+        return "needs_setup"
+    if daily.get("status") == "disabled":
+        return "disabled"
+    if daily.get("status") != "enabled":
+        return "needs_decision"
+    valid = (
+        str(daily.get("chat_id", "")).startswith("oc_")
+        and str(daily.get("owner_open_id", "")).startswith("ou_")
+        and bool(str(daily.get("calendar_id", "")).strip())
+        and daily.get("timezone") == "Asia/Shanghai"
+        and daily.get("time") == "22:10"
+    )
+    return "configured" if valid else "needs_setup"
+
+
+def _fingerprint(payload: dict) -> str:
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode(
+        "utf-8"
+    )
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def sync_automation_fingerprint(config: dict) -> str:
+    bridge = config.get("progress_sync")
+    public_bridge = (
+        {
+            key: bridge.get(key)
+            for key in ("app_id", "endpoint", "workflow_id", "status")
+        }
+        if isinstance(bridge, dict)
+        else None
+    )
+    return _fingerprint(
+        {
+            "schema_version": config.get("schema_version"),
+            "lark_profile": config.get("lark_profile"),
+            "target_base_url": config.get("target_base_url"),
+            "progress_base_url": config.get("progress_base_url"),
+            "reminder_base_url": config.get("reminder_base_url"),
+            "progress_sync": public_bridge,
+        }
+    )
+
+
+def daily_checkin_fingerprint(config: dict) -> str:
+    daily = config.get("daily_checkin")
+    public_daily = (
+        {
+            key: daily.get(key)
+            for key in (
+                "status",
+                "chat_id",
+                "owner_open_id",
+                "calendar_id",
+                "timezone",
+                "time",
+            )
+        }
+        if isinstance(daily, dict)
+        else None
+    )
+    return _fingerprint(
+        {
+            "schema_version": config.get("schema_version"),
+            "reminder_base_url": config.get("reminder_base_url"),
+            "progress_sync_app_id": (
+                config.get("progress_sync", {}).get("app_id")
+                if isinstance(config.get("progress_sync"), dict)
+                else None
+            ),
+            "daily_checkin": public_daily,
+        }
+    )
+
+
+def sync_automation_status(config: dict) -> str:
+    if workspace_status(config) != "ready" or not _progress_sync_config_ready(config):
+        return "needs_setup"
+    verification = config.get("automation_verification")
+    if not isinstance(verification, dict):
+        return "needs_online_verification"
+    checks = set(verification.get("checks", []))
+    if (
+        verification.get("status") != "verified"
+        or verification.get("schema_version") != AUTOMATION_VERIFICATION_SCHEMA
+        or verification.get("sync_fingerprint")
+        != sync_automation_fingerprint(config)
+        or not SYNC_AUTOMATION_CHECKS.issubset(checks)
+    ):
+        return "needs_online_verification"
+    return "ready"
+
+
+def daily_checkin_status(config: dict) -> str:
+    configured = _daily_checkin_config_status(config)
+    if configured != "configured":
+        return configured
+    verification = config.get("automation_verification")
+    if not isinstance(verification, dict):
+        return "needs_online_verification"
+    checks = set(verification.get("checks", []))
+    if (
+        verification.get("status") != "verified"
+        or verification.get("schema_version") != AUTOMATION_VERIFICATION_SCHEMA
+        or verification.get("daily_checkin_fingerprint")
+        != daily_checkin_fingerprint(config)
+        or not DAILY_CHECKIN_CHECKS.issubset(checks)
+    ):
+        return "needs_online_verification"
+    return "ready"
+
+
+def readiness(config: dict) -> dict:
+    workspace = workspace_status(config)
+    sync = sync_automation_status(config)
+    daily = daily_checkin_status(config)
+    return {
+        "workspace_ready": workspace == "ready",
+        "sync_ready": sync == "ready",
+        "daily_checkin_ready": daily == "ready",
+        "daily_checkin_selected": _daily_checkin_config_status(config)
+        in {"configured", "disabled"},
+    }
+
+
+def complete_system_status(config: dict) -> str:
+    if workspace_status(config) != "ready":
+        return "needs_setup"
+    if sync_automation_status(config) != "ready":
+        return "needs_setup"
+    if daily_checkin_status(config) not in {"ready", "disabled"}:
+        return "needs_setup"
+    return "ready"
+
+
 def _next_prompt() -> str:
     return (
         "请完成 OfferLoop 完整模式初始化：先读取已安装的 "
         ".offerloop-runtime/references/full-setup.md，做只读预检并向我展示将采用或创建的"
-        "三张飞书 Base、私有知识库和目录计划；得到我确认后再执行线上写入，最后运行只读验收。"
+        "三张飞书 Base、私有知识库、同步服务、12 条 Base workflow 和每日卡片选择；"
+        "得到我确认后再执行线上写入，最后运行完整自动化验收。"
+    )
+
+
+def _automation_prompt() -> str:
+    return (
+        "请继续完成 OfferLoop 自动化闭环：读取已安装的 "
+        ".offerloop-runtime/references/one-click-deploy.md，发布同步服务，创建并启用"
+        "企业主子表双向同步、企业清单到求职进展及笔面试中心到求职进展的 12 条 workflow；"
+        "再询问我是否启用每日 22:10 群卡片。完成真实回读后记录自动化验收。"
     )
 
 
@@ -489,12 +703,14 @@ def setup(
     environ=None,
     dry_run: bool = False,
     upgrade: bool = False,
+    progress=None,
 ) -> dict:
     installer = _load_installer()
     if mode != "full":
         raise ValueError("OfferLoop only supports the full Feishu workspace mode")
     selected = installer.SKILL_NAMES
 
+    _emit_progress(progress, "source_validation", agent=agent)
     installer.validate_sources(selected)
     install = installer.install_agent(
         agent,
@@ -503,14 +719,34 @@ def setup(
         upgrade=upgrade,
         skill_names=selected,
         install_mode=mode,
+        progress=progress,
     )
+    _emit_progress(progress, "dependency_check", agent=agent)
+    prerequisites = _load_preflight().run_prerequisite_checks(
+        environ=environ,
+        capability="workspace",
+    )
+    phases = {
+        "local_install": {
+            "status": "conflict" if install["status"] == "conflict" else "ready"
+        },
+        "workspace_prerequisites": {
+            "status": prerequisites["status"],
+            "checks": prerequisites["checks"],
+        },
+        "feishu_workspace": {"status": "needs_setup"},
+        "sync_automation": {"status": "needs_setup"},
+        "daily_checkin": {"status": "needs_decision"},
+    }
     if install["status"] == "conflict":
+        _emit_progress(progress, "complete", agent=agent)
         return {
             "schema_version": 1,
             "status": "conflict",
             "mode": mode,
             "selected_skills": list(selected),
             "install": install,
+            "phases": phases,
             "next_action": install.get("next_action", "resolve the install conflict"),
         }
 
@@ -521,25 +757,44 @@ def setup(
         "selected_skills": list(selected),
         "offerloop_version": installer.offerloop_version(),
     }
-    status = workspace_status(config)
+    workspace = workspace_status(config)
+    sync = sync_automation_status(config)
+    daily = daily_checkin_status(config)
+    status = complete_system_status(config)
+    phases["feishu_workspace"]["status"] = workspace
+    phases["sync_automation"]["status"] = sync
+    phases["daily_checkin"]["status"] = daily
     result = {
         "schema_version": 1,
         "status": status,
         "mode": mode,
         "selected_skills": list(selected),
         "install": install,
+        "phases": phases,
+        "readiness": readiness(config),
         "online_writes": False,
     }
-    if status != "ready":
+    if prerequisites["status"] == "blocked":
+        result["next_action"] = "install_workspace_prerequisites"
+        result["next_prompt"] = (
+            "请先补齐 OfferLoop 工作区依赖（安装器不会自动运行 npm 或 npx）："
+            + "；".join(prerequisites["next_actions"])
+        )
+    elif workspace != "ready":
         result["next_action"] = "start_agent_workspace_setup"
         result["next_prompt"] = _next_prompt()
+    elif sync != "ready" or daily not in {"ready", "disabled"}:
+        result["next_action"] = "start_agent_automation_setup"
+        result["next_prompt"] = _automation_prompt()
     else:
         result["next_action"] = "restart_agent_and_run_verify"
 
     if dry_run:
         result["dry_run"] = True
+        _emit_progress(progress, "complete", agent=agent)
         return result
 
+    _emit_progress(progress, "write_config", agent=agent)
     _write_private_json(config_path, config)
     state = {
         "schema_version": 1,
@@ -548,9 +803,18 @@ def setup(
         "status": status,
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "completed_phases": ["local_install", "mode_config"],
-        "pending_phase": "feishu_workspace" if status == "needs_setup" else None,
+        "pending_phase": (
+            "workspace_prerequisites"
+            if prerequisites["status"] == "blocked"
+            else "feishu_workspace"
+            if workspace != "ready"
+            else "automation_integrations"
+            if status != "ready"
+            else None
+        ),
     }
     _write_private_json(state_file(environ), state)
+    _emit_progress(progress, "complete", agent=agent)
     return result
 
 
@@ -573,7 +837,15 @@ def verify(agent: str, mode: str, *, environ=None) -> dict:
         and installation.get("selected_skills") == list(selected)
     )
     workspace = workspace_status(config)
-    verified = install["verified"] and mode_ready and workspace == "ready"
+    sync = sync_automation_status(config)
+    daily = daily_checkin_status(config)
+    verified = (
+        install["verified"]
+        and mode_ready
+        and workspace == "ready"
+        and sync == "ready"
+        and daily in {"ready", "disabled"}
+    )
     result = {
         "schema_version": 1,
         "status": "ready" if verified else "needs_setup",
@@ -583,9 +855,14 @@ def verify(agent: str, mode: str, *, environ=None) -> dict:
         "local_install": install,
         "mode_config": "ready" if mode_ready else "missing_or_mismatch",
         "workspace": workspace,
+        "sync_automation": sync,
+        "daily_checkin": daily,
+        "readiness": readiness(config),
     }
     if workspace != "ready":
         result["next_prompt"] = _next_prompt()
+    elif sync != "ready" or daily not in {"ready", "disabled"}:
+        result["next_prompt"] = _automation_prompt()
     return result
 
 
@@ -617,12 +894,13 @@ def record_workspace_verification(agent: str, *, environ=None) -> dict:
     }
     _write_private_json(path, config)
     state = _load_json(state_file(environ))
+    status = complete_system_status(config)
     state.update(
         {
             "schema_version": 1,
             "mode": "full",
             "selected_skills": list(installer.SKILL_NAMES),
-            "status": "ready",
+            "status": status,
             "updated_at": now,
             "completed_phases": [
                 "local_install",
@@ -630,6 +908,80 @@ def record_workspace_verification(agent: str, *, environ=None) -> dict:
                 "feishu_workspace",
                 "online_verification",
             ],
+            "pending_phase": (
+                "automation_integrations" if status != "ready" else None
+            ),
+        }
+    )
+    _write_private_json(state_file(environ), state)
+    result = {
+        "schema_version": 1,
+        "status": status,
+        "mode": "full",
+        "selected_skills": list(installer.SKILL_NAMES),
+        "online_writes": False,
+        "verification_recorded": True,
+        "readiness": readiness(config),
+    }
+    if status != "ready":
+        result["next_action"] = "start_agent_automation_setup"
+        result["next_prompt"] = _automation_prompt()
+    return result
+
+
+def record_automation_verification(agent: str, *, environ=None) -> dict:
+    """Record an Agent-completed online automation audit; no network I/O."""
+    installer = _load_installer()
+    local = installer.verify_agent(
+        agent,
+        environ=environ,
+        skill_names=installer.SKILL_NAMES,
+        install_mode="full",
+    )
+    if not local["verified"]:
+        raise ValueError("local full installation must verify before automation completion")
+    path = config_file(environ)
+    config = _load_json(path)
+    if workspace_status(config) != "ready":
+        raise ValueError("workspace must be verified before automation completion")
+    if not _progress_sync_config_ready(config):
+        raise ValueError("verified progress_sync app, endpoint, and workflow are required")
+    daily = _daily_checkin_config_status(config)
+    if daily not in {"configured", "disabled"}:
+        raise ValueError("daily_checkin must be explicitly enabled or disabled")
+
+    now = datetime.now(timezone.utc).isoformat()
+    checks = set(SYNC_AUTOMATION_CHECKS)
+    verification = {
+        "status": "verified",
+        "schema_version": AUTOMATION_VERIFICATION_SCHEMA,
+        "verified_at": now,
+        "sync_fingerprint": sync_automation_fingerprint(config),
+    }
+    if daily == "configured":
+        checks.update(DAILY_CHECKIN_CHECKS)
+        verification["daily_checkin_fingerprint"] = daily_checkin_fingerprint(
+            config
+        )
+    verification["checks"] = sorted(checks)
+    config["automation_verification"] = verification
+    _write_private_json(path, config)
+
+    if complete_system_status(config) != "ready":
+        raise RuntimeError("automation verification did not make the system ready")
+    state = _load_json(state_file(environ))
+    completed = list(state.get("completed_phases", []))
+    for phase in ("automation_integrations", "automation_verification"):
+        if phase not in completed:
+            completed.append(phase)
+    state.update(
+        {
+            "schema_version": 1,
+            "mode": "full",
+            "selected_skills": list(installer.SKILL_NAMES),
+            "status": "ready",
+            "updated_at": now,
+            "completed_phases": completed,
             "pending_phase": None,
         }
     )
@@ -640,7 +992,8 @@ def record_workspace_verification(agent: str, *, environ=None) -> dict:
         "mode": "full",
         "selected_skills": list(installer.SKILL_NAMES),
         "online_writes": False,
-        "verification_recorded": True,
+        "automation_verification_recorded": True,
+        "readiness": readiness(config),
     }
 
 
@@ -653,6 +1006,7 @@ def main(argv=None) -> int:
     parser.add_argument("--upgrade", action="store_true")
     parser.add_argument("--verify", action="store_true")
     parser.add_argument("--record-workspace-verified", action="store_true")
+    parser.add_argument("--record-automation-verified", action="store_true")
     parser.add_argument("--create-retirement-snapshot", action="store_true")
     parser.add_argument("--rollback-snapshot")
     parser.add_argument("--input", default="-")
@@ -666,7 +1020,12 @@ def main(argv=None) -> int:
         parser.error("--mode is required for setup, verify, and workspace verification")
     if args.create_retirement_snapshot and args.rollback_snapshot:
         parser.error("choose either --create-retirement-snapshot or --rollback-snapshot")
-    if retirement_action and (args.upgrade or args.verify or args.record_workspace_verified):
+    if retirement_action and (
+        args.upgrade
+        or args.verify
+        or args.record_workspace_verified
+        or args.record_automation_verified
+    ):
         parser.error("retirement snapshot actions cannot be combined with setup actions")
     if args.create_retirement_snapshot and (args.dry_run or args.confirmed):
         parser.error("snapshot creation does not accept --dry-run or --confirmed")
@@ -676,6 +1035,12 @@ def main(argv=None) -> int:
         parser.error("--record-workspace-verified requires --mode full")
     if args.record_workspace_verified and (args.verify or args.dry_run or args.upgrade):
         parser.error("--record-workspace-verified cannot be combined with other actions")
+    if args.record_automation_verified and args.mode != "full":
+        parser.error("--record-automation-verified requires --mode full")
+    if args.record_automation_verified and (
+        args.verify or args.dry_run or args.upgrade or args.record_workspace_verified
+    ):
+        parser.error("--record-automation-verified cannot be combined with other actions")
     if args.verify and (args.dry_run or args.upgrade):
         parser.error("--verify cannot be combined with --dry-run or --upgrade")
 
@@ -696,7 +1061,9 @@ def main(argv=None) -> int:
             )
         else:
             result = (
-                record_workspace_verification(args.agent)
+                record_automation_verification(args.agent)
+                if args.record_automation_verified
+                else record_workspace_verification(args.agent)
                 if args.record_workspace_verified
                 else verify(args.agent, args.mode)
                 if args.verify
@@ -705,6 +1072,7 @@ def main(argv=None) -> int:
                     args.mode,
                     dry_run=args.dry_run,
                     upgrade=args.upgrade,
+                    progress=None if args.as_json else _human_progress,
                 )
             )
     except (OSError, ValueError, RuntimeError) as exc:
@@ -716,13 +1084,33 @@ def main(argv=None) -> int:
         return 1
 
     if args.as_json:
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        print(json.dumps(result, ensure_ascii=True, indent=2))
     elif retirement_action:
         print(f"OfferLoop retirement action: {result['status']}")
         print(f"Snapshot: {result['snapshot_id']}")
     else:
         print(f"OfferLoop {result['mode']} setup: {result['status']}")
         print("Skills: " + ", ".join(result["selected_skills"]))
+        phases = result.get("phases", {})
+        local_status = phases.get("local_install", {}).get("status")
+        prerequisites_status = phases.get("workspace_prerequisites", {}).get(
+            "status"
+        )
+        feishu_status = phases.get("feishu_workspace", {}).get("status")
+        sync_status = phases.get("sync_automation", {}).get("status")
+        daily_status = phases.get("daily_checkin", {}).get("status")
+        if local_status:
+            print(f"本地 Skill 安装：{local_status}")
+        if prerequisites_status:
+            print(f"工作区依赖：{prerequisites_status}")
+        if feishu_status:
+            print(f"飞书工作区：{feishu_status}")
+        if sync_status:
+            print(f"同步自动化：{sync_status}")
+        if daily_status:
+            print(f"每日群卡片：{daily_status}")
+        if result.get("status") == "needs_setup":
+            print("needs_setup 表示本地安装已完成，飞书初始化仍待进行。")
         if result.get("next_prompt"):
             print("下一步在新 Agent 会话中发送：")
             print(result["next_prompt"])

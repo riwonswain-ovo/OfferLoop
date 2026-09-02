@@ -23,8 +23,10 @@ SUPPORT_NAME = ".offerloop-runtime"
 ADMIN_SOURCE = RUNTIME_SOURCE / "admin"
 ADMIN_SCRIPTS_SOURCE = ADMIN_SOURCE / "scripts"
 ADMIN_REFERENCES_SOURCE = ADMIN_SOURCE / "references"
+ADMIN_ASSETS_SOURCE = ADMIN_SOURCE / "assets"
 VERSION_FILE = ROOT / "VERSION"
 INSTALLER_VERSION = "3.0"
+SCAN_MAX_DEPTH = 6
 SKILL_NAMES = (
     "job-collection",
     "recruiting-reminder",
@@ -72,7 +74,8 @@ WELCOME = {
     "headline": "欢迎使用 OfferLoop",
     "summary": (
         "OfferLoop 包含 7 个与飞书工作区协同运行的长期 Skill。当前只完成了本地文件安装；"
-        "完成三张 Base 和私有知识库初始化及验收后，OfferLoop 才可正式使用。"
+        "飞书工作区初始化、"
+        "完成三张 Base、私有知识库、核心同步自动化及验收后，OfferLoop 才可正式使用。"
     ),
     "groups": [
         {
@@ -133,9 +136,10 @@ WELCOME = {
         "经历深挖 → Resume Tailor → 面试准备 → 模拟面试 → 真实面试复盘",
     ],
     "next_prompt": (
-        "请完成 OfferLoop 飞书工作区初始化：先读取已安装的 "
+        "请完成 OfferLoop 完整初始化：先读取已安装的 "
         ".offerloop-runtime/references/full-setup.md，做只读预检并展示将采用或创建的"
-        "三张飞书 Base、私有知识库和目录计划；得到我确认后再写入，最后运行只读验收。"
+        "三张飞书 Base、私有知识库、同步服务、12 条 Base workflow 和每日卡片选择；"
+        "得到我确认后再写入，最后运行完整自动化验收。"
     ),
     "privacy_notice": (
         "安装只添加本地 Skill；尚未读取飞书、邮箱或简历，也没有创建或修改线上数据，"
@@ -300,31 +304,57 @@ def tree_digest(root: Path) -> str:
 
 def runtime_source_digest() -> str:
     """Digest the virtual hidden runtime assembled from management sources."""
-    entries: list[tuple[str, Path]] = []
-    entries.extend(
+    entries: dict[str, Path] = {}
+    entries.update(
         (relative.as_posix(), path)
         for path, relative in _included_files(SUPPORT_SOURCE)
     )
-    entries.extend(
+    entries.update(
         ((Path("scripts") / relative).as_posix(), path)
         for path, relative in _included_files(ADMIN_SCRIPTS_SOURCE)
     )
-    entries.extend(
+    entries.update(
         ((Path("references") / relative).as_posix(), path)
         for path, relative in _included_files(ADMIN_REFERENCES_SOURCE)
     )
+    entries.update(
+        ((Path("assets") / relative).as_posix(), path)
+        for path, relative in _included_files(ADMIN_ASSETS_SOURCE)
+    )
+
+    tree: dict = {}
+    for relative, path in entries.items():
+        node = tree
+        parts = Path(relative).parts
+        for part in parts[:-1]:
+            node = node.setdefault(part, {})
+        node[parts[-1]] = path
+
     digest = hashlib.sha256()
-    for relative, path in sorted(entries, key=lambda item: item[0]):
-        digest.update(relative.encode("utf-8"))
-        digest.update(b"\0")
-        digest.update(path.read_bytes())
-        digest.update(b"\0")
+
+    def visit(node: dict, prefix: Path) -> None:
+        files = sorted(name for name, value in node.items() if isinstance(value, Path))
+        directories = sorted(
+            name for name, value in node.items() if isinstance(value, dict)
+        )
+        for name in files:
+            relative = (prefix / name).as_posix()
+            path = node[name]
+            digest.update(relative.encode("utf-8"))
+            digest.update(b"\0")
+            digest.update(path.read_bytes())
+            digest.update(b"\0")
+        for name in directories:
+            visit(node[name], prefix / name)
+
+    visit(tree, Path())
     return digest.hexdigest()
 
 
 def _loose_frontmatter_name(skill_file: Path) -> str | None:
     try:
-        text = skill_file.read_text(encoding="utf-8")
+        with skill_file.open("r", encoding="utf-8") as handle:
+            text = handle.read(4096)
     except OSError:
         return None
     match = re.match(r"^---\r?\n(.*?)\r?\n---", text, re.DOTALL)
@@ -334,20 +364,60 @@ def _loose_frontmatter_name(skill_file: Path) -> str | None:
     return name.group(1) if name else None
 
 
-def _skill_directories(root: Path, name: str) -> tuple[Path, ...]:
-    """Find direct or grouped Skills up to six directory levels."""
-    found = []
-    direct = root / name
-    if (direct / "SKILL.md").is_file():
-        found.append(direct)
-    if root.is_dir():
-        for skill_file in root.rglob("SKILL.md"):
-            relative = skill_file.relative_to(root)
-            if len(relative.parts) - 1 > 6 or skill_file.parent == direct:
-                continue
-            if _loose_frontmatter_name(skill_file) == name:
-                found.append(skill_file.parent)
-    return tuple(found)
+def _skill_directory_index(
+    root: Path,
+    names,
+    *,
+    max_depth: int = SCAN_MAX_DEPTH,
+) -> dict[str, tuple[Path, ...]]:
+    """Index matching Skills with one bounded, non-symlink traversal."""
+    selected = tuple(dict.fromkeys(names))
+    found: dict[str, list[Path]] = {name: [] for name in selected}
+    direct_paths = {root / name: name for name in selected}
+    for direct, name in direct_paths.items():
+        skill_file = direct / "SKILL.md"
+        if (
+            not direct.is_symlink()
+            and not skill_file.is_symlink()
+            and skill_file.is_file()
+        ):
+            found[name].append(direct)
+
+    if not root.is_dir():
+        return {name: tuple(paths) for name, paths in found.items()}
+
+    for directory, dirnames, filenames in os.walk(
+        root, topdown=True, followlinks=False
+    ):
+        parent = Path(directory)
+        try:
+            depth = len(parent.relative_to(root).parts)
+        except ValueError:
+            dirnames[:] = []
+            continue
+        dirnames[:] = [
+            name
+            for name in sorted(dirnames)
+            if depth < max_depth
+            and not _is_ignored(parent / name)
+            and not (parent / name).is_symlink()
+        ]
+        if depth > max_depth or "SKILL.md" not in filenames:
+            continue
+        if parent in direct_paths:
+            continue
+        skill_file = parent / "SKILL.md"
+        if skill_file.is_symlink() or not skill_file.is_file():
+            continue
+        skill_name = _loose_frontmatter_name(skill_file)
+        if skill_name in found:
+            found[skill_name].append(parent)
+    return {name: tuple(paths) for name, paths in found.items()}
+
+
+def _emit_progress(progress, event: str, *, agent: str | None = None) -> None:
+    if progress is not None:
+        progress(event, agent=agent)
 
 
 def _ignore_copy(directory: str, names: list[str]) -> set[str]:
@@ -538,12 +608,14 @@ def _hermes_external_duplicates(
     home: Path, root: Path, environ=None
 ) -> dict[str, list[tuple[Path, Path]]]:
     duplicates: dict[str, list[tuple[Path, Path]]] = {}
+    names = (*SKILL_NAMES, *LEGACY_SKILL_RENAMES.values())
     for external_root in _hermes_external_roots(home, root, environ):
+        index = _skill_directory_index(external_root, names)
         for name in SKILL_NAMES:
-            for candidate in _skill_directories(external_root, name):
+            for candidate in index[name]:
                 duplicates.setdefault(name, []).append((external_root, candidate))
         for new_name, legacy_name in LEGACY_SKILL_RENAMES.items():
-            for candidate in _skill_directories(external_root, legacy_name):
+            for candidate in index[legacy_name]:
                 duplicates.setdefault(new_name, []).append(
                     (external_root, candidate)
                 )
@@ -553,14 +625,16 @@ def _hermes_external_duplicates(
 def _workbuddy_import_duplicates(root: Path) -> dict[str, list[tuple[Path, Path]]]:
     """Find imported WorkBuddy Skills whose folder differs from the Skill name."""
     duplicates: dict[str, list[tuple[Path, Path]]] = {}
+    names = (*SKILL_NAMES, *LEGACY_SKILL_RENAMES.values())
+    index = _skill_directory_index(root, names)
     for name in SKILL_NAMES:
         direct = root / name
-        for candidate in _skill_directories(root, name):
+        for candidate in index[name]:
             if candidate != direct:
                 duplicates.setdefault(name, []).append((root, candidate))
     for new_name, legacy_name in LEGACY_SKILL_RENAMES.items():
         direct_legacy = root / legacy_name
-        for candidate in _skill_directories(root, legacy_name):
+        for candidate in index[legacy_name]:
             if candidate != direct_legacy:
                 duplicates.setdefault(new_name, []).append((root, candidate))
     return duplicates
@@ -586,6 +660,7 @@ def install_agent(
     upgrade=False,
     skill_names=None,
     install_mode="full",
+    progress=None,
 ) -> dict:
     selected_names = _selected_skill_names(skill_names)
     if install_mode != "full":
@@ -596,11 +671,13 @@ def install_agent(
     home = Path(source.get("HOME", Path.home())).expanduser()
     root = agent_root(agent, source)
     assert root is not None
+    _emit_progress(progress, "hash_sources", agent=agent)
     source_digests = {
         name: tree_digest(SKILLS_SOURCE / name) for name in selected_names
     }
     support_digest = runtime_source_digest()
     support_destination = root / SUPPORT_NAME
+    _emit_progress(progress, "scan_targets", agent=agent)
     hermes_duplicates = (
         _hermes_external_duplicates(home, root, source)
         if agent == "hermes-agent"
@@ -679,6 +756,7 @@ def install_agent(
                 "WorkBuddy 已导入的随机目录中存在同名 Skill；"
                 "确认属于旧版 OfferLoop 后使用 --upgrade 备份并清理重复副本"
             )
+        _emit_progress(progress, "local_conflict", agent=agent)
         return {
             "agent": agent,
             "target": agent_target_label(agent, source),
@@ -711,6 +789,7 @@ def install_agent(
             ],
             "runtime": {"name": SUPPORT_NAME, "status": support_status},
         }
+        _emit_progress(progress, "local_complete", agent=agent)
         return result
 
     if (
@@ -727,6 +806,7 @@ def install_agent(
             _write_manifest(
                 root, agent, source_digests, install_mode=install_mode
             )
+        _emit_progress(progress, "local_complete", agent=agent)
         return {
             "agent": agent,
             "target": agent_target_label(agent, source),
@@ -743,6 +823,7 @@ def install_agent(
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     with tempfile.TemporaryDirectory(prefix=".offerloop-stage-", dir=root) as stage_name:
         stage = Path(stage_name)
+        _emit_progress(progress, "stage_files", agent=agent)
         for name, status in operations:
             if status == "already_installed":
                 continue
@@ -777,10 +858,18 @@ def install_agent(
                 ignore=_ignore_copy,
                 dirs_exist_ok=True,
             )
+            shutil.copytree(
+                ADMIN_ASSETS_SOURCE,
+                staged_support / "assets",
+                symlinks=False,
+                ignore=_ignore_copy,
+                dirs_exist_ok=True,
+            )
             if tree_digest(staged_support) != support_digest:
                 raise RuntimeError("runtime support copy failed integrity validation")
         external_backups: list[tuple[Path, Path]] = []
         try:
+            _emit_progress(progress, "commit_files", agent=agent)
             for new_name, legacy_name in LEGACY_SKILL_RENAMES.items():
                 legacy = root / legacy_name
                 if not legacy.exists():
@@ -905,6 +994,7 @@ def install_agent(
         "skills": [{"name": name, "status": status} for name, status in operations],
         "runtime": {"name": SUPPORT_NAME, "status": support_status},
     }
+    _emit_progress(progress, "local_complete", agent=agent)
     return result
 
 
@@ -1026,6 +1116,24 @@ def _print_welcome() -> None:
     print(f"“{WELCOME['next_prompt']}”")
 
 
+_PROGRESS_LABELS = {
+    "source_validation": "校验安装源",
+    "hash_sources": "校验本地文件完整性",
+    "scan_targets": "扫描目标 Skill 目录（最多六层）",
+    "stage_files": "暂存 OfferLoop 文件",
+    "commit_files": "安装 OfferLoop 文件",
+    "local_complete": "本地 Skill 安装完成",
+    "local_conflict": "目标扫描完成，发现同名冲突",
+    "complete": "安装流程完成",
+}
+
+
+def _human_progress(event: str, *, agent: str | None = None) -> None:
+    label = _PROGRESS_LABELS.get(event, event)
+    prefix = f"[{agent}] " if agent else ""
+    print(f"OfferLoop · {prefix}{label}…", flush=True)
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -1077,6 +1185,8 @@ def main(argv=None) -> int:
 
     current_agent = None
     try:
+        if not args.as_json:
+            _human_progress("source_validation")
         validate_sources()
         reports = []
         for current_agent in _expand_agents(args.agent):
@@ -1088,6 +1198,7 @@ def main(argv=None) -> int:
                         current_agent,
                         dry_run=args.dry_run,
                         upgrade=args.upgrade,
+                        progress=None if args.as_json else _human_progress,
                     )
                 )
     except (OSError, ValueError, RuntimeError) as exc:
@@ -1165,6 +1276,7 @@ def main(argv=None) -> int:
                     "下一步：结束当前 Agent 会话并新开会话，然后调用 "
                     "安装器 --verify 运行只读核验。"
                 )
+        _human_progress("complete")
     if args.verify:
         return 0 if payload["verified"] else 1
     return 1 if any(report["status"] == "conflict" for report in reports) else 0

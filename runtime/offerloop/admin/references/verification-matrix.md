@@ -86,8 +86,15 @@ lark-cli wiki +node-list --space-id '<SPACE_ID>' --as user
 | 核验项 | 身份 | 只读操作 | 通过条件 |
 | --- | --- | --- | --- |
 | 即时桥接定位已配置 | 本地 | 离线预检 | 已登记 profile、两张 Base、同步应用、HTTPS endpoint 与 workflow ID |
-| 工作流列表可读取 | bot | `base +workflow-list` | 可读取目标表工作流列表 |
-| 即时工作流已启用 | bot | `base +workflow-get` | 登记的 workflow 状态为 enabled，触发条件监听投递进度的所有变更 |
+| 工作流列表可读取 | bot | 对企业清单与笔面试中心执行 `base +workflow-list` | 两张来源 Base 的 workflow 列表均可读取 |
+| 主子表双向工作流 | bot | 对企业清单的 10 条主子表 workflow 执行 `base +workflow-get` | 五张分类子表均有“子表 → 主表”和“主表 → 子表”，全部 enabled、监听投递进度且排除 `automationBatchUpdate` |
+| 企业到进展即时工作流 | bot | 对企业清单的跨 Base workflow 执行 `base +workflow-get` | 唯一一条 enabled workflow 监听主表投递进度，并调用已发布同步服务 |
+| 笔面试到进展即时工作流 | bot | 对笔面试中心 workflow 执行 `base +workflow-get` | 唯一一条 enabled workflow 监听完成状态，并携带精确 record ID 调用同步服务 |
+| 完整 workflow 数量 | 本地 | 将脱敏列表传给 `scripts/automation_contract.py --validate --input -` | 企业清单 11 条 + 笔面试中心 1 条，共 12 条必要 enabled workflow；无同标题重复或额外 enabled workflow |
+| 同步服务发布与健康 | user | `apps +release-list/get` 与只读健康检查 | 当前线上 release 为 finished，健康检查返回 ready；不得把本地构建成功当作线上已发布 |
+| 应用 Base 读写权限 | bot | 在用户确认的验收前缀合成记录与内部运行状态表上执行最小读取、创建、更新和回读 | 企业清单、求职进展、笔面试中心与运行状态表均可由同步应用读写；403 或只读成功均不得记录 ready |
+| 精确记录定位传输 | user | 回读两条 HTTP workflow 的 query、raw body 和触发器 ref | 企业 workflow 使用 `sourceRecordId` query，笔面试 workflow 使用 `recordId` query，二者 raw body 均为 `{}`；禁止把动态 record ID 拼进 raw body |
+| 每日卡片选择 | 本地 / user | 配置与 `apps +automation-list/get` | 明确 disabled，或 `offerloop-daily-checkin` 为 enabled、cron=`10 22 * * *`、Asia/Shanghai，且群、owner、指定日历、匿名 HTTPS 回调入口和卡片动作回读均已验证；日历必须是显式配置且应用角色为 owner/writer，不得新建替代日历，writer 模式不得邀请 owner；OAuth 重定向、登录页或 404 均不通过 |
 | 自动化运行历史可读取 | bot | `base +workflow-run-history` | 可读取历史状态，不重跑工作流 |
 | 应用身份有效 | bot | `lark-cli whoami` | 返回当前 bot 身份，不泄露凭据 |
 
@@ -98,11 +105,16 @@ lark-cli whoami --profile '<PROFILE>' --as bot
 lark-cli base +workflow-list --base-token '<BASE_TOKEN>' --table-id '<TABLE_ID>' --profile '<PROFILE>' --as bot
 ```
 
+脱敏快照只包含 title、status、trigger_type、step_types、记录定位传输方式、是否排除自动批量更新、发布/健康状态、Base 读写权限验证布尔值和
+每日卡片验证布尔值（含 `callback_route_public_verified`）。不得把 Base token、workflow ID、record ID、OpenAPI key 或 workflow secret
+传给校验器或验收报告。
+
 执行运行历史查询前先阅读 `lark-base` Skill 的 `references/lark-base-workflow-run-history.md`，以该参考中的当前参数为准。验收阶段禁止启用、停用、创建或执行工作流。
 
 ## 5. 状态解释与交接
 
-- `ready`：已完成所选能力的离线检查，且本次已执行的只读在线检查通过。
+- `ready`：已完成所选能力的离线检查，且本次已执行的只读在线检查通过。完整模式还要求
+  `workspace_ready=true`、`sync_ready=true`，以及每日卡片已经验证或由用户明确停用。
 - `needs_action`：配置、字段、权限或入口缺失，需用户确认后才可修复。
 - `blocked`：本机缺少必要工具、运行时或必填配置，无法继续。
 - `unverified`：尚未授权或尚未执行在线检查；不是失败，也不应以猜测代替。

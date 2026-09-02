@@ -1204,14 +1204,16 @@ class RepositoryContractTest(unittest.TestCase):
         security = (ROOT / "SECURITY.md").read_text(encoding="utf-8")
         for agent in ("codex", "claude-code", "hermes-agent"):
             self.assertIn(f'"{agent}"', acceptance)
-        self.assertIn("four Agents, seven Skills", acceptance)
+        self.assertIn("README setup entrypoint, four Agents", acceptance)
         self.assertNotIn("four Agents, eleven Skills", acceptance)
         self.assertIn("工作区配置升级到 schema v7", end_to_end)
         self.assertIn("install_offerloop.py", acceptance)
+        self.assertIn("setup_offerloop.py", acceptance)
         self.assertIn("already_installed", acceptance)
         self.assertIn("--verify", acceptance)
         self.assertIn("post-install verification", acceptance)
         self.assertIn("cold_install_acceptance.py", workflow)
+        self.assertIn("bundle_install_acceptance.py", workflow)
         self.assertIn("readme_install_contract.py", workflow)
         for operating_system in ("ubuntu-latest", "macos-latest", "windows-latest"):
             self.assertIn(operating_system, workflow)
