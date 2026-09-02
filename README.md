@@ -6,7 +6,7 @@
 
 **招聘机会 · 求职进展 · 笔面试提醒 · 经历深挖 · 定制简历 · 面试准备与复盘**
 
-[![Version](https://img.shields.io/badge/Version-v0.1.0--alpha.15-7C3AED)](RELEASE_NOTES.md)
+[![Version](https://img.shields.io/badge/Version-v0.1.0--alpha.16-7C3AED)](RELEASE_NOTES.md)
 [![Skills](https://img.shields.io/badge/Skills-7-2563EB)](#-认识-7-个-skill)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![Agents](https://img.shields.io/badge/Agents-4-0F766E)](#支持的-agent)
@@ -109,11 +109,11 @@ OfferLoop 是一套由 7 个 Agent Skill、三张飞书业务 Base 和一个私�
 推荐下载 Release 中不超过 2 MiB 的精简安装包。先下载 ZIP 和 SHA-256 文件，校验后再解压：
 
 ```bash
-curl -LO https://github.com/riwonswain-ovo/OfferLoop/releases/download/v0.1.0-alpha.15/OfferLoop-v0.1.0-alpha.15.zip
-curl -LO https://github.com/riwonswain-ovo/OfferLoop/releases/download/v0.1.0-alpha.15/OfferLoop-v0.1.0-alpha.15.zip.sha256
-shasum -a 256 -c OfferLoop-v0.1.0-alpha.15.zip.sha256
-unzip OfferLoop-v0.1.0-alpha.15.zip
-cd OfferLoop-v0.1.0-alpha.15
+curl -LO https://github.com/riwonswain-ovo/OfferLoop/releases/download/v0.1.0-alpha.16/OfferLoop-v0.1.0-alpha.16.zip
+curl -LO https://github.com/riwonswain-ovo/OfferLoop/releases/download/v0.1.0-alpha.16/OfferLoop-v0.1.0-alpha.16.zip.sha256
+shasum -a 256 -c OfferLoop-v0.1.0-alpha.16.zip.sha256
+unzip OfferLoop-v0.1.0-alpha.16.zip
+cd OfferLoop-v0.1.0-alpha.16
 python3 scripts/setup_offerloop.py --agent codex --mode full --dry-run
 ```
 
@@ -123,8 +123,8 @@ Windows PowerShell 可用 `Invoke-WebRequest` 下载、`Get-FileHash -Algorithm 
 如果所在网络无法下载 Release 资产，可浅克隆同一版本作为备用：
 
 ```bash
-git clone --depth 1 --branch v0.1.0-alpha.15 https://github.com/riwonswain-ovo/OfferLoop.git OfferLoop-v0.1.0-alpha.15
-cd OfferLoop-v0.1.0-alpha.15
+git clone --depth 1 --branch v0.1.0-alpha.16 https://github.com/riwonswain-ovo/OfferLoop.git OfferLoop-v0.1.0-alpha.16
+cd OfferLoop-v0.1.0-alpha.16
 python3 scripts/setup_offerloop.py --agent codex --mode full --dry-run
 ```
 

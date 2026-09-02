@@ -31,7 +31,7 @@ class InstallerBundleTest(unittest.TestCase):
             first_archive = Path(first["archive"])
             second_archive = Path(second["archive"])
 
-            self.assertEqual(first_archive.name, "OfferLoop-v0.1.0-alpha.15.zip")
+            self.assertEqual(first_archive.name, "OfferLoop-v0.1.0-alpha.16.zip")
             self.assertEqual(first_archive.read_bytes(), second_archive.read_bytes())
             self.assertEqual(first["sha256"], second["sha256"])
             self.assertLessEqual(
@@ -43,7 +43,7 @@ class InstallerBundleTest(unittest.TestCase):
             )
 
             manifest = json.loads(Path(first["manifest"]).read_text(encoding="utf-8"))
-            self.assertEqual(manifest["offerloop_version"], "0.1.0-alpha.15")
+            self.assertEqual(manifest["offerloop_version"], "0.1.0-alpha.16")
             paths = [entry["path"] for entry in manifest["entries"]]
             self.assertEqual(paths, sorted(paths))
             self.assertEqual(manifest["entry_count"], len(paths))
