@@ -535,7 +535,7 @@ class OfferLoopInstallerTest(unittest.TestCase):
 
     def test_version_reports_installer_and_offerloop_versions(self):
         self.assertEqual(self.installer.INSTALLER_VERSION, "3.0")
-        self.assertEqual(self.installer.offerloop_version(), "0.1.0-alpha.15")
+        self.assertEqual(self.installer.offerloop_version(), "0.1.0-alpha.16")
 
     def test_skill_index_is_bounded_and_prunes_generated_and_symlinked_trees(self):
         with tempfile.TemporaryDirectory() as directory:
