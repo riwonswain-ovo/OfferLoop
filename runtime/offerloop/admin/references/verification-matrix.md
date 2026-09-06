@@ -49,7 +49,7 @@ lark-cli base +field-list --base-token '<PROGRESS_BASE_TOKEN>' --table-id '<PROG
 | 笔面试中心单表结构 | user / bot | Base 的 `+table-list`、`+view-list`、`+view-get-filter` | 使用 `笔面试安排` 单表；`全部安排` 无筛选，其余受管视图按 `环节` 筛选 |
 | Runtime 状态账本 | bot | Base 的 `+field-list` | `OfferLoop运行状态` 字段符合 reminder schema，只保存最小幂等、失败和分页状态 |
 | 日历可读取 | user | `calendar +agenda` 或 `calendar +freebusy` | 指定的未来 7 天范围可读取；不创建日程 |
-| 环节视图可读取 | user / bot | `base +view-list`、`+view-get-filter` | 测评、笔试、群面、一面、二面、三面、HR 面、其他面试均为同一物理表的受管视图 |
+| 环节视图可读取 | user / bot | `base +view-list`、`+view-get-filter` | 测评、笔试、AI 面、群面、一面、二面、三面、HR 面、其他面试均为同一物理表的受管视图 |
 | 每日卡片配置可定位 | 本地 | 离线预检 | daily_checkin 与 notifications 分离；时间为 22:10 Asia/Shanghai，chat、owner 与 calendar 已登记或明确停用 |
 
 IMAP 检查示例：

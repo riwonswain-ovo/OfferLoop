@@ -14,7 +14,7 @@ export const MAX_RECORDS_PER_CARD = 25;
 const FIXED_STAGES: Set<string> = new Set([
   '群面', '一面', '二面', '三面', '面试', 'HR面',
 ]);
-const ASYNC_STAGES: Set<string> = new Set(['测评', '笔试']);
+const ASYNC_STAGES: Set<string> = new Set(['测评', '笔试', 'AI面']);
 
 function text(value: unknown): string {
   if (typeof value === 'string') return value.trim();
@@ -185,7 +185,7 @@ export function deriveAsyncWindow(
 }
 
 function storedDurationMillis(fields: Record<string, unknown>): number {
-  const minutes: number = Number(fields['预计时长（分钟）'] ?? 90);
+  const minutes: number = Number(fields['预计时长（分钟）'] ?? (fields['环节'] === 'AI面' ? 60 : 90));
   if (!Number.isFinite(minutes) || minutes <= 0 || minutes > 24 * 60) {
     throw new Error('stored duration must be a positive number');
   }

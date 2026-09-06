@@ -3,7 +3,7 @@ export const DAILY_CHECKIN_TIME = "22:10";
 export const MAX_RECORDS_PER_CARD = 25;
 
 const FIXED_STAGES = new Set(["群面", "一面", "二面", "三面", "面试", "HR面"]);
-const ASYNC_STAGES = new Set(["测评", "笔试"]);
+const ASYNC_STAGES = new Set(["测评", "笔试", "AI面"]);
 
 function fields(record) {
   return record?.fields ?? record ?? {};
@@ -149,7 +149,7 @@ export function parseCardAction(payload, ownerOpenId) {
 }
 
 function storedDurationMs(item) {
-  const minutes = Number(item["预计时长（分钟）"] ?? 90);
+  const minutes = Number(item["预计时长（分钟）"] ?? (item["环节"] === "AI面" ? 60 : 90));
   if (!Number.isFinite(minutes) || minutes <= 0 || minutes > 24 * 60) throw new Error("invalid_stored_duration");
   return minutes * 60 * 1000;
 }

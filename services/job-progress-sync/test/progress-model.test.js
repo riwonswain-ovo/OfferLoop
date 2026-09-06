@@ -1,6 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+test("AI interview has an independent lifecycle before human round one", () => {
+  const invited = applyInvitation({ "进展状态": "待笔试", "最近完成节点": "笔试完成" }, "AI面");
+  assert.equal(invited["进展状态"], "待 AI 面");
+  const completed = applyCompletion(invited, "AI面");
+  assert.equal(completed["最近完成节点"], "AI面完成");
+  assert.equal(completed["进展状态"], "待反馈");
+  assert.equal(applyInvitation(invited, "一面")["进展状态"], "待一面");
+  assert.equal(applyInvitation({ "进展状态": "待一面" }, "AI面")["进展状态"], "待一面");
+  assert.equal(applyInvitation({ "进展状态": "Offer" }, "AI面")["进展状态"], "Offer");
+  assert.deepEqual(resolveInterviewStages([
+    { created_time: "100", fields: { "环节": "AI面" } },
+    { created_time: "200", fields: { "环节": "面试" } },
+  ]).map((item) => item.stage), ["AI面", "一面"]);
+});
+
 import {
   applyCompletion,
   applyInvitation,

@@ -45,6 +45,7 @@ REMINDER_VIEW_FILTERS = {
     "全部安排": (),
     "测评": ("测评",),
     "笔试": ("笔试",),
+    "AI 面": ("AI面",),
     "群面": ("群面",),
     "一面": ("一面",),
     "二面": ("二面",),
@@ -61,6 +62,7 @@ PROGRESS_STATUS_ORDER = {
     "待反馈": 0,
     "待测评": 1,
     "待笔试": 2,
+    "待 AI 面": 2.5,
     "待群面": 3,
     "待一面": 4,
     "待二面": 5,
@@ -72,6 +74,7 @@ PROGRESS_STATUS_ORDER = {
 EVENT_STAGE_TO_PROGRESS_STATUS = {
     "测评": "待测评",
     "笔试": "待笔试",
+    "AI面": "待 AI 面",
     "群面": "待群面",
     "一面": "待一面",
     "二面": "待二面",
@@ -86,6 +89,7 @@ COMPLETED_NODE_ORDER = {
     "投递完成": 0,
     "测评完成": 1,
     "笔试完成": 2,
+    "AI面完成": 2.5,
     "群面完成": 3,
     "一面完成": 4,
     "二面完成": 5,
@@ -96,6 +100,7 @@ COMPLETED_NODE_ORDER = {
 EVENT_STAGE_TO_COMPLETED_NODE = {
     "测评": "测评完成",
     "笔试": "笔试完成",
+    "AI面": "AI面完成",
     "群面": "群面完成",
     "一面": "一面完成",
     "二面": "二面完成",
@@ -127,10 +132,17 @@ def _normalized(value):
     return re.sub(r"[\W_]+", "", text, flags=re.UNICODE)
 
 
-def _stage_from_text(event_type, raw_stage):
+def _stage_from_text(event_type, raw_stage, platform=""):
     event_kind = _normalized(event_type)
     stage = _normalized(raw_stage)
     combined = f"{event_kind}{stage}"
+    # Explicit interview wording wins over umbrella assessment labels. Do not
+    # infer AI interviews from an AI job title or a generic online platform.
+    if any(re.search(r"(?:^|[^a-z])ai\s*(?:面试|面|interview\b)",
+                     unicodedata.normalize("NFKC", str(value or "")).lower())
+           or "人工智能面试" in str(value) or "智能面试" in str(value)
+           for value in (event_type, raw_stage, platform)):
+        return "AI面"
     written_markers = ("笔试", "技术笔试", "codingtest", "writtentest")
     assessment_markers = ("测评", "性格", "行测", "assessment", "aptitude", "personality")
     event_is_written = any(word in combined for word in written_markers)
@@ -177,6 +189,7 @@ def route_event(extracted):
     classification = _normalized(" ".join(str(extracted.get(key, "") or "") for key in ("classification", "event_type", "raw_stage")))
     recruiting_markers = (
         "recruit", "招聘", "interview", "面试", "test", "笔试", "测评", "assessment", "exam", "考试",
+        "ai面",
     )
     if kind == "new" and not classification and not _normalized(extracted.get("raw_stage")):
         return {**extracted, "source_mail_id": source_mail_id, "message_kind": kind,
@@ -198,6 +211,7 @@ def route_event(extracted):
     stage = _stage_from_text(
         extracted.get("event_type", ""),
         extracted.get("raw_stage", ""),
+        extracted.get("platform", ""),
     )
     mode = normalize_delivery_mode(extracted.get("delivery_mode", extracted.get("exam_subtype", "")))
     deadline_text = extracted.get("deadline_text", "")
@@ -210,7 +224,7 @@ def route_event(extracted):
             if deadline_value in (None, "") or deadline_value == deadline_source:
                 raise
             extracted["deadline"] = normalize_deadline(deadline_value, extracted.get("received_at", ""))
-    if stage in {"测评", "笔试"} and not mode:
+    if stage in {"测评", "笔试", "AI面"} and not mode:
         if extracted.get("deadline") not in (None, "") and extracted.get("start_time") in (None, ""):
             mode = "异步"
         elif extracted.get("start_time") not in (None, ""):
@@ -250,6 +264,8 @@ def route_event(extracted):
 
 def _is_unscheduled_selection_invite(extracted, stage):
     if stage in {"测评", "笔试"}:
+        return False
+    if stage == "AI面" and normalize_delivery_mode(extracted.get("delivery_mode")) == "异步":
         return False
     scheduling_action = _normalized(extracted.get("scheduling_action", ""))
     selection_flag = extracted.get("requires_time_selection")
@@ -1164,14 +1180,22 @@ def _required_confirmation_reason(event):
     stage = str(event.get("stage", "")).strip()
     start = event.get("start_time")
     critical_fields = {"company", "classification"}
+    mode = normalize_delivery_mode(event.get("delivery_mode", event.get("exam_subtype", "")))
+    async_ai = stage == "AI面" and mode == "异步"
     if stage not in {"测评", "笔试"}:
-        critical_fields.update({"position", "start_time"})
+        critical_fields.add("position")
+        if not async_ai:
+            critical_fields.add("start_time")
     critical = uncertain.intersection(critical_fields)
     if critical:
         return "critical_fields_uncertain:" + ",".join(sorted(critical))
     if stage not in {"测评", "笔试"}:
         if not str(event.get("position", "")).strip():
             return "interview_position_required"
+        if async_ai:
+            if "deadline" in uncertain:
+                return "critical_fields_uncertain:deadline"
+            return "true_deadline_required" if event.get("deadline") in (None, "") else ""
         if start in (None, ""):
             return "fixed_start_time_required"
         return ""

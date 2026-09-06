@@ -34,6 +34,17 @@ def valid_fields():
 
 
 class ProgressSchemaTest(unittest.TestCase):
+    def test_pre_ai_schema_requires_additive_upgrade(self):
+        fields = valid_fields()
+        for field in fields:
+            if "options" in field:
+                field["options"] = [item for item in field["options"]
+                                    if item["name"] not in {"待 AI 面", "AI面完成"}]
+        result = validator.validate(fields)
+        self.assertEqual(result["status"], "needs_action")
+        missing = {name for issue in result["issues"] for name in issue.get("missing", [])}
+        self.assertEqual(missing, {"待 AI 面", "AI面完成"})
+
     def test_completed_view_contract_includes_every_active_status(self):
         contract = (
             ROOT
@@ -44,7 +55,7 @@ class ProgressSchemaTest(unittest.TestCase):
             / "progress-schema-v6.md"
         ).read_text(encoding="utf-8")
         expected = (
-            "`待反馈`、`待测评`、`待笔试`、`待面试`、`待群面`、`待一面`、`待二面`、"
+            "`待反馈`、`待测评`、`待笔试`、`待 AI 面`、`待面试`、`待群面`、`待一面`、`待二面`、"
             "\n  `待三面`、`待 HR 面`、`待 OC`"
         )
 

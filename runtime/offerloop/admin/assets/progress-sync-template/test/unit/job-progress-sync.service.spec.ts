@@ -590,7 +590,7 @@ describe('JobProgressSyncService', (): void => {
     expect(mock.calls).toHaveLength(0);
   });
 
-  it('reconciles a changed reminder immediately from its exact record id', async (): Promise<void> => {
+  it.each(['一面', 'AI面'])('reconciles a changed %s reminder from its exact record id', async (stage: string): Promise<void> => {
     const mock: MockService = createMockService((config: InternalAxiosRequestConfig) => {
       const url: string = String(config.url ?? '');
       const method: string = String(config.method ?? '').toUpperCase();
@@ -607,7 +607,7 @@ describe('JobProgressSyncService', (): void => {
               fields: {
                 完成状态: '已完成',
                 事件状态: '有效',
-                环节: '一面',
+                环节: stage,
                 求职记录ID: '["recProgress"]',
               },
             },
@@ -633,7 +633,7 @@ describe('JobProgressSyncService', (): void => {
             record: {
               record_id: 'recProgress',
               fields: {
-                进展状态: '待一面',
+                进展状态: stage === 'AI面' ? '待 AI 面' : '待一面',
                 最近完成节点: '笔试完成',
               },
             },
@@ -651,6 +651,13 @@ describe('JobProgressSyncService', (): void => {
       action: 'reconciled',
       recordId: 'recReminder',
       completionStatus: '已完成',
+    });
+    const progressWrite = mock.calls.find((config): boolean =>
+      String(config.method).toUpperCase() === 'PUT'
+      && String(config.url ?? '').endsWith('/progress-table/records/recProgress'));
+    expect(progressWrite).toBeDefined();
+    expect(parseRequestData(progressWrite!)).toMatchObject({
+      fields: { 最近完成节点: `${stage}完成`, 进展状态: '待反馈' },
     });
     expect(mock.calls.some(
       (config: InternalAxiosRequestConfig): boolean =>

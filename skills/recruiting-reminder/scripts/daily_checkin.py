@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 
 
 FIXED_STAGES = {"群面", "一面", "二面", "三面", "面试", "HR面"}
-ASYNC_STAGES = {"测评", "笔试"}
+ASYNC_STAGES = {"测评", "笔试", "AI面"}
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 
 
@@ -88,7 +88,7 @@ def reschedule_window(record, date_value, start_time, now=None):
     """Validate an owner-selected async start and preserve the event duration."""
     fields = _fields(record)
     if str(fields.get("环节", "")).strip() not in ASYNC_STAGES:
-        raise ValueError("only assessment or written-test events can be rescheduled")
+        raise ValueError("only async assessment, written-test or AI-interview events can be rescheduled")
     if str(fields.get("进行方式", "")).strip() != "异步":
         raise ValueError("fixed-time events cannot be rescheduled")
     deadline = _parse_time(fields.get("截止时间"))
@@ -113,7 +113,7 @@ def reschedule_window(record, date_value, start_time, now=None):
 
 
 def _stored_duration_minutes(fields):
-    raw = fields.get("预计时长（分钟）", 90)
+    raw = fields.get("预计时长（分钟）", 60 if fields.get("环节") == "AI面" else 90)
     try:
         value = float(raw)
     except (TypeError, ValueError) as exc:

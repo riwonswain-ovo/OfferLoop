@@ -21,7 +21,7 @@ from zoneinfo import ZoneInfo
 
 
 CONTRACT_VERSION = 4
-INTERVIEW_STAGES = {"群面", "一面", "二面", "三面", "HR面", "面试"}
+INTERVIEW_STAGES = {"AI面", "群面", "一面", "二面", "三面", "HR面", "面试"}
 UNKNOWN_STAGE = "面试（轮次待确认）"
 FIELDS_BY_KIND = {
     "prep": "面试准备文档",
@@ -46,6 +46,8 @@ def _position_matches(left, right):
 
 
 STAGE_ALIASES = {
+    "ai面": "AI面", "ai面试": "AI面", "aiinterview": "AI面", "智能面试": "AI面",
+    "人工智能面试": "AI面",
     "hr面": "HR面", "hrinterview": "HR面", "第一轮": "一面", "第一轮面试": "一面",
     "第1轮": "一面", "第二轮": "二面", "第二轮面试": "二面", "第2轮": "二面",
     "第三轮": "三面", "第三轮面试": "三面", "第3轮": "三面", "无领导小组": "群面",
