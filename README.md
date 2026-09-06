@@ -6,7 +6,7 @@
 
 **招聘机会 · 求职进展 · 笔面试提醒 · 经历深挖 · 定制简历 · 面试准备与复盘**
 
-[![Version](https://img.shields.io/badge/Version-v0.1.0--alpha.16-7C3AED)](RELEASE_NOTES.md)
+[![Version](https://img.shields.io/badge/Version-v0.1.0--alpha.17-7C3AED)](RELEASE_NOTES.md)
 [![Skills](https://img.shields.io/badge/Skills-7-2563EB)](#-认识-7-个-skill)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![Agents](https://img.shields.io/badge/Agents-4-0F766E)](#支持的-agent)
@@ -106,14 +106,23 @@ OfferLoop 是一套由 7 个 Agent Skill、三张飞书业务 Base 和一个私�
 
 ### 完整安装 7 个 Skill
 
-推荐下载 Release 中不超过 2 MiB 的精简安装包。先下载 ZIP 和 SHA-256 文件，校验后再解压：
+当前 `main` 包含 alpha.17 的 AI 面流程。本次只合并代码，不创建 alpha.17 tag / Release；在对应资产发布前，请先获取 `main`：
 
 ```bash
-curl -LO https://github.com/riwonswain-ovo/OfferLoop/releases/download/v0.1.0-alpha.16/OfferLoop-v0.1.0-alpha.16.zip
-curl -LO https://github.com/riwonswain-ovo/OfferLoop/releases/download/v0.1.0-alpha.16/OfferLoop-v0.1.0-alpha.16.zip.sha256
-shasum -a 256 -c OfferLoop-v0.1.0-alpha.16.zip.sha256
-unzip OfferLoop-v0.1.0-alpha.16.zip
-cd OfferLoop-v0.1.0-alpha.16
+git clone --depth 1 https://github.com/riwonswain-ovo/OfferLoop.git OfferLoop
+cd OfferLoop
+```
+
+然后执行下方的 `scripts/setup_offerloop.py` 安装命令。已有安装请按升级说明操作，旧飞书工作区需单独确认增补 AI 面选项和视图。
+
+对应 Release 发布后，推荐下载不超过 2 MiB 的精简安装包。以下版本化下载命令仅在资产发布后可用：
+
+```bash
+curl -LO https://github.com/riwonswain-ovo/OfferLoop/releases/download/v0.1.0-alpha.17/OfferLoop-v0.1.0-alpha.17.zip
+curl -LO https://github.com/riwonswain-ovo/OfferLoop/releases/download/v0.1.0-alpha.17/OfferLoop-v0.1.0-alpha.17.zip.sha256
+shasum -a 256 -c OfferLoop-v0.1.0-alpha.17.zip.sha256
+unzip OfferLoop-v0.1.0-alpha.17.zip
+cd OfferLoop-v0.1.0-alpha.17
 python3 scripts/setup_offerloop.py --agent codex --mode full --dry-run
 ```
 
@@ -123,8 +132,8 @@ Windows PowerShell 可用 `Invoke-WebRequest` 下载、`Get-FileHash -Algorithm 
 如果所在网络无法下载 Release 资产，可浅克隆同一版本作为备用：
 
 ```bash
-git clone --depth 1 --branch v0.1.0-alpha.16 https://github.com/riwonswain-ovo/OfferLoop.git OfferLoop-v0.1.0-alpha.16
-cd OfferLoop-v0.1.0-alpha.16
+git clone --depth 1 --branch v0.1.0-alpha.17 https://github.com/riwonswain-ovo/OfferLoop.git OfferLoop-v0.1.0-alpha.17
+cd OfferLoop-v0.1.0-alpha.17
 python3 scripts/setup_offerloop.py --agent codex --mode full --dry-run
 ```
 
@@ -218,7 +227,7 @@ OfferLoop 会创建或接管连续的 `00`–`06` 目录。三张 Base 只保留
 
 **它做什么。** 维护笔面试中心，并把确认后的招聘事件关联到求职进展。启用邮箱或日历能力后，还可以识别招聘通知和创建日程；这些集成只在用户明确配置后运行。
 
-**第一次使用。** 可以直接登记一场测评、笔试或面试，也可以在本机配置授权后扫描招聘通知。写 Base、创建日历或发送群通知前都会展示范围并等待确认。日程只会写入用户显式配置且已授予应用 `owner` 或 `writer` 权限的日历；目标日历不可见或只读时会停止并提示修复权限，不会静默新建替代日历。应用以 `writer` 身份使用共享日历时，也不会把日历所有者添加为参与人。
+**第一次使用。** 可以直接登记一场测评、笔试、AI 面或真人面试，也可以在本机配置授权后扫描招聘通知。写 Base、创建日历或发送群通知前都会展示范围并等待确认。日程只会写入用户显式配置且已授予应用 `owner` 或 `writer` 权限的日历；目标日历不可见或只读时会停止并提示修复权限，不会静默新建替代日历。应用以 `writer` 身份使用共享日历时，也不会把日历所有者添加为参与人。
 
 **你会得到。** 结构化笔面试事件、求职进展关联、完成状态与复盘文档。真实复盘完成后，对应进展会更新为“X 面完成”；没有下一轮安排时进入“待反馈”。
 

@@ -114,6 +114,7 @@ event_lookup.py backfill --input - --json
   已完成。
 - 历史“面试（轮次待确认）”与明确轮次使用相同的单表回填规则。
 - 测评或笔试：拒绝回填。
+- AI 面：属于面试候选，支持准备和复盘回填；完成节点为 `AI面完成`，不计入真人一面编号。
 
 Agent 通过 `lark-base` 逐条执行原子 patch，并重新读取事件与关联求职进展验证。若返回
 `progress_reconcile_expected=true`，必须确认 workflow 已把 `最近完成节点` 更新为对应的“X面完成”；
