@@ -106,7 +106,7 @@ OfferLoop 是一套由 7 个 Agent Skill、三张飞书业务 Base 和一个私�
 
 ### 完整安装 7 个 Skill
 
-当前 `main` 包含 alpha.17 的 AI 面流程。本次只合并代码，不创建 alpha.17 tag / Release；在对应资产发布前，请先获取 `main`：
+alpha.17 包含独立 AI 面流程。推荐使用下方的版本化 Release 安装包；也可以获取 `main`：
 
 ```bash
 git clone --depth 1 https://github.com/riwonswain-ovo/OfferLoop.git OfferLoop
@@ -115,7 +115,7 @@ cd OfferLoop
 
 然后执行下方的 `scripts/setup_offerloop.py` 安装命令。已有安装请按升级说明操作，旧飞书工作区需单独确认增补 AI 面选项和视图。
 
-对应 Release 发布后，推荐下载不超过 2 MiB 的精简安装包。以下版本化下载命令仅在资产发布后可用：
+从 [alpha.17 Release](https://github.com/riwonswain-ovo/OfferLoop/releases/tag/v0.1.0-alpha.17) 下载不超过 2 MiB 的精简安装包，校验后解压：
 
 ```bash
 curl -LO https://github.com/riwonswain-ovo/OfferLoop/releases/download/v0.1.0-alpha.17/OfferLoop-v0.1.0-alpha.17.zip
